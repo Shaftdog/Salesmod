@@ -25,8 +25,8 @@ export function ClientCard({ client }: ClientCardProps) {
     const formattedRevenue = client.totalRevenue ? new Intl.NumberFormat("en-US", {
         style: "currency",
         currency: "USD",
-        maximumFractionDigits: 0,
-    }).format(client.totalRevenue) : '$0';
+        minimumFractionDigits: 2,
+    }).format(client.totalRevenue) : '$0.00';
 
     const handleAction = (e: React.MouseEvent, callback: () => void) => {
         e.preventDefault();

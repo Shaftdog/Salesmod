@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -42,7 +43,6 @@ import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { useSearch } from "@/contexts/search-context";
 import { rankItem } from "@tanstack/match-sorter-utils";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { orderStatuses } from "@/lib/types";
 
 
@@ -60,16 +60,13 @@ type OrdersTableProps = {
 };
 
 export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
-  const { searchTerm } = useSearch();
+  const { searchTerm, setSearchTerm: setGlobalFilter } = useSearch();
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
-  const [globalFilter, setGlobalFilter] = React.useState('');
-
-  React.useEffect(() => {
-    setGlobalFilter(searchTerm);
-  }, [searchTerm]);
+  
+  const globalFilter = searchTerm;
 
   const columns: ColumnDef<Order>[] = [
     {
@@ -93,14 +90,7 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
     },
     {
       accessorKey: "orderNumber",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Order #<ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: "Order #",
       cell: ({ row }) => <Link href={`/orders/${row.original.id}`} className="font-medium text-primary hover:underline">{row.getValue("orderNumber")}</Link>,
     },
     {
@@ -122,17 +112,14 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
       },
     },
     {
+        accessorKey: "orderedDate",
+        header: "Ordered Date",
+        cell: ({ row }) => <div>{format(new Date(row.getValue("orderedDate")), "MMM d, yyyy")}</div>,
+    },
+    {
       accessorKey: "dueDate",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Due Date
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) => <div>{format(new Date(row.getValue("dueDate")), "MMM d, yyyy")}</div>
+      header: "Due Date",
+      cell: ({ row }) => <div>{format(new Date(row.getValue("dueDate")), "MMM d, yyyy")}</div>,
     },
     {
         accessorKey: "assignee.name",
@@ -155,8 +142,9 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
         cell: ({ row }) => {
             const amount = parseFloat(row.getValue("totalAmount"))
             const formatted = new Intl.NumberFormat("en-US", {
-            style: "currency",
-            currency: "USD",
+              style: "currency",
+              currency: "USD",
+              minimumFractionDigits: 2,
             }).format(amount)
     
             return <div className="text-right font-medium">{formatted}</div>
@@ -267,37 +255,15 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
   return (
     <div className="w-full">
         <div className="flex items-center pb-4 gap-4">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-1">
                 <Input
-                placeholder="Search orders..."
+                placeholder="Search orders by number, address, client..."
                 value={globalFilter ?? ""}
                 onChange={(event) =>
                     setGlobalFilter(event.target.value)
                 }
                 className="max-w-sm"
                 />
-            </div>
-            <div className="flex items-center gap-2">
-                <label className="text-sm font-medium">Status</label>
-                <Select
-                    onValueChange={(value) => {
-                        if (value === 'all') {
-                            table.getColumn("status")?.setFilterValue(undefined);
-                        } else {
-                            table.getColumn("status")?.setFilterValue(value);
-                        }
-                    }}
-                    >
-                    <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="All" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        {orderStatuses.map(status => (
-                            <SelectItem key={status} value={status}>{status.replace(/_/g, " ")}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
             </div>
             
             <div className="ml-auto flex items-center gap-2">
@@ -318,6 +284,9 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
                     .getAllColumns()
                     .filter((column) => column.getCanHide())
                     .map((column) => {
+                        const header = column.columnDef.header;
+                        const headerText = typeof header === 'string' ? header : column.id.replace(/_/g, ' ');
+
                         return (
                         <DropdownMenuCheckboxItem
                             key={column.id}
@@ -327,7 +296,7 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
                             column.toggleVisibility(!!value)
                             }
                         >
-                            {column.id.replace(/_/g, ' ')}
+                            {headerText}
                         </DropdownMenuCheckboxItem>
                         );
                     })}

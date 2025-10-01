@@ -6,6 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { OrdersList } from "@/components/orders/orders-list";
 import { orders } from "@/lib/data";
 import Link from "next/link";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { orderStatuses } from "@/lib/types";
+import { Input } from "@/components/ui/input";
 
 export default function OrdersPage() {
     return (
