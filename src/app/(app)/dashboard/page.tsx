@@ -1,16 +1,10 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { MoreHorizontal, ArrowUpRight, PlusCircle } from "lucide-react";
-import { OrdersTable } from "@/components/orders/orders-table";
+import { ArrowUpRight, PlusCircle } from "lucide-react";
+import { OrdersList } from "@/components/orders/orders-list";
 import { orders } from "@/lib/data";
 import Link from "next/link";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { OrderStatusChart } from "./_components/order-status-chart";
 
 const stats = [
@@ -21,7 +15,7 @@ const stats = [
 ];
 
 export default function Dashboard() {
-  const recentOrders = orders.slice(0, 10);
+  const recentOrders = orders.slice(0, 5);
   
   return (
     <div className="flex-1 space-y-4">
@@ -54,11 +48,11 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle>Recent Orders</CardTitle>
             <CardDescription>
-              A list of the 10 most recent orders.
+              A list of the 5 most recent orders.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <OrdersTable orders={recentOrders} isMinimal={true} />
+            <OrdersList orders={recentOrders} isMinimal={true} />
           </CardContent>
         </Card>
         <Card className="col-span-4 lg:col-span-3">

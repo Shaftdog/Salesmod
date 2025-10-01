@@ -1,7 +1,8 @@
+
 import { PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { OrdersTable } from "@/components/orders/orders-table";
+import { OrdersList } from "@/components/orders/orders-list";
 import { orders } from "@/lib/data";
 import Link from "next/link";
 
@@ -25,7 +26,7 @@ export default function OrdersPage() {
                 </Button>
             </CardHeader>
             <CardContent>
-                <OrdersTable orders={orders} />
+                <OrdersList orders={orders} />
             </CardContent>
         </Card>
     );
