@@ -29,6 +29,7 @@ import { Separator } from "@/components/ui/separator";
 import { OrderTimeline } from "@/components/orders/order-timeline";
 import { Progress } from "@/components/ui/progress";
 import { orderStatuses } from "@/lib/types";
+import { OrderMap } from "@/components/orders/order-map";
 
 export default function OrderDetailsPage({ params }: { params: { id: string } }) {
   const order = orders.find((o) => o.id === params.id);
@@ -39,6 +40,8 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
 
   const statusIndex = orderStatuses.findIndex(s => s === order.status);
   const progressValue = (statusIndex + 1) / orderStatuses.length * 100;
+  const fullAddress = `${order.propertyAddress}, ${order.propertyCity}, ${order.propertyState} ${order.propertyZip}`;
+
 
   return (
     <div className="grid gap-4 md:grid-cols-4 md:gap-8 lg:grid-cols-5">
@@ -68,29 +71,34 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
               </TabsList>
               <TabsContent value="overview">
                 <div className="space-y-6 pt-6">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <h3 className="font-semibold">Property</h3>
-                            <p className="text-sm text-muted-foreground">{order.propertyAddress}</p>
-                            <p className="text-sm text-muted-foreground">{order.propertyCity}, {order.propertyState} {order.propertyZip}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                            <div>
+                                <h3 className="font-semibold">Property</h3>
+                                <p className="text-sm text-muted-foreground">{order.propertyAddress}</p>
+                                <p className="text-sm text-muted-foreground">{order.propertyCity}, {order.propertyState} {order.propertyZip}</p>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold">Client</h3>
+                                <p className="text-sm text-muted-foreground">{order.client?.companyName}</p>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold">Borrower</h3>
+                                <p className="text-sm text-muted-foreground">{order.borrowerName}</p>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold">Assigned Appraiser</h3>
+                                <p className="text-sm text-muted-foreground">{order.assignee?.name || "Unassigned"}</p>
+                            </div>
+                             <div>
+                                <h3 className="font-semibold">Fees</h3>
+                                <p className="text-sm text-muted-foreground">
+                                    {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(order.totalAmount)}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h3 className="font-semibold">Client</h3>
-                            <p className="text-sm text-muted-foreground">{order.client?.companyName}</p>
-                        </div>
-                        <div>
-                            <h3 className="font-semibold">Borrower</h3>
-                            <p className="text-sm text-muted-foreground">{order.borrowerName}</p>
-                        </div>
-                        <div>
-                            <h3 className="font-semibold">Assigned Appraiser</h3>
-                            <p className="text-sm text-muted-foreground">{order.assignee?.name || "Unassigned"}</p>
-                        </div>
-                         <div>
-                            <h3 className="font-semibold">Fees</h3>
-                            <p className="text-sm text-muted-foreground">
-                                {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(order.totalAmount)}
-                            </p>
+                        <div className="min-h-[300px]">
+                            <OrderMap address={fullAddress} />
                         </div>
                     </div>
                 </div>
