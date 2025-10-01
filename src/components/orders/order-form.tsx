@@ -257,7 +257,7 @@ export function OrderForm({ appraisers, clients }: OrderFormProps) {
               </Button>
             )}
              {currentStep === steps.length - 1 && (
-              <Button type="button" onClick={() => setCurrentStep(0)}>
+              <Button type="button" onClick={() => form.reset()}>
                 Create Another Order
               </Button>
             )}
@@ -562,6 +562,3 @@ const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers }: { suggestion
         </div>
     )
 }
-
-
-    
