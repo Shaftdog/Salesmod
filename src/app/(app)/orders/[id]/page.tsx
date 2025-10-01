@@ -30,6 +30,7 @@ import { OrderTimeline } from "@/components/orders/order-timeline";
 import { Progress } from "@/components/ui/progress";
 import { orderStatuses } from "@/lib/types";
 import { OrderMap } from "@/components/orders/order-map";
+import { formatCurrency } from "@/lib/utils";
 
 export default function OrderDetailsPage({ params }: { params: { id: string } }) {
   const order = orders.find((o) => o.id === params.id);
@@ -93,7 +94,7 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
                              <div>
                                 <h3 className="font-semibold">Fees</h3>
                                 <p className="text-sm text-muted-foreground">
-                                    {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(order.totalAmount)}
+                                    {formatCurrency(order.totalAmount)}
                                 </p>
                             </div>
                         </div>

@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState } from "react";
@@ -22,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon, ChevronLeft, ChevronRight, Loader2, Wand2 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { format, subDays } from "date-fns";
 import { Progress } from "@/components/ui/progress";
 import { ClientSelector } from "./client-selector";
@@ -79,7 +78,7 @@ const steps = [
   { id: "Step 2", name: "Loan Info", fields: ["loanType", "loanNumber", "loanAmount", "orderType"] },
   { id: "Step 3", name: "Contact Info", fields: ["clientId", "loanOfficer", "processorName", "borrowerName"] },
   { id: "Step 4", name: "Order Details", fields: ["priority", "dueDate", "feeAmount", "assignedTo"] },
-  { id: "Step 5", name: "Review" },
+  { id: "Step 5", name: "Review & Submit" },
 ];
 
 type OrderFormProps = {
@@ -90,6 +89,7 @@ type OrderFormProps = {
 export function OrderForm({ appraisers, clients }: OrderFormProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<{appraiserId: string, reason: string} | null>(null);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const [potentialDuplicates, setPotentialDuplicates] = useState<Order[]>([]);
@@ -165,20 +165,41 @@ export function OrderForm({ appraisers, clients }: OrderFormProps) {
   }
 
   async function processForm(data: FormData) {
+    setIsSubmitting(true);
     console.log(data);
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+    setIsSubmitting(false);
     toast({
         title: "Order Created!",
         description: "The new order has been successfully created.",
     });
+    // This would typically redirect or clear the form
   }
 
   type FieldName = keyof FormData;
 
+  const next = async () => {
+    const fields = steps[currentStep].fields;
+    const output = await form.trigger(fields as FieldName[], { shouldFocus: true });
+
+    if (!output) {
+      toast({
+        variant: "destructive",
+        title: "Missing Information",
+        description: "Please fill out all required fields before continuing.",
+      });
+      return;
+    }
+
+    if (currentStep === 0) { // Property Info step
+        checkForDuplicates();
+    } else if (currentStep < steps.length - 1) {
+        setCurrentStep((step) => step + 1);
+    }
+  };
+
   const proceedToNextStep = () => {
     if (currentStep < steps.length - 1) {
-        if (currentStep === steps.length - 2) { // When on the last form step (Review), submit the form
-            form.handleSubmit(processForm)();
-        }
         setCurrentStep((step) => step + 1);
     }
   }
@@ -207,19 +228,6 @@ export function OrderForm({ appraisers, clients }: OrderFormProps) {
   };
 
 
-  const next = async () => {
-    const fields = steps[currentStep].fields;
-    const output = await form.trigger(fields as FieldName[], { shouldFocus: true });
-
-    if (!output) return;
-
-    if (currentStep === 0) { // Property Info step
-        checkForDuplicates();
-    } else {
-        proceedToNextStep();
-    }
-  };
-
   const prev = () => {
     if (currentStep > 0) {
       setCurrentStep((step) => step - 1);
@@ -235,31 +243,34 @@ export function OrderForm({ appraisers, clients }: OrderFormProps) {
           <Progress value={progress} className="w-full" />
           
           <div className="min-h-[450px]">
-          {currentStep === 0 && <Step1 />}
-          {currentStep === 1 && <Step2 />}
-          {currentStep === 2 && <Step3 clients={clients} />}
-          {currentStep === 3 && <Step4 appraisers={appraisers} onSuggest={handleAiSuggest} isLoading={isAiLoading} />}
-          {currentStep === 4 && <ReviewStep onSelectSuggestion={handleSelectSuggestion} suggestion={aiSuggestion} appraisers={appraisers} />}
+            <fieldset disabled={isSubmitting}>
+              {currentStep === 0 && <Step1 />}
+              {currentStep === 1 && <Step2 />}
+              {currentStep === 2 && <Step3 clients={clients} />}
+              {currentStep === 3 && <Step4 appraisers={appraisers} onSuggest={handleAiSuggest} isLoading={isAiLoading} />}
+              {currentStep === 4 && <ReviewStep onSelectSuggestion={handleSelectSuggestion} suggestion={aiSuggestion} appraisers={appraisers} />}
+            </fieldset>
           </div>
 
           {/* Navigation */}
           <div className="flex justify-between">
-            <Button type="button" onClick={prev} variant="outline" disabled={currentStep === 0}>
+            <Button type="button" onClick={prev} variant="outline" disabled={currentStep === 0 || isSubmitting}>
               <ChevronLeft className="mr-2 h-4 w-4" /> Previous
             </Button>
             {currentStep < steps.length - 2 && (
-              <Button type="button" onClick={next}>
+              <Button type="button" onClick={next} disabled={isSubmitting}>
                 Next <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             )}
-            {currentStep === steps.length - 2 && (
-              <Button type="button" onClick={next}>
-                Review & Submit
+             {currentStep === steps.length - 2 && (
+               <Button type="button" onClick={next} disabled={isSubmitting}>
+                 Review Order
               </Button>
             )}
-             {currentStep === steps.length - 1 && (
-              <Button type="button" onClick={() => form.reset()}>
-                Create Another Order
+            {currentStep === steps.length - 1 && (
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isSubmitting ? "Submitting..." : "Submit Order"}
               </Button>
             )}
           </div>
@@ -300,7 +311,7 @@ const Step1 = () => {
     <div className="space-y-4">
       <FormField name="propertyAddress" control={control} render={({ field }) => (
         <FormItem>
-          <FormLabel>Property Address</FormLabel>
+          <FormLabel>Property Address <span className="text-destructive">*</span></FormLabel>
           <FormControl><Input placeholder="123 Main St" {...field} /></FormControl>
           <FormMessage />
         </FormItem>
@@ -308,21 +319,21 @@ const Step1 = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <FormField name="propertyCity" control={control} render={({ field }) => (
         <FormItem>
-          <FormLabel>City</FormLabel>
+          <FormLabel>City <span className="text-destructive">*</span></FormLabel>
           <FormControl><Input placeholder="San Francisco" {...field} /></FormControl>
           <FormMessage />
         </FormItem>
       )} />
       <FormField name="propertyState" control={control} render={({ field }) => (
         <FormItem>
-          <FormLabel>State</FormLabel>
+          <FormLabel>State <span className="text-destructive">*</span></FormLabel>
           <FormControl><Input placeholder="CA" {...field} /></FormControl>
           <FormMessage />
         </FormItem>
       )} />
       <FormField name="propertyZip" control={control} render={({ field }) => (
         <FormItem>
-          <FormLabel>ZIP Code</FormLabel>
+          <FormLabel>ZIP Code <span className="text-destructive">*</span></FormLabel>
           <FormControl><Input placeholder="94103" {...field} /></FormControl>
           <FormMessage />
         </FormItem>
@@ -330,7 +341,7 @@ const Step1 = () => {
       </div>
        <FormField control={control} name="propertyType" render={({ field }) => (
         <FormItem>
-            <FormLabel>Property Type</FormLabel>
+            <FormLabel>Property Type <span className="text-destructive">*</span></FormLabel>
             <Select onValueChange={field.onChange} defaultValue={field.value}>
             <FormControl>
                 <SelectTrigger><SelectValue placeholder="Select a property type" /></SelectTrigger>
@@ -344,14 +355,14 @@ const Step1 = () => {
         )} />
       <FormField name="accessInstructions" control={control} render={({ field }) => (
         <FormItem>
-          <FormLabel>Access Instructions</FormLabel>
+          <FormLabel>Access Instructions <span className="text-muted-foreground">(optional)</span></FormLabel>
           <FormControl><Textarea placeholder="e.g. key under mat, call for code" {...field} /></FormControl>
           <FormMessage />
         </FormItem>
       )} />
        <FormField name="specialInstructions" control={control} render={({ field }) => (
         <FormItem>
-          <FormLabel>Special Instructions</FormLabel>
+          <FormLabel>Special Instructions <span className="text-muted-foreground">(optional)</span></FormLabel>
           <FormControl><Textarea placeholder="e.g. Beware of dog, gate code is #1234" {...field} /></FormControl>
           <FormMessage />
         </FormItem>
@@ -366,7 +377,7 @@ const Step2 = () => {
         <div className="space-y-4">
              <FormField control={control} name="orderType" render={({ field }) => (
                 <FormItem>
-                    <FormLabel>Order Type</FormLabel>
+                    <FormLabel>Order Type <span className="text-destructive">*</span></FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                         <SelectTrigger><SelectValue placeholder="Select an order type" /></SelectTrigger>
@@ -380,21 +391,21 @@ const Step2 = () => {
              )} />
             <FormField name="loanType" control={control} render={({ field }) => (
                 <FormItem>
-                <FormLabel>Loan Type</FormLabel>
+                <FormLabel>Loan Type <span className="text-muted-foreground">(optional)</span></FormLabel>
                 <FormControl><Input placeholder="e.g. Conventional, FHA, VA" {...field} /></FormControl>
                 <FormMessage />
                 </FormItem>
             )} />
             <FormField name="loanNumber" control={control} render={({ field }) => (
                 <FormItem>
-                <FormLabel>Loan Number</FormLabel>
+                <FormLabel>Loan Number <span className="text-muted-foreground">(optional)</span></FormLabel>
                 <FormControl><Input placeholder="e.g. 1234567890" {...field} /></FormControl>
                 <FormMessage />
                 </FormItem>
             )} />
             <FormField name="loanAmount" control={control} render={({ field }) => (
                 <FormItem>
-                <FormLabel>Loan Amount</FormLabel>
+                <FormLabel>Loan Amount <span className="text-muted-foreground">(optional)</span></FormLabel>
                 <FormControl><Input type="number" placeholder="e.g. 500000" {...field} /></FormControl>
                 <FormMessage />
                 </FormItem>
@@ -409,28 +420,28 @@ const Step3 = ({ clients }: { clients: Client[]}) => {
         <div className="space-y-4">
              <FormField control={control} name="clientId" render={({ field }) => (
                 <FormItem className="flex flex-col">
-                    <FormLabel>Client</FormLabel>
+                    <FormLabel>Client <span className="text-destructive">*</span></FormLabel>
                     <ClientSelector clients={clients} value={field.value} onChange={field.onChange} />
                     <FormMessage />
                 </FormItem>
             )} />
             <FormField name="borrowerName" control={control} render={({ field }) => (
                 <FormItem>
-                <FormLabel>Borrower Name</FormLabel>
+                <FormLabel>Borrower Name <span className="text-destructive">*</span></FormLabel>
                 <FormControl><Input placeholder="John Borrower" {...field} /></FormControl>
                 <FormMessage />
                 </FormItem>
             )} />
             <FormField name="loanOfficer" control={control} render={({ field }) => (
                 <FormItem>
-                <FormLabel>Loan Officer</FormLabel>
+                <FormLabel>Loan Officer <span className="text-muted-foreground">(optional)</span></FormLabel>
                 <FormControl><Input placeholder="Jane Officer" {...field} /></FormControl>
                 <FormMessage />
                 </FormItem>
             )} />
             <FormField name="processorName" control={control} render={({ field }) => (
                 <FormItem>
-                <FormLabel>Processor Name</FormLabel>
+                <FormLabel>Processor Name <span className="text-muted-foreground">(optional)</span></FormLabel>
                 <FormControl><Input placeholder="Peter Processor" {...field} /></FormControl>
                 <FormMessage />
                 </FormItem>
@@ -445,7 +456,7 @@ const Step4 = ({ appraisers, onSuggest, isLoading }: { appraisers: User[], onSug
         <div className="space-y-4">
             <FormField control={control} name="priority" render={({ field }) => (
                 <FormItem>
-                    <FormLabel>Priority</FormLabel>
+                    <FormLabel>Priority <span className="text-destructive">*</span></FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                         <SelectTrigger><SelectValue placeholder="Select priority level" /></SelectTrigger>
@@ -459,7 +470,7 @@ const Step4 = ({ appraisers, onSuggest, isLoading }: { appraisers: User[], onSug
              )} />
              <FormField control={control} name="dueDate" render={({ field }) => (
                 <FormItem className="flex flex-col">
-                    <FormLabel>Due Date</FormLabel>
+                    <FormLabel>Due Date <span className="text-destructive">*</span></FormLabel>
                     <Popover>
                         <PopoverTrigger asChild>
                         <FormControl>
@@ -494,7 +505,7 @@ const Step4 = ({ appraisers, onSuggest, isLoading }: { appraisers: User[], onSug
             )} />
              <FormField name="feeAmount" control={control} render={({ field }) => (
                 <FormItem>
-                <FormLabel>Fee Amount</FormLabel>
+                <FormLabel>Fee Amount <span className="text-destructive">*</span></FormLabel>
                 <FormControl><Input type="number" placeholder="e.g. 500.00" {...field} onChange={e => field.onChange(e.target.valueAsNumber)} value={field.value} /></FormControl>
                 <FormMessage />
                 </FormItem>
@@ -502,7 +513,7 @@ const Step4 = ({ appraisers, onSuggest, isLoading }: { appraisers: User[], onSug
             <div className="space-y-2">
                 <FormField control={control} name="assignedTo" render={({ field }) => (
                     <FormItem>
-                        <FormLabel>Assign To Appraiser</FormLabel>
+                        <FormLabel>Assign To Appraiser <span className="text-muted-foreground">(optional)</span></FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                             <SelectTrigger><SelectValue placeholder="Select an appraiser" /></SelectTrigger>
@@ -553,12 +564,8 @@ const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers }: { suggestion
              <div className="space-y-2">
                 <h4 className="font-medium">Details</h4>
                 <p className="text-sm text-muted-foreground">Due Date: {format(values.dueDate, "PPP")}</p>
-                <p className="text-sm text-muted-foreground">Fee: {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(values.feeAmount || 0)}</p>
+                <p className="text-sm text-muted-foreground">Fee: {formatCurrency(values.feeAmount || 0)}</p>
                 <p className="text-sm text-muted-foreground">Assigned To: {appraiser?.name || 'Unassigned'}</p>
-             </div>
-             <div className="text-center pt-4">
-                <h3 className="text-2xl font-bold text-green-600">Order Submitted!</h3>
-                <p className="text-muted-foreground">Click "Create Another Order" to start a new one.</p>
              </div>
         </div>
     )

@@ -1,5 +1,3 @@
-
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Order } from "@/lib/types";
 import { OrderStatusBadge } from "./status-badge";
@@ -18,6 +16,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
+import { formatCurrency } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 
 type OrderCardProps = {
     order: Order;
@@ -27,10 +27,7 @@ export function OrderCard({ order }: OrderCardProps) {
     const { toast } = useToast();
     const router = useRouter();
     const formattedDueDate = format(new Date(order.dueDate), "MMM d, yyyy");
-    const formattedFee = new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-    }).format(order.totalAmount);
+    const formattedFee = formatCurrency(order.totalAmount);
 
     const handleAction = (e: React.MouseEvent, callback: () => void) => {
         e.preventDefault();
@@ -74,22 +71,31 @@ export function OrderCard({ order }: OrderCardProps) {
                             </CardTitle>
                             <CardDescription>{order.propertyAddress}</CardDescription>
                         </div>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => handleAction(e, () => {})}>
-                                    <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleView)}>View</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleEdit)}>Edit</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleClone)}>Clone</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleDelete)}>Delete</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                         <TooltipProvider>
+                            <DropdownMenu>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => handleAction(e, () => {})}>
+                                                <span className="sr-only">Open menu</span>
+                                                <MoreHorizontal className="h-4 w-4" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>More options</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                                <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuItem onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleView)}>View</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleEdit)}>Edit</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleClone)}>Clone</DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleDelete)}>Delete</DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </TooltipProvider>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">

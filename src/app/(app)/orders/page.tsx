@@ -13,7 +13,15 @@ import { orderStatuses } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { useSearch } from "@/contexts/search-context";
 
-type SortOption = "orderedDate_desc" | "orderedDate_asc" | "dueDate_asc" | "dueDate_desc" | "totalAmount_desc" | "totalAmount_asc";
+type SortOption = 
+  | "orderedDate_desc" 
+  | "orderedDate_asc" 
+  | "dueDate_asc" 
+  | "dueDate_desc" 
+  | "totalAmount_desc" 
+  | "totalAmount_asc"
+  | "orderNumber_asc"
+  | "orderNumber_desc";
 
 export default function OrdersPage() {
     const { searchTerm, setSearchTerm } = useSearch();
@@ -58,6 +66,10 @@ export default function OrdersPage() {
                     valA = a[sortBy];
                     valB = b[sortBy];
                     break;
+                case 'orderNumber':
+                    valA = a.orderNumber;
+                    valB = b.orderNumber;
+                    return sortDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
                 default:
                     return 0;
             }
@@ -78,39 +90,43 @@ export default function OrdersPage() {
                         Manage your appraisal orders and view their status.
                     </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-center gap-2">
                     <Input
-                      placeholder="Search orders..."
+                      placeholder="Search orders (⌘K)..."
                       className="w-full md:w-[200px] lg:w-[336px]"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Filter by status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Statuses</SelectItem>
-                            {orderStatuses.map(status => (
-                                <SelectItem key={status} value={status} className="capitalize">
-                                    {status.replace(/_/g, " ")}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Select value={sortOption} onValueChange={(value) => setSortOption(value as SortOption)}>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Sort by" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="orderedDate_desc">Ordered (Newest)</SelectItem>
-                            <SelectItem value="orderedDate_asc">Ordered (Oldest)</SelectItem>
-                            <SelectItem value="dueDate_asc">Due Date (Soonest)</SelectItem>
-                            <SelectItem value="dueDate_desc">Due Date (Latest)</SelectItem>
-                            <SelectItem value="totalAmount_desc">Fee (High-Low)</SelectItem>
-                            <SelectItem value="totalAmount_asc">Fee (Low-High)</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <div className="flex w-full sm:w-auto items-center gap-2">
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <SelectTrigger className="w-full sm:w-[180px]">
+                                <SelectValue placeholder="Filter by status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Statuses</SelectItem>
+                                {orderStatuses.map(status => (
+                                    <SelectItem key={status} value={status} className="capitalize">
+                                        {status.replace(/_/g, " ")}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Select value={sortOption} onValueChange={(value) => setSortOption(value as SortOption)}>
+                            <SelectTrigger className="w-full sm:w-[180px]">
+                                <SelectValue placeholder="Sort by" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="orderedDate_desc">Created (Newest)</SelectItem>
+                                <SelectItem value="orderedDate_asc">Created (Oldest)</SelectItem>
+                                <SelectItem value="dueDate_asc">Due Date (Soonest)</SelectItem>
+                                <SelectItem value="dueDate_desc">Due Date (Latest)</SelectItem>
+                                <SelectItem value="orderNumber_asc">Order # (A-Z)</SelectItem>
+                                <SelectItem value="orderNumber_desc">Order # (Z-A)</SelectItem>
+                                <SelectItem value="totalAmount_desc">Fee (High-Low)</SelectItem>
+                                <SelectItem value="totalAmount_asc">Fee (Low-High)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                     <Button asChild size="sm" className="gap-1 hidden sm:flex">
                         <Link href="/orders/new">
                             <PlusCircle className="h-3.5 w-3.5" />

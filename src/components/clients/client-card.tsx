@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Client } from "@/lib/types";
 import Link from "next/link";
@@ -14,6 +13,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
+import { formatCurrency } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 
 type ClientCardProps = {
     client: Client;
@@ -22,10 +23,7 @@ type ClientCardProps = {
 export function ClientCard({ client }: ClientCardProps) {
     const { toast } = useToast();
     const router = useRouter();
-    const formattedRevenue = new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-    }).format(client.totalRevenue || 0);
+    const formattedRevenue = formatCurrency(client.totalRevenue || 0);
 
     const handleAction = (e: React.MouseEvent, callback: () => void) => {
         e.preventDefault();
@@ -34,6 +32,7 @@ export function ClientCard({ client }: ClientCardProps) {
     };
 
     const handleView = () => {
+        toast({ title: `Loading details for ${client.companyName}...` });
         router.push(`/clients/${client.id}`);
     };
 
@@ -59,7 +58,7 @@ export function ClientCard({ client }: ClientCardProps) {
 
     return (
         <Link href={`/clients/${client.id}`} className="block hover:shadow-lg rounded-lg transition-shadow">
-            <Card className="cursor-pointer h-full flex flex-col" onClick={() => toast({ title: `Loading details for ${client.companyName}...` })}>
+            <Card className="cursor-pointer h-full flex flex-col">
                 <CardHeader>
                     <div className="flex justify-between items-start">
                         <div>
@@ -68,21 +67,30 @@ export function ClientCard({ client }: ClientCardProps) {
                             </CardTitle>
                             <CardDescription>{client.primaryContact}</CardDescription>
                         </div>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => handleAction(e, () => {})}>
-                                    <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleView)}>View</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleEdit)}>Edit</DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleDelete)}>Delete</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        <TooltipProvider>
+                            <DropdownMenu>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => handleAction(e, () => {})}>
+                                                <span className="sr-only">Open menu</span>
+                                                <MoreHorizontal className="h-4 w-4" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>More options</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                    <DropdownMenuItem onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleView)}>View</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleEdit)}>Edit</DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleDelete)}>Delete</DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </TooltipProvider>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4 flex-grow">

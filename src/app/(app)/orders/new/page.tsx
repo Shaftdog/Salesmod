@@ -9,7 +9,7 @@ export default function NewOrderPage() {
                 <CardHeader>
                     <CardTitle>New Order</CardTitle>
                     <CardDescription>
-                        Fill out the form below to create a new appraisal order.
+                        Fill out the form below to create a new appraisal order. Fields marked with <span className="text-destructive">*</span> are required.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>

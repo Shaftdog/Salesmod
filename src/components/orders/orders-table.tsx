@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from "react";
@@ -16,7 +15,7 @@ import {
   type VisibilityState,
   type FilterFn,
 } from "@tanstack/react-table";
-import { MoreHorizontal, ArrowUpDown, ChevronDown, File, ListFilter } from "lucide-react";
+import { MoreHorizontal, ArrowUpDown, ChevronDown, File, ListFilter, PackageSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -45,6 +44,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { useSearch } from "@/contexts/search-context";
 import { rankItem } from "@tanstack/match-sorter-utils";
 import { orderStatuses } from "@/lib/types";
+import { formatCurrency } from "@/lib/utils";
+import { Skeleton } from "../ui/skeleton";
 
 
 const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
@@ -60,16 +61,7 @@ type OrdersTableProps = {
   isMinimal?: boolean;
 };
 
-export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
-  const { searchTerm, setSearchTerm: setGlobalFilter } = useSearch();
-  const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
-  const [rowSelection, setRowSelection] = React.useState({});
-  
-  const globalFilter = searchTerm;
-
-  const columns: ColumnDef<Order>[] = [
+export const columns: ColumnDef<Order>[] = [
     {
       id: "select",
       header: ({ table }) => (
@@ -142,12 +134,7 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
         header: () => <div className="text-right">Fee</div>,
         cell: ({ row }) => {
             const amount = parseFloat(row.getValue("totalAmount"))
-            const formatted = new Intl.NumberFormat("en-US", {
-              style: "currency",
-              currency: "USD",
-            }).format(amount)
-    
-            return <div className="text-right font-medium">{formatted}</div>
+            return <div className="text-right font-medium">{formatCurrency(amount)}</div>
         },
     },
     {
@@ -173,7 +160,16 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
         );
       },
     },
-  ];
+];
+
+export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
+  const { searchTerm, setSearchTerm: setGlobalFilter } = useSearch();
+  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = React.useState({});
+  
+  const globalFilter = searchTerm;
 
   const minimalColumns = columns.filter(c => ['orderNumber', 'client.companyName', 'status', 'actions'].includes(c.id || c.accessorKey as string));
 
@@ -297,11 +293,17 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                    {globalFilter ? (
-                        <>No orders found for &quot;{globalFilter}&quot;.</>
-                    ) : (
-                        "No orders found."
-                    )}
+                    <div className="flex flex-col items-center justify-center gap-2">
+                        <PackageSearch className="h-12 w-12 text-muted-foreground" />
+                        <h3 className="font-semibold">No Orders Found</h3>
+                        <p className="text-sm text-muted-foreground">
+                            {globalFilter ? (
+                                <>No orders found matching &quot;{globalFilter}&quot;.</>
+                            ) : (
+                                "There are no orders to display."
+                            )}
+                        </p>
+                    </div>
                 </TableCell>
               </TableRow>
             )}
@@ -334,4 +336,35 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
       </div>
     </div>
   );
+}
+
+export function OrdersTableSkeleton({ isMinimal }: { isMinimal?: boolean }) {
+    const skeletonColumns = isMinimal 
+        ? ['orderNumber', 'client.companyName', 'status', 'actions']
+        : ['select', 'orderNumber', 'propertyAddress', 'client.companyName', 'status', 'orderedDate', 'dueDate', 'assignee.name', 'totalAmount', 'actions'];
+
+    return (
+         <div className="w-full">
+            <div className="rounded-md border">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            {skeletonColumns.map(colId => (
+                                <TableHead key={colId}><Skeleton className="h-5 w-full" /></TableHead>
+                            ))}
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {[...Array(10)].map((_, rowIndex) => (
+                            <TableRow key={rowIndex}>
+                                {skeletonColumns.map(colId => (
+                                    <TableCell key={colId}><Skeleton className="h-5 w-full" /></TableCell>
+                                ))}
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
+         </div>
+    )
 }

@@ -7,14 +7,14 @@ import { useSearch } from "@/contexts/search-context";
 import { ClientCard } from "./client-card";
 import { Button } from "../ui/button";
 import Link from "next/link";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, UserX } from "lucide-react";
 
 type ClientsListProps = {
     clients: Client[];
 };
 
 export function ClientsList({ clients }: ClientsListProps) {
-    const { searchTerm } = useSearch();
+    const { searchTerm, setSearchTerm } = useSearch();
 
     const filteredClients = React.useMemo(() => {
         if (!searchTerm) return clients;
@@ -36,8 +36,9 @@ export function ClientsList({ clients }: ClientsListProps) {
 
     if (!filteredClients.length) {
         return (
-            <div className="text-center py-12">
-                <h3 className="text-lg font-semibold">No Clients Found</h3>
+            <div className="text-center py-12 flex flex-col items-center">
+                <UserX className="h-12 w-12 text-muted-foreground" />
+                <h3 className="text-lg font-semibold mt-4">No Clients Found</h3>
                 {searchTerm ? (
                      <p className="text-muted-foreground text-sm mt-1">
                         No clients found matching &quot;{searchTerm}&quot;.
