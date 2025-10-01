@@ -50,9 +50,7 @@ type OrdersTableProps = {
   isMinimal?: boolean;
 };
 
-export const OrdersTableColumns = ({ isMinimal = false }: { isMinimal?: boolean }): ColumnDef<Order>[] => {
-  const { toast } = useToast();
-  
+export const OrdersTableColumns = ({ isMinimal = false, toast }: { isMinimal?: boolean, toast: (options: any) => void }): ColumnDef<Order>[] => {
   const columns: ColumnDef<Order>[] = [
       {
         id: "select",
@@ -182,6 +180,7 @@ export const OrdersTableColumns = ({ isMinimal = false }: { isMinimal?: boolean 
 };
 
 export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
+  const { toast } = useToast();
   const { searchTerm, setSearchTerm: setGlobalFilter } = useSearch();
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -189,7 +188,7 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
   const [rowSelection, setRowSelection] = React.useState({});
   
   const globalFilter = searchTerm;
-  const columns = React.useMemo(() => OrdersTableColumns({ isMinimal }), [isMinimal]);
+  const columns = React.useMemo(() => OrdersTableColumns({ isMinimal, toast }), [isMinimal, toast]);
 
   const table = useReactTable({
     data: orders,
