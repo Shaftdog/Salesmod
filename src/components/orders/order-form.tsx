@@ -48,7 +48,7 @@ const formSchema = z.object({
   propertyCity: z.string().min(1, "City is required"),
   propertyState: z.string().min(1, "State is required"),
   propertyZip: z.string().min(1, "ZIP code is required"),
-  propertyType: z.enum(propertyTypes),
+  propertyType: z.enum(propertyTypes, { required_error: "Please select a property type" }),
   accessInstructions: z.string().optional(),
   specialInstructions: z.string().optional(),
 
@@ -56,7 +56,7 @@ const formSchema = z.object({
   loanType: z.string().optional(),
   loanNumber: z.string().optional(),
   loanAmount: z.string().optional(),
-  orderType: z.enum(orderTypes),
+  orderType: z.enum(orderTypes, { required_error: "Please select an order type" }),
 
   // Step 3
   clientId: z.string().min(1, "Client is required"),
@@ -65,8 +65,8 @@ const formSchema = z.object({
   borrowerName: z.string().min(1, "Borrower name is required"),
 
   // Step 4
-  priority: z.enum(orderPriorities),
-  dueDate: z.date(),
+  priority: z.enum(orderPriorities, { required_error: "Please select a priority" }),
+  dueDate: z.date({ required_error: "Due date is required" }),
   feeAmount: z.string().min(1, "Fee is required"),
   assignedTo: z.string().optional(),
 });
@@ -97,10 +97,25 @@ export function OrderForm({ appraisers, clients }: OrderFormProps) {
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      priority: "normal",
-      orderType: "purchase",
+      propertyAddress: "",
+      propertyCity: "",
+      propertyState: "",
+      propertyZip: "",
       propertyType: "single_family",
+      accessInstructions: "",
+      specialInstructions: "",
+      loanType: "",
+      loanNumber: "",
+      loanAmount: "",
+      orderType: "purchase",
+      clientId: "",
+      loanOfficer: "",
+      processorName: "",
+      borrowerName: "",
+      priority: "normal",
       dueDate: new Date(new Date().setDate(new Date().getDate() + 7)),
+      feeAmount: "",
+      assignedTo: "",
     },
   });
 
@@ -160,7 +175,7 @@ export function OrderForm({ appraisers, clients }: OrderFormProps) {
 
   const proceedToNextStep = () => {
     if (currentStep < steps.length - 1) {
-        if (currentStep === steps.length - 2) {
+        if (currentStep === steps.length - 2) { // When on the last form step (Review), submit the form
             form.handleSubmit(processForm)();
         }
         setCurrentStep((step) => step + 1);
@@ -241,8 +256,8 @@ export function OrderForm({ appraisers, clients }: OrderFormProps) {
                 Review & Submit
               </Button>
             )}
-            {currentStep === steps.length - 1 && (
-              <Button type="submit">
+             {currentStep === steps.length - 1 && (
+              <Button type="button" onClick={() => setCurrentStep(0)}>
                 Create Another Order
               </Button>
             )}
@@ -541,11 +556,9 @@ const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers }: { suggestion
                 <p className="text-sm text-muted-foreground">Assigned To: {appraiser?.name || 'Unassigned'}</p>
              </div>
              <div className="text-center pt-4">
-                <h3 className="text-2xl font-bold text-green-600">Order Ready to Submit!</h3>
-                <p className="text-muted-foreground">Click "Create Another Order" to finalize and start a new one.</p>
+                <h3 className="text-2xl font-bold text-green-600">Order Submitted!</h3>
+                <p className="text-muted-foreground">Click "Create Another Order" to start a new one.</p>
              </div>
         </div>
     )
 }
-
-    
