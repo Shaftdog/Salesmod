@@ -49,8 +49,8 @@ function Header() {
   const { searchTerm, setSearchTerm } = useSearch();
 
   useEffect(() => {
-    // Reset search term on page navigation
-    setSearchTerm('');
+    // We don't reset search term on navigation anymore as filtering is now on the pages.
+    // setSearchTerm('');
   }, [pathname, setSearchTerm]);
 
   const breadcrumbItems = React.useMemo(() => {
@@ -82,7 +82,7 @@ function Header() {
     return items;
   }, [pathname]);
 
-  const showSearch = pathname.startsWith('/orders') || pathname === '/dashboard' || pathname.startsWith('/clients');
+  const showSearch = false; // Search is now on the pages themselves
   const searchPlaceholder = pathname.startsWith('/clients') ? "Search clients..." : "Search orders...";
 
 

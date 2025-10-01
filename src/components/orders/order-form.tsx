@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState } from "react";
@@ -335,7 +336,7 @@ const Step1 = () => {
                 <SelectTrigger><SelectValue placeholder="Select a property type" /></SelectTrigger>
             </FormControl>
             <SelectContent>
-                {propertyTypes.map(type => <SelectItem key={type} value={type}>{type.replace(/_/g, " ")}</SelectItem>)}
+                {propertyTypes.map(type => <SelectItem key={type} value={type} className="capitalize">{type.replace(/_/g, " ")}</SelectItem>)}
             </SelectContent>
             </Select>
             <FormMessage />
@@ -371,7 +372,7 @@ const Step2 = () => {
                         <SelectTrigger><SelectValue placeholder="Select an order type" /></SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                        {orderTypes.map(type => <SelectItem key={type} value={type}>{type.replace(/_/g, " ")}</SelectItem>)}
+                        {orderTypes.map(type => <SelectItem key={type} value={type} className="capitalize">{type.replace(/_/g, " ")}</SelectItem>)}
                     </SelectContent>
                     </Select>
                     <FormMessage />
@@ -450,7 +451,7 @@ const Step4 = ({ appraisers, onSuggest, isLoading }: { appraisers: User[], onSug
                         <SelectTrigger><SelectValue placeholder="Select priority level" /></SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                        {orderPriorities.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                        {orderPriorities.map(p => <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>)}
                     </SelectContent>
                     </Select>
                     <FormMessage />
@@ -494,7 +495,7 @@ const Step4 = ({ appraisers, onSuggest, isLoading }: { appraisers: User[], onSug
              <FormField name="feeAmount" control={control} render={({ field }) => (
                 <FormItem>
                 <FormLabel>Fee Amount</FormLabel>
-                <FormControl><Input type="number" placeholder="$500.00" {...field} /></FormControl>
+                <FormControl><Input type="number" placeholder="e.g. 500.00" {...field} onChange={e => field.onChange(e.target.valueAsNumber)} value={field.value} /></FormControl>
                 <FormMessage />
                 </FormItem>
             )} />
@@ -552,7 +553,7 @@ const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers }: { suggestion
              <div className="space-y-2">
                 <h4 className="font-medium">Details</h4>
                 <p className="text-sm text-muted-foreground">Due Date: {format(values.dueDate, "PPP")}</p>
-                <p className="text-sm text-muted-foreground">Fee: ${values.feeAmount}</p>
+                <p className="text-sm text-muted-foreground">Fee: {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(values.feeAmount || 0)}</p>
                 <p className="text-sm text-muted-foreground">Assigned To: {appraiser?.name || 'Unassigned'}</p>
              </div>
              <div className="text-center pt-4">

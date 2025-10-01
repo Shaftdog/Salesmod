@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -61,9 +62,7 @@ type OrdersTableProps = {
 
 export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
   const { searchTerm, setSearchTerm: setGlobalFilter } = useSearch();
-  const [sorting, setSorting] = React.useState<SortingState>([
-    { id: "orderedDate", desc: true },
-  ]);
+  const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
@@ -255,56 +254,6 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
 
   return (
     <div className="w-full">
-        <div className="flex items-center pb-4 gap-4">
-            <div className="flex items-center gap-2 flex-1">
-                <Input
-                placeholder="Search orders by number, address, client..."
-                value={globalFilter ?? ""}
-                onChange={(event) =>
-                    setGlobalFilter(event.target.value)
-                }
-                className="max-w-sm"
-                />
-            </div>
-            
-            <div className="ml-auto flex items-center gap-2">
-                <Button variant="outline" size="sm" className="h-8 gap-1">
-                    <File className="h-3.5 w-3.5" />
-                    <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                        Export
-                    </span>
-                </Button>
-                <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="ml-auto">
-                    Columns <ChevronDown className="ml-2 h-4 w-4" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    {table
-                    .getAllColumns()
-                    .filter((column) => column.getCanHide())
-                    .map((column) => {
-                        const header = column.columnDef.header;
-                        const headerText = typeof header === 'string' ? header : column.id.replace(/_/g, ' ');
-
-                        return (
-                        <DropdownMenuCheckboxItem
-                            key={column.id}
-                            className="capitalize"
-                            checked={column.getIsVisible()}
-                            onCheckedChange={(value) =>
-                            column.toggleVisibility(!!value)
-                            }
-                        >
-                            {headerText}
-                        </DropdownMenuCheckboxItem>
-                        );
-                    })}
-                </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
-      </div>
       <div className="rounded-md border">
         <Table>
           <TableHeader>

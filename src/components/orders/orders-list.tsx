@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -7,6 +8,9 @@ import { OrdersTable } from "./orders-table";
 import { OrderCard } from "./order-card";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSearch } from "@/contexts/search-context";
+import { Button } from "../ui/button";
+import Link from "next/link";
+import { PlusCircle } from "lucide-react";
 
 type OrdersListProps = {
     orders: Order[];
@@ -44,7 +48,7 @@ export function OrdersList({ orders, isMinimal = false }: OrdersListProps) {
                     <h3 className="text-lg font-semibold">No Orders Found</h3>
                     {searchTerm ? (
                         <p className="text-muted-foreground text-sm mt-1">
-                            Try adjusting your search or filters.
+                            No orders found matching &quot;{searchTerm}&quot;.
                         </p>
                     ) : (
                          <p className="text-muted-foreground text-sm mt-1">
