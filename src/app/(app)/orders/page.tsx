@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { OrdersList } from "@/components/orders/orders-list";
 import { orders } from "@/lib/data";
 import Link from "next/link";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { orderStatuses } from "@/lib/types";
+import { orderStatuses, Order } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { useSearch } from "@/contexts/search-context";
 
@@ -25,9 +25,15 @@ type SortOption =
 
 export default function OrdersPage() {
     const { searchTerm, setSearchTerm } = useSearch();
-    const [statusFilter, setStatusFilter] = React.useState<string>("all");
-    const [sortOption, setSortOption] = React.useState<SortOption>("orderedDate_desc");
+    const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [sortOption, setSortOption] = useState<SortOption>("orderedDate_desc");
+    const [isLoading, setIsLoading] = useState(true);
     const searchInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+      const timer = setTimeout(() => setIsLoading(false), 1500); // Simulate loading
+      return () => clearTimeout(timer);
+    }, []);
 
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -40,8 +46,8 @@ export default function OrdersPage() {
       return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    const filteredAndSortedOrders = React.useMemo(() => {
-        let filtered = orders;
+    const filteredAndSortedOrders = useMemo(() => {
+        let filtered: Order[] = orders;
 
         if (statusFilter !== 'all') {
             filtered = filtered.filter(order => order.status === statusFilter);
@@ -58,7 +64,7 @@ export default function OrdersPage() {
                     order.client?.companyName,
                     order.status,
                     order.assignee?.name,
-                ].filter(Boolean).map(v => v.toLowerCase());
+                ].filter(Boolean).map(v => String(v).toLowerCase());
                 return values.some(v => v.includes(lowercasedTerm));
             });
         }
@@ -66,7 +72,7 @@ export default function OrdersPage() {
         const [sortBy, sortDir] = sortOption.split('_');
 
         return [...filtered].sort((a, b) => {
-            let valA: string | number, valB: string | number;
+            let valA, valB;
 
             switch (sortBy) {
                 case 'orderedDate':
@@ -75,8 +81,8 @@ export default function OrdersPage() {
                     valB = new Date(b[sortBy]).getTime();
                     break;
                 case 'totalAmount':
-                    valA = a[sortBy];
-                    valB = b[sortBy];
+                    valA = a[sortBy] || 0;
+                    valB = b[sortBy] || 0;
                     break;
                 case 'orderNumber':
                     valA = a.orderNumber;
@@ -91,7 +97,7 @@ export default function OrdersPage() {
             return 0;
         });
 
-    }, [orders, statusFilter, searchTerm, sortOption]);
+    }, [statusFilter, searchTerm, sortOption]);
 
     return (
         <Card>
@@ -151,7 +157,7 @@ export default function OrdersPage() {
                 </div>
             </CardHeader>
             <CardContent>
-                <OrdersList orders={filteredAndSortedOrders} />
+                <OrdersList orders={filteredAndSortedOrders} isLoading={isLoading} />
             </CardContent>
         </Card>
     );

@@ -8,9 +8,23 @@ import Link from "next/link";
 import { ClientsList } from "@/components/clients/clients-list";
 import { Input } from "@/components/ui/input";
 import { useSearch } from "@/contexts/search-context";
+import { useEffect, useRef } from "react";
 
 export default function ClientsPage() {
     const { searchTerm, setSearchTerm } = useSearch();
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+          e.preventDefault();
+          searchInputRef.current?.focus();
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
 
     return (
         <Card>
@@ -23,6 +37,7 @@ export default function ClientsPage() {
                 </div>
                  <div className="flex items-center gap-2">
                     <Input
+                      ref={searchInputRef}
                       placeholder="Search clients (⌘K)..."
                       className="w-full md:w-[200px] lg:w-[336px]"
                       value={searchTerm}

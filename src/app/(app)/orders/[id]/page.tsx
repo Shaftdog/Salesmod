@@ -145,7 +145,7 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
                 <TooltipProvider>
                     <Tooltip>
                         <TooltipTrigger asChild>
-                            <Button variant="outline">
+                            <Button variant="outline" className="w-full">
                                 <Printer className="mr-2 h-4 w-4" /> Print Order
                             </Button>
                         </TooltipTrigger>

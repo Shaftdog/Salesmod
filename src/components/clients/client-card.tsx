@@ -39,12 +39,10 @@ export function ClientCard({ client }: ClientCardProps) {
 
     const handleEdit = () => {
         toast({ title: "Opening edit form..." });
-        // This would navigate to an edit page.
         router.push(`/clients/${client.id}/edit`);
     };
 
     const handleDelete = () => {
-        // A simple confirmation dialog.
         if (window.confirm("Are you sure you want to delete this client?")) {
             console.log(`Deleting client ${client.id}`);
             toast({ 
@@ -58,7 +56,7 @@ export function ClientCard({ client }: ClientCardProps) {
 
 
     return (
-        <Link href={`/clients/${client.id}`} className="block hover:shadow-lg rounded-lg transition-shadow">
+        <Link href={`/clients/${client.id}`} className="block hover:shadow-lg rounded-lg transition-shadow" onClick={() => toast({ title: `Viewing ${client.companyName}...` })}>
             <Card className="cursor-pointer h-full flex flex-col">
                 <CardHeader>
                     <div className="flex justify-between items-start">

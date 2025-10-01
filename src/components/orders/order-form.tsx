@@ -506,7 +506,7 @@ const Step4 = ({ appraisers, onSuggest, isLoading }: { appraisers: User[], onSug
              <FormField name="feeAmount" control={control} render={({ field }) => (
                 <FormItem>
                 <FormLabel>Fee Amount <span className="text-destructive">*</span></FormLabel>
-                <FormControl><Input type="number" placeholder="e.g. 500.00" {...field} onChange={e => field.onChange(e.target.valueAsNumber)} value={field.value} /></FormControl>
+                <FormControl><Input type="number" placeholder="e.g. 500.00" {...field} /></FormControl>
                 <FormMessage />
                 </FormItem>
             )} />
@@ -514,7 +514,7 @@ const Step4 = ({ appraisers, onSuggest, isLoading }: { appraisers: User[], onSug
                 <FormField control={control} name="assignedTo" render={({ field }) => (
                     <FormItem>
                         <FormLabel>Assign To Appraiser <span className="text-muted-foreground">(optional)</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value} defaultValue="">
                         <FormControl>
                             <SelectTrigger><SelectValue placeholder="Select an appraiser" /></SelectTrigger>
                         </FormControl>

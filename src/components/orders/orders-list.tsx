@@ -15,42 +15,13 @@ import { Skeleton } from "../ui/skeleton";
 type OrdersListProps = {
     orders: Order[];
     isMinimal?: boolean;
+    isLoading: boolean;
 };
 
-export function OrdersList({ orders, isMinimal = false }: OrdersListProps) {
+export function OrdersList({ orders, isMinimal = false, isLoading }: OrdersListProps) {
     const isMobile = useIsMobile();
     const { searchTerm } = useSearch();
-    const [isLoading, setIsLoading] = React.useState(true);
-
-    React.useEffect(() => {
-        const timer = setTimeout(() => {
-            setIsLoading(false);
-        }, 1500); // Simulate loading
-        return () => clearTimeout(timer);
-    }, []);
-
-    // This is a simplified filtering for demonstration. 
-    // In a real app, this would likely be part of the API call.
-    const filteredOrders = React.useMemo(() => {
-        if (!searchTerm) return orders;
-        
-        return orders.filter(order => {
-            const values = [
-                order.orderNumber,
-                order.propertyAddress,
-                order.propertyCity,
-                order.propertyState,
-                order.client?.companyName,
-                order.status,
-                order.assignee?.name,
-            ].filter(Boolean).map(v => v.toLowerCase());
-
-            return values.some(v => v.includes(searchTerm.toLowerCase()));
-        });
-
-    }, [orders, searchTerm]);
-
-
+   
     if (isLoading && isMobile) {
         return (
             <div className="space-y-4">
@@ -62,7 +33,7 @@ export function OrdersList({ orders, isMinimal = false }: OrdersListProps) {
     }
 
     if (isMobile) {
-        if (!filteredOrders.length) {
+        if (!orders.length) {
              return (
                 <div className="text-center py-12 flex flex-col items-center">
                     <SearchX className="h-12 w-12 text-muted-foreground" />
@@ -89,7 +60,7 @@ export function OrdersList({ orders, isMinimal = false }: OrdersListProps) {
         }
         return (
             <div className="space-y-4">
-                {filteredOrders.map(order => (
+                {orders.map(order => (
                     <OrderCard key={order.id} order={order} />
                 ))}
             </div>
@@ -100,5 +71,5 @@ export function OrdersList({ orders, isMinimal = false }: OrdersListProps) {
         return <OrdersTableSkeleton isMinimal={isMinimal} />;
     }
 
-    return <OrdersTable orders={filteredOrders} isMinimal={isMinimal} />;
+    return <OrdersTable orders={orders} isMinimal={isMinimal} />;
 }

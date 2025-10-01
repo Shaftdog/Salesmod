@@ -63,7 +63,7 @@ export function OrderCard({ order }: OrderCardProps) {
 
     return (
         <Link href={`/orders/${order.id}`} className="block hover:shadow-lg rounded-lg transition-shadow">
-            <Card className="cursor-pointer">
+            <Card className="cursor-pointer h-full flex flex-col">
                 <CardHeader>
                     <div className="flex justify-between items-start">
                         <div>
@@ -99,7 +99,7 @@ export function OrderCard({ order }: OrderCardProps) {
                         </TooltipProvider>
                     </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 flex-grow">
                     <div className="flex justify-between items-center">
                         <OrderStatusBadge status={order.status} />
                         <div className="text-sm text-muted-foreground">Due: {formattedDueDate}</div>
@@ -117,7 +117,7 @@ export function OrderCard({ order }: OrderCardProps) {
                         <div className="flex items-center gap-2 text-sm">
                             <span className="text-muted-foreground">Assigned to:</span>
                             <Avatar className="h-6 w-6">
-                                <AvatarImage src={order.assignee.avatarUrl} />
+                                {order.assignee.avatarUrl && <AvatarImage src={order.assignee.avatarUrl} />}
                                 <AvatarFallback>{order.assignee.name.charAt(0)}</AvatarFallback>
                             </Avatar>
                             <span>{order.assignee.name}</span>
