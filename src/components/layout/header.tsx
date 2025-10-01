@@ -52,8 +52,17 @@ export default function Header() {
     const items = pathParts.map((part, index) => {
         const href = '/' + pathParts.slice(0, index + 1).join('/');
         const isPage = index === pathParts.length - 1;
+        const label = part.charAt(0).toUpperCase() + part.slice(1).replace(/-/g, ' ');
+        // Special case for order IDs to show "Order <ID>"
+        if (pathParts[index-1] === 'orders' && part.match(/^order-\d+$/)) {
+            return {
+                label: `Order ${part.split('-')[1]}`,
+                href,
+                isPage
+            }
+        }
         return {
-            label: part.charAt(0).toUpperCase() + part.slice(1).replace('-', ' '),
+            label,
             href,
             isPage
         }
