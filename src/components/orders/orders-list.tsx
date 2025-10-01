@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -38,7 +39,20 @@ export function OrdersList({ orders, isMinimal = false }: OrdersListProps) {
 
     if (isMobile) {
         if (!filteredOrders.length) {
-            return <p className="text-center text-muted-foreground">No orders found.</p>;
+             return (
+                <div className="text-center py-12">
+                    <h3 className="text-lg font-semibold">No Orders Found</h3>
+                    {searchTerm ? (
+                        <p className="text-muted-foreground text-sm mt-1">
+                            Try adjusting your search or filters.
+                        </p>
+                    ) : (
+                         <p className="text-muted-foreground text-sm mt-1">
+                            Get started by creating a new order.
+                        </p>
+                    )}
+                </div>
+            );
         }
         return (
             <div className="space-y-4">

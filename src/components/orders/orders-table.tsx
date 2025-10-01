@@ -61,7 +61,9 @@ type OrdersTableProps = {
 
 export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
   const { searchTerm, setSearchTerm: setGlobalFilter } = useSearch();
-  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [sorting, setSorting] = React.useState<SortingState>([
+    { id: "orderedDate", desc: true },
+  ]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
@@ -113,7 +115,7 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
     },
     {
         accessorKey: "orderedDate",
-        header: "Ordered Date",
+        header: "Ordered",
         cell: ({ row }) => <div>{format(new Date(row.getValue("orderedDate")), "MMM d, yyyy")}</div>,
     },
     {
@@ -144,7 +146,6 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
             const formatted = new Intl.NumberFormat("en-US", {
               style: "currency",
               currency: "USD",
-              minimumFractionDigits: 2,
             }).format(amount)
     
             return <div className="text-right font-medium">{formatted}</div>
@@ -347,7 +348,11 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No results.
+                    {globalFilter ? (
+                        <>No orders found for &quot;{globalFilter}&quot;.</>
+                    ) : (
+                        "No orders found."
+                    )}
                 </TableCell>
               </TableRow>
             )}
