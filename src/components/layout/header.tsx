@@ -1,6 +1,7 @@
+
 "use client";
 
-import React from "react";
+import React, { memo } from "react";
 import Link from "next/link";
 import { usePathname } from 'next/navigation';
 import {
@@ -41,7 +42,7 @@ const navLinks = [
     { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-export default function Header() {
+function Header() {
   const pathname = usePathname();
   const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar-1');
 
@@ -172,3 +173,5 @@ export default function Header() {
     </header>
   );
 }
+
+export default memo(Header);
