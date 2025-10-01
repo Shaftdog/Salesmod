@@ -31,7 +31,7 @@ export function OrderCard({ order }: OrderCardProps) {
         currency: "USD",
     }).format(order.totalAmount)
 
-    const handleAction = (e: Event, callback: () => void) => {
+    const handleAction = (e: React.MouseEvent, callback: () => void) => {
         e.preventDefault();
         e.stopPropagation();
         callback();
@@ -82,11 +82,11 @@ export function OrderCard({ order }: OrderCardProps) {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onSelect={(e) => handleAction(e, handleView)}>View</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={(e) => handleAction(e, handleEdit)}>Edit</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={(e) => handleAction(e, handleClone)}>Clone</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleView)}>View</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleEdit)}>Edit</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleClone)}>Clone</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={(e) => handleAction(e, handleDelete)}>Delete</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleDelete)}>Delete</DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>

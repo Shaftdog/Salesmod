@@ -28,7 +28,7 @@ export function ClientCard({ client }: ClientCardProps) {
         maximumFractionDigits: 0,
     }).format(client.totalRevenue) : '$0';
 
-    const handleAction = (e: Event, callback: () => void) => {
+    const handleAction = (e: React.MouseEvent, callback: () => void) => {
         e.preventDefault();
         e.stopPropagation();
         callback();
@@ -79,10 +79,10 @@ export function ClientCard({ client }: ClientCardProps) {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onSelect={(e) => handleAction(e, handleView)}>View</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={(e) => handleAction(e, handleEdit)}>Edit</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleView)}>View</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleEdit)}>Edit</DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={(e) => handleAction(e, handleDelete)}>Delete</DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={(e) => handleAction(e as unknown as React.MouseEvent, handleDelete)}>Delete</DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
