@@ -31,39 +31,39 @@ export function OrderCard({ order }: OrderCardProps) {
         currency: "USD",
     }).format(order.totalAmount)
 
-    const handleAction = (e: Event, message: string) => {
+    const handleAction = (e: Event, callback: () => void) => {
         e.preventDefault();
         e.stopPropagation();
-        toast({ title: message });
+        callback();
     };
 
-    const handleDelete = (e: Event) => {
-        e.preventDefault();
-        e.stopPropagation();
+    const handleDelete = () => {
         if (window.confirm("Are you sure you want to delete this order?")) {
             console.log(`Deleting order ${order.id}`);
             toast({
                 title: "Order deleted",
                 description: `Order ${order.orderNumber} has been deleted.`,
-                variant: "destructive"
+                variant: "destructive",
+                action: <Button variant="secondary" size="sm" onClick={() => toast({title: "Undo not implemented yet."})}>Undo</Button>
             });
         }
     };
     
-    const handleClone = (e: Event) => {
-        e.preventDefault();
-        e.stopPropagation();
-        toast({ title: "Order duplicated successfully", description: `Order ${order.orderNumber} has been cloned.` });
+    const handleClone = () => {
+        toast({ title: "Order duplicated successfully", description: `A new order based on ${order.orderNumber} has been created.` });
     };
 
-    const handleView = (e: Event) => {
-        e.preventDefault();
-        e.stopPropagation();
+    const handleView = () => {
         router.push(`/orders/${order.id}`);
     }
 
+    const handleEdit = () => {
+        toast({ title: "Opening order editor..."});
+        // router.push(`/orders/${order.id}/edit`);
+    }
+
     return (
-        <Link href={`/orders/${order.id}`} className="block hover:shadow-lg rounded-lg">
+        <Link href={`/orders/${order.id}`} className="block hover:shadow-lg rounded-lg transition-shadow">
             <Card className="cursor-pointer">
                 <CardHeader>
                     <div className="flex justify-between items-start">
@@ -74,19 +74,19 @@ export function OrderCard({ order }: OrderCardProps) {
                             <CardDescription>{order.propertyAddress}</CardDescription>
                         </div>
                         <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                                <span className="sr-only">Open menu</span>
-                                <MoreHorizontal className="h-4 w-4" />
-                            </Button>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => handleAction(e, () => {})}>
+                                    <span className="sr-only">Open menu</span>
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onSelect={handleView}>View</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={(e) => handleAction(e, "Opening order editor...")}>Edit</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={handleClone}>Clone</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={(e) => handleAction(e, handleView)}>View</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={(e) => handleAction(e, handleEdit)}>Edit</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={(e) => handleAction(e, handleClone)}>Clone</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive" onSelect={handleDelete}>Delete</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={(e) => handleAction(e, handleDelete)}>Delete</DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
