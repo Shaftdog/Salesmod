@@ -35,13 +35,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Order } from "@/lib/types";
+import type { Order, OrderStatus } from "@/lib/types";
 import { OrderStatusBadge } from "./status-badge";
 import { format } from "date-fns";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { useSearch } from "@/contexts/search-context";
 import { rankItem } from "@tanstack/match-sorter-utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { orderStatuses } from "@/lib/types";
 
 
 const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
@@ -115,6 +117,9 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => <OrderStatusBadge status={row.getValue("status")} />,
+      filterFn: (row, id, value) => {
+        return value.includes(row.getValue(id))
+      },
     },
     {
       accessorKey: "dueDate",
@@ -261,33 +266,40 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
 
   return (
     <div className="w-full">
-        <div className="flex items-center pb-4 gap-2">
-            <Input
-            placeholder="Search by order #, address, client..."
-            value={globalFilter ?? ""}
-            onChange={(event) =>
-                setGlobalFilter(event.target.value)
-            }
-            className="max-w-sm"
-            />
-             <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 gap-1">
-                        <ListFilter className="h-3.5 w-3.5" />
-                        <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                            Filter
-                        </span>
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Filter by</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuCheckboxItem checked>
-                        Status
-                    </DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem>Priority</DropdownMenuCheckboxItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
+        <div className="flex items-center pb-4 gap-4">
+            <div className="flex items-center gap-2">
+                <Input
+                placeholder="Search orders..."
+                value={globalFilter ?? ""}
+                onChange={(event) =>
+                    setGlobalFilter(event.target.value)
+                }
+                className="max-w-sm"
+                />
+            </div>
+            <div className="flex items-center gap-2">
+                <label className="text-sm font-medium">Status</label>
+                <Select
+                    onValueChange={(value) => {
+                        if (value === 'all') {
+                            table.getColumn("status")?.setFilterValue(undefined);
+                        } else {
+                            table.getColumn("status")?.setFilterValue(value);
+                        }
+                    }}
+                    >
+                    <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        {orderStatuses.map(status => (
+                            <SelectItem key={status} value={status}>{status.replace(/_/g, " ")}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+            
             <div className="ml-auto flex items-center gap-2">
                 <Button variant="outline" size="sm" className="h-8 gap-1">
                     <File className="h-3.5 w-3.5" />
