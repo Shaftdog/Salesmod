@@ -29,8 +29,7 @@ export function OrderCard({ order }: OrderCardProps) {
     const formattedFee = new Intl.NumberFormat("en-US", {
         style: "currency",
         currency: "USD",
-        minimumFractionDigits: 2,
-    }).format(order.totalAmount)
+    }).format(order.totalAmount);
 
     const handleAction = (e: React.MouseEvent, callback: () => void) => {
         e.preventDefault();

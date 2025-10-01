@@ -22,11 +22,10 @@ type ClientCardProps = {
 export function ClientCard({ client }: ClientCardProps) {
     const { toast } = useToast();
     const router = useRouter();
-    const formattedRevenue = client.totalRevenue ? new Intl.NumberFormat("en-US", {
+    const formattedRevenue = new Intl.NumberFormat("en-US", {
         style: "currency",
         currency: "USD",
-        minimumFractionDigits: 2,
-    }).format(client.totalRevenue) : '$0.00';
+    }).format(client.totalRevenue || 0);
 
     const handleAction = (e: React.MouseEvent, callback: () => void) => {
         e.preventDefault();
@@ -35,7 +34,6 @@ export function ClientCard({ client }: ClientCardProps) {
     };
 
     const handleView = () => {
-        toast({ title: "Loading client details..." });
         router.push(`/clients/${client.id}`);
     };
 
@@ -61,7 +59,7 @@ export function ClientCard({ client }: ClientCardProps) {
 
     return (
         <Link href={`/clients/${client.id}`} className="block hover:shadow-lg rounded-lg transition-shadow">
-            <Card className="cursor-pointer h-full flex flex-col" onClick={() => toast({ title: "Loading client details..." })}>
+            <Card className="cursor-pointer h-full flex flex-col" onClick={() => toast({ title: `Loading details for ${client.companyName}...` })}>
                 <CardHeader>
                     <div className="flex justify-between items-start">
                         <div>

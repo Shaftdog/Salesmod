@@ -7,6 +7,7 @@ import { useSearch } from "@/contexts/search-context";
 import { ClientCard } from "./client-card";
 import { Button } from "../ui/button";
 import Link from "next/link";
+import { PlusCircle } from "lucide-react";
 
 type ClientsListProps = {
     clients: Client[];
@@ -46,8 +47,11 @@ export function ClientsList({ clients }: ClientsListProps) {
                         <p className="text-muted-foreground text-sm mt-1">
                             Get started by adding a new client.
                         </p>
-                        <Button asChild className="mt-4">
-                            <Link href="#">New Client</Link>
+                        <Button asChild className="mt-4 gap-1">
+                            <Link href="#">
+                                <PlusCircle className="h-3.5 w-3.5" />
+                                New Client
+                            </Link>
                         </Button>
                     </>
                 )}
