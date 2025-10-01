@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from "react";
@@ -21,21 +22,24 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { CalendarIcon, ChevronLeft, ChevronRight, Loader2, Wand2 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 import { Progress } from "@/components/ui/progress";
 import { ClientSelector } from "./client-selector";
 import { suggestBestAppraiserForOrder } from "@/ai/flows/suggest-best-appraiser-for-order";
 import { useToast } from "@/hooks/use-toast";
-import type { User, Client, OrderType, PropertyType, OrderPriority } from "@/lib/types";
+import type { User, Client, OrderType, PropertyType, OrderPriority, Order } from "@/lib/types";
 import { orderTypes, propertyTypes, orderPriorities } from "@/lib/types";
+import { orders as allOrders } from "@/lib/data";
 import {
     Dialog,
     DialogContent,
     DialogDescription,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
     DialogTrigger,
-  } from "@/components/ui/dialog"
+  } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../ui/alert-dialog";
   
 
 const formSchema = z.object({
@@ -86,6 +90,8 @@ export function OrderForm({ appraisers, clients }: OrderFormProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<{appraiserId: string, reason: string} | null>(null);
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+  const [potentialDuplicates, setPotentialDuplicates] = useState<Order[]>([]);
   const { toast } = useToast();
 
   const form = useForm<FormData>({
@@ -152,17 +158,49 @@ export function OrderForm({ appraisers, clients }: OrderFormProps) {
 
   type FieldName = keyof FormData;
 
+  const proceedToNextStep = () => {
+    if (currentStep < steps.length - 1) {
+        if (currentStep === steps.length - 2) {
+            form.handleSubmit(processForm)();
+        }
+        setCurrentStep((step) => step + 1);
+    }
+  }
+
+  const checkForDuplicates = () => {
+    const { propertyAddress, propertyCity, propertyState, propertyZip } = form.getValues();
+    const thirtyDaysAgo = subDays(new Date(), 30);
+
+    const duplicates = allOrders.filter(order => {
+        const orderDate = new Date(order.orderedDate);
+        return (
+            order.propertyAddress.toLowerCase() === propertyAddress.toLowerCase() &&
+            order.propertyCity.toLowerCase() === propertyCity.toLowerCase() &&
+            order.propertyState.toLowerCase() === propertyState.toLowerCase() &&
+            order.propertyZip === propertyZip &&
+            orderDate >= thirtyDaysAgo
+        );
+    });
+
+    if (duplicates.length > 0) {
+        setPotentialDuplicates(duplicates);
+        setShowDuplicateWarning(true);
+    } else {
+        proceedToNextStep();
+    }
+  };
+
+
   const next = async () => {
     const fields = steps[currentStep].fields;
     const output = await form.trigger(fields as FieldName[], { shouldFocus: true });
 
     if (!output) return;
 
-    if (currentStep < steps.length - 1) {
-      if (currentStep === steps.length - 2) {
-        await form.handleSubmit(processForm)();
-      }
-      setCurrentStep((step) => step + 1);
+    if (currentStep === 0) { // Property Info step
+        checkForDuplicates();
+    } else {
+        proceedToNextStep();
     }
   };
 
@@ -175,41 +213,68 @@ export function OrderForm({ appraisers, clients }: OrderFormProps) {
   const progress = ((currentStep + 1) / steps.length) * 100;
 
   return (
-    <FormProvider {...form}>
-      <form onSubmit={form.handleSubmit(processForm)} className="space-y-8">
-        <Progress value={progress} className="w-full" />
-        
-        <div className="min-h-[450px]">
-        {currentStep === 0 && <Step1 />}
-        {currentStep === 1 && <Step2 />}
-        {currentStep === 2 && <Step3 clients={clients} />}
-        {currentStep === 3 && <Step4 appraisers={appraisers} onSuggest={handleAiSuggest} isLoading={isAiLoading} />}
-        {currentStep === 4 && <ReviewStep onSelectSuggestion={handleSelectSuggestion} suggestion={aiSuggestion} appraisers={appraisers} />}
-        </div>
+    <>
+      <FormProvider {...form}>
+        <form onSubmit={form.handleSubmit(processForm)} className="space-y-8">
+          <Progress value={progress} className="w-full" />
+          
+          <div className="min-h-[450px]">
+          {currentStep === 0 && <Step1 />}
+          {currentStep === 1 && <Step2 />}
+          {currentStep === 2 && <Step3 clients={clients} />}
+          {currentStep === 3 && <Step4 appraisers={appraisers} onSuggest={handleAiSuggest} isLoading={isAiLoading} />}
+          {currentStep === 4 && <ReviewStep onSelectSuggestion={handleSelectSuggestion} suggestion={aiSuggestion} appraisers={appraisers} />}
+          </div>
 
-        {/* Navigation */}
-        <div className="flex justify-between">
-          <Button type="button" onClick={prev} variant="outline" disabled={currentStep === 0}>
-            <ChevronLeft className="mr-2 h-4 w-4" /> Previous
-          </Button>
-          {currentStep < steps.length - 2 && (
-            <Button type="button" onClick={next}>
-              Next <ChevronRight className="ml-2 h-4 w-4" />
+          {/* Navigation */}
+          <div className="flex justify-between">
+            <Button type="button" onClick={prev} variant="outline" disabled={currentStep === 0}>
+              <ChevronLeft className="mr-2 h-4 w-4" /> Previous
             </Button>
-          )}
-           {currentStep === steps.length - 2 && (
-            <Button type="button" onClick={next}>
-              Review & Submit
-            </Button>
-          )}
-           {currentStep === steps.length - 1 && (
-            <Button type="submit">
-              Create Another Order
-            </Button>
-          )}
-        </div>
-      </form>
-    </FormProvider>
+            {currentStep < steps.length - 2 && (
+              <Button type="button" onClick={next}>
+                Next <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+            )}
+            {currentStep === steps.length - 2 && (
+              <Button type="button" onClick={next}>
+                Review & Submit
+              </Button>
+            )}
+            {currentStep === steps.length - 1 && (
+              <Button type="submit">
+                Create Another Order
+              </Button>
+            )}
+          </div>
+        </form>
+      </FormProvider>
+
+      <AlertDialog open={showDuplicateWarning} onOpenChange={setShowDuplicateWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Potential Duplicate Order</AlertDialogTitle>
+            <AlertDialogDescription>
+              An order for this property address was created recently. Are you sure you want to create a new one?
+              <ul className="mt-2 list-disc list-inside bg-muted p-2 rounded-md">
+                {potentialDuplicates.map(d => (
+                    <li key={d.id} className="text-sm">Order #{d.orderNumber} created on {format(new Date(d.orderedDate), "PPP")}</li>
+                ))}
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+                setShowDuplicateWarning(false);
+                proceedToNextStep();
+            }}>
+              Create Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -482,3 +547,5 @@ const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers }: { suggestion
         </div>
     )
 }
+
+    
