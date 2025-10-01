@@ -62,7 +62,7 @@ export function ClientCard({ client }: ClientCardProps) {
 
     return (
         <Link href={`/clients/${client.id}`} className="block hover:shadow-lg rounded-lg">
-            <Card className="cursor-pointer h-full flex flex-col">
+            <Card className="cursor-pointer h-full flex flex-col" onClick={() => toast({ title: "Loading client details..." })}>
                 <CardHeader>
                     <div className="flex justify-between items-start">
                         <div>
