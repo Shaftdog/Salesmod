@@ -13,6 +13,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 
 type ClientCardProps = {
     client: Client;
@@ -20,20 +21,47 @@ type ClientCardProps = {
 
 export function ClientCard({ client }: ClientCardProps) {
     const { toast } = useToast();
+    const router = useRouter();
     const formattedRevenue = client.totalRevenue ? new Intl.NumberFormat("en-US", {
         style: "currency",
         currency: "USD",
         maximumFractionDigits: 0,
     }).format(client.totalRevenue) : '$0';
 
-    const handleAction = (e: Event, message: string, variant?: "default" | "destructive") => {
+    const handleView = (e: Event) => {
         e.preventDefault();
         e.stopPropagation();
-        toast({ title: message, variant });
-    }
+        toast({ title: "Loading client details..." });
+        router.push(`/clients/${client.id}`);
+    };
+
+    const handleEdit = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toast({ title: "Opening edit form..." });
+        // This would navigate to an edit page, which we can build later.
+        // router.push(`/clients/${client.id}/edit`);
+    };
+
+    const handleDelete = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // A simple confirmation dialog. For a better UX, a custom AlertDialog component would be ideal.
+        if (window.confirm("Are you sure you want to delete this client?")) {
+            console.log(`Deleting client ${client.id}`);
+            toast({ 
+                title: "Client deleted",
+                description: `${client.companyName} has been deleted.`,
+                variant: "destructive",
+                // The current toast implementation doesn't support an undo action out of the box.
+                // This would require a more advanced toast setup.
+            });
+        }
+    };
+
 
     return (
-        <Link href="#" className="block hover:shadow-lg rounded-lg" onClick={(e) => handleAction(e, `Viewing details for ${client.companyName}`)}>
+        <Link href={`/clients/${client.id}`} className="block hover:shadow-lg rounded-lg">
             <Card className="cursor-pointer h-full flex flex-col">
                 <CardHeader>
                     <div className="flex justify-between items-start">
@@ -52,10 +80,10 @@ export function ClientCard({ client }: ClientCardProps) {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onSelect={(e) => handleAction(e, `Viewing client...`)}>View</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={(e) => handleAction(e, `Editing client...`)}>Edit</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={handleView}>View</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={handleEdit}>Edit</DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-destructive" onSelect={(e) => handleAction(e, "Client deleted", "destructive")}>Delete</DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive" onSelect={handleDelete}>Delete</DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>

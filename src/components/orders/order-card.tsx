@@ -17,6 +17,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 
 type OrderCardProps = {
     order: Order;
@@ -24,16 +25,42 @@ type OrderCardProps = {
 
 export function OrderCard({ order }: OrderCardProps) {
     const { toast } = useToast();
+    const router = useRouter();
     const formattedDueDate = format(new Date(order.dueDate), "MMM d, yyyy");
     const formattedFee = new Intl.NumberFormat("en-US", {
         style: "currency",
         currency: "USD",
     }).format(order.totalAmount)
 
-    const handleAction = (e: Event, message: string, variant?: "default" | "destructive") => {
+    const handleAction = (e: Event, message: string) => {
         e.preventDefault();
         e.stopPropagation();
-        toast({ title: message, variant });
+        toast({ title: message });
+    };
+
+    const handleDelete = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.confirm("Are you sure you want to delete this order?")) {
+            console.log(`Deleting order ${order.id}`);
+            toast({
+                title: "Order deleted",
+                description: `Order ${order.orderNumber} has been deleted.`,
+                variant: "destructive"
+            });
+        }
+    };
+    
+    const handleClone = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toast({ title: "Order duplicated successfully", description: `Order ${order.orderNumber} has been cloned.` });
+    };
+
+    const handleView = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        router.push(`/orders/${order.id}`);
     }
 
     return (
@@ -56,11 +83,11 @@ export function OrderCard({ order }: OrderCardProps) {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onSelect={(e) => handleAction(e, "Viewing order...")} asChild><Link href={`/orders/${order.id}`}>View</Link></DropdownMenuItem>
-                            <DropdownMenuItem onSelect={(e) => handleAction(e, "Editing order...")}>Edit</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={(e) => handleAction(e, "Cloning order...")}>Clone</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={handleView}>View</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={(e) => handleAction(e, "Opening order editor...")}>Edit</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={handleClone}>Clone</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive" onSelect={(e) => handleAction(e, "Order deleted", "destructive")}>Delete</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onSelect={handleDelete}>Delete</DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
@@ -97,4 +124,3 @@ export function OrderCard({ order }: OrderCardProps) {
         </Link>
     );
 }
-
