@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
+import { SearchProvider } from "@/contexts/search-context";
 
 export function Providers({ children }: PropsWithChildren) {
   const [queryClient] = useState(
@@ -20,8 +21,10 @@ export function Providers({ children }: PropsWithChildren) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
-      <Toaster />
+      <SearchProvider>
+        {children}
+        <Toaster />
+      </SearchProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );

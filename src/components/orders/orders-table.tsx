@@ -12,6 +12,7 @@ import {
   type SortingState,
   type ColumnFiltersState,
   type VisibilityState,
+  type FilterFn,
 } from "@tanstack/react-table";
 import { MoreHorizontal, ArrowUpDown, ChevronDown, File, ListFilter } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,17 @@ import { OrderStatusBadge } from "./status-badge";
 import { format } from "date-fns";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import { useSearch } from "@/contexts/search-context";
+import { rankItem } from "@tanstack/match-sorter-utils";
+
+
+const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
+    const itemRank = rankItem(row.getValue(columnId), value)
+    addMeta({
+      itemRank,
+    })
+    return itemRank.passed
+  }
 
 type OrdersTableProps = {
   orders: Order[];
@@ -46,10 +58,16 @@ type OrdersTableProps = {
 };
 
 export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
+  const { searchTerm } = useSearch();
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
+  const [globalFilter, setGlobalFilter] = React.useState('');
+
+  React.useEffect(() => {
+    setGlobalFilter(searchTerm);
+  }, [searchTerm]);
 
   const columns: ColumnDef<Order>[] = [
     {
@@ -177,11 +195,14 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
+    onGlobalFilterChange: setGlobalFilter,
+    globalFilterFn: fuzzyFilter,
     state: {
       sorting,
       columnFilters,
       columnVisibility,
       rowSelection,
+      globalFilter,
     },
   });
 
@@ -243,9 +264,9 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
         <div className="flex items-center pb-4 gap-2">
             <Input
             placeholder="Search by order #, address, client..."
-            value={(table.getColumn("propertyAddress")?.getFilterValue() as string) ?? ""}
+            value={globalFilter ?? ""}
             onChange={(event) =>
-                table.getColumn("propertyAddress")?.setFilterValue(event.target.value)
+                setGlobalFilter(event.target.value)
             }
             className="max-w-sm"
             />
