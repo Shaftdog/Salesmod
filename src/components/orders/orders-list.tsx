@@ -1,8 +1,7 @@
-
 "use client";
 
-import *s React from "react";
-import { Order } from "@/lib/types";
+import * as React from "react";
+import type { Order } from "@/lib/types";
 import { OrdersTable } from "./orders-table";
 import { OrderCard } from "./order-card";
 import { useIsMobile } from "@/hooks/use-mobile";
