@@ -60,14 +60,13 @@ function Header() {
     const items = pathParts.map((part, index) => {
         const href = '/' + pathParts.slice(0, index + 1).join('/');
         const isPage = index === pathParts.length - 1;
-        const label = part.charAt(0).toUpperCase() + part.slice(1).replace(/-/g, ' ');
+        let label = part.charAt(0).toUpperCase() + part.slice(1).replace(/-/g, ' ');
         // Special case for order IDs to show "Order <ID>"
         if (pathParts[index-1] === 'orders' && part.match(/^order-\d+$/)) {
-            return {
-                label: `Order ${part.split('-')[1]}`,
-                href,
-                isPage
-            }
+            label = `Order ${part.split('-')[1]}`;
+        }
+        if (pathParts[index-1] === 'clients' && part.match(/^client-\d+$/)) {
+            label = `Client Details`;
         }
         return {
             label,
@@ -83,7 +82,9 @@ function Header() {
     return items;
   }, [pathname]);
 
-  const isOrderPage = pathname.startsWith('/orders') || pathname === '/dashboard';
+  const showSearch = pathname.startsWith('/orders') || pathname === '/dashboard' || pathname.startsWith('/clients');
+  const searchPlaceholder = pathname.startsWith('/clients') ? "Search clients..." : "Search orders...";
+
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
@@ -150,12 +151,12 @@ function Header() {
         </BreadcrumbList>
       </Breadcrumb>
       <div className="relative ml-auto flex-1 md:grow-0">
-        {isOrderPage && (
+        {showSearch && (
           <>
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search orders..."
+              placeholder={searchPlaceholder}
               className="w-full rounded-lg bg-background pl-8 md:w-[200px] lg:w-[336px]"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}

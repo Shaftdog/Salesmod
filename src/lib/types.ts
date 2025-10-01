@@ -34,12 +34,14 @@ export interface Client {
   address: string;
   billingAddress: string;
   paymentTerms: number;
-  feeSchedule?: any; // jsonb
-  preferredTurnaround?: number;
-  specialRequirements?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  activeOrders?: number;
+  totalRevenue?: number;
+  feeSchedule?: any; // jsonb
+  preferredTurnaround?: number;
+  specialRequirements?: string;
 }
 
 export interface Order {
