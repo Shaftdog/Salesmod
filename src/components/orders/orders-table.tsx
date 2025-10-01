@@ -13,21 +13,18 @@ import {
   type SortingState,
   type ColumnFiltersState,
   type VisibilityState,
-  type FilterFn,
 } from "@tanstack/react-table";
-import { MoreHorizontal, ArrowUpDown, ChevronDown, File, ListFilter, PackageSearch } from "lucide-react";
+import { MoreHorizontal, PackageSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -36,25 +33,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Order, OrderStatus } from "@/lib/types";
+import type { Order } from "@/lib/types";
 import { OrderStatusBadge } from "./status-badge";
 import { format } from "date-fns";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { useSearch } from "@/contexts/search-context";
-import { rankItem } from "@tanstack/match-sorter-utils";
-import { orderStatuses } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 import { Skeleton } from "../ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 
-
-const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
-    const itemRank = rankItem(row.getValue(columnId), value)
-    addMeta({
-      itemRank,
-    })
-    return itemRank.passed
-  }
 
 type OrdersTableProps = {
   orders: Order[];
@@ -100,9 +88,6 @@ export const columns: ColumnDef<Order>[] = [
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => <OrderStatusBadge status={row.getValue("status")} />,
-      filterFn: (row, id, value) => {
-        return value.includes(row.getValue(id))
-      },
     },
     {
         accessorKey: "orderedDate",
@@ -141,22 +126,31 @@ export const columns: ColumnDef<Order>[] = [
       id: "actions",
       cell: ({ row }) => {
         return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem asChild><Link href={`/orders/${row.original.id}`}>View</Link></DropdownMenuItem>
-              <DropdownMenuItem>Edit</DropdownMenuItem>
-              <DropdownMenuItem>Clone</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <TooltipProvider>
+            <DropdownMenu>
+               <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="h-8 w-8 p-0">
+                      <span className="sr-only">Open menu</span>
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>More options</p>
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuItem asChild><Link href={`/orders/${row.original.id}`}>View</Link></DropdownMenuItem>
+                <DropdownMenuItem>Edit</DropdownMenuItem>
+                <DropdownMenuItem>Clone</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </TooltipProvider>
         );
       },
     },
@@ -184,14 +178,11 @@ export function OrdersTable({ orders, isMinimal = false }: OrdersTableProps) {
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    onGlobalFilterChange: setGlobalFilter,
-    globalFilterFn: fuzzyFilter,
     state: {
       sorting,
       columnFilters,
       columnVisibility,
       rowSelection,
-      globalFilter,
     },
   });
 

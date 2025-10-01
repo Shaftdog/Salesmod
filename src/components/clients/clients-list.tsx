@@ -8,6 +8,7 @@ import { ClientCard } from "./client-card";
 import { Button } from "../ui/button";
 import Link from "next/link";
 import { PlusCircle, UserX } from "lucide-react";
+import { Skeleton } from "../ui/skeleton";
 
 type ClientsListProps = {
     clients: Client[];
@@ -15,6 +16,12 @@ type ClientsListProps = {
 
 export function ClientsList({ clients }: ClientsListProps) {
     const { searchTerm, setSearchTerm } = useSearch();
+    const [isLoading, setIsLoading] = React.useState(true);
+
+    React.useEffect(() => {
+        const timer = setTimeout(() => setIsLoading(false), 1000); // Simulate loading
+        return () => clearTimeout(timer);
+    }, []);
 
     const filteredClients = React.useMemo(() => {
         if (!searchTerm) return clients;
@@ -33,6 +40,15 @@ export function ClientsList({ clients }: ClientsListProps) {
 
     }, [clients, searchTerm]);
 
+    if (isLoading) {
+        return (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[...Array(6)].map((_, i) => (
+                    <Skeleton key={i} className="h-[240px] w-full" />
+                ))}
+            </div>
+        )
+    }
 
     if (!filteredClients.length) {
         return (
@@ -49,7 +65,7 @@ export function ClientsList({ clients }: ClientsListProps) {
                             Get started by adding a new client.
                         </p>
                         <Button asChild className="mt-4 gap-1">
-                            <Link href="#">
+                            <Link href="/clients/new">
                                 <PlusCircle className="h-3.5 w-3.5" />
                                 New Client
                             </Link>

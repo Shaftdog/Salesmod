@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Order } from "@/lib/types";
 import { OrderStatusBadge } from "./status-badge";
@@ -57,7 +58,7 @@ export function OrderCard({ order }: OrderCardProps) {
 
     const handleEdit = () => {
         toast({ title: "Opening order editor..."});
-        // router.push(`/orders/${order.id}/edit`);
+        router.push(`/orders/${order.id}/edit`);
     }
 
     return (

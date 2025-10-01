@@ -29,6 +29,8 @@ export function OrdersList({ orders, isMinimal = false }: OrdersListProps) {
         return () => clearTimeout(timer);
     }, []);
 
+    // This is a simplified filtering for demonstration. 
+    // In a real app, this would likely be part of the API call.
     const filteredOrders = React.useMemo(() => {
         if (!searchTerm) return orders;
         
@@ -70,9 +72,17 @@ export function OrdersList({ orders, isMinimal = false }: OrdersListProps) {
                             No orders found matching &quot;{searchTerm}&quot;.
                         </p>
                     ) : (
-                         <p className="text-muted-foreground text-sm mt-1">
-                            Get started by creating a new order.
-                        </p>
+                         <>
+                            <p className="text-muted-foreground text-sm mt-1">
+                                Get started by creating a new order.
+                            </p>
+                             <Button asChild className="mt-4 gap-1">
+                                <Link href="/orders/new">
+                                    <PlusCircle className="h-3.5 w-3.5" />
+                                    New Order
+                                </Link>
+                            </Button>
+                        </>
                     )}
                 </div>
             );

@@ -23,7 +23,7 @@ export default function ClientsPage() {
                 </div>
                  <div className="flex items-center gap-2">
                     <Input
-                      placeholder="Search clients..."
+                      placeholder="Search clients (⌘K)..."
                       className="w-full md:w-[200px] lg:w-[336px]"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}

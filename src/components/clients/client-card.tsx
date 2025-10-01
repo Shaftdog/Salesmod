@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Client } from "@/lib/types";
 import Link from "next/link";
@@ -39,7 +40,7 @@ export function ClientCard({ client }: ClientCardProps) {
     const handleEdit = () => {
         toast({ title: "Opening edit form..." });
         // This would navigate to an edit page.
-        // router.push(`/clients/${client.id}/edit`);
+        router.push(`/clients/${client.id}/edit`);
     };
 
     const handleDelete = () => {

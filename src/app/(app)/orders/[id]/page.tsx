@@ -1,3 +1,4 @@
+
 import { orders, users } from "@/lib/data";
 import { notFound } from "next/navigation";
 import {
@@ -31,6 +32,7 @@ import { Progress } from "@/components/ui/progress";
 import { orderStatuses } from "@/lib/types";
 import { OrderMap } from "@/components/orders/order-map";
 import { formatCurrency } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function OrderDetailsPage({ params }: { params: { id: string } }) {
   const order = orders.find((o) => o.id === params.id);
@@ -140,7 +142,18 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
                 <Button>Change Status</Button>
                 <Button variant="secondary">Assign Appraiser</Button>
                 <Button variant="secondary">Schedule Inspection</Button>
-                <Button variant="outline"> <Printer className="mr-2 h-4 w-4" /> Print Order</Button>
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button variant="outline">
+                                <Printer className="mr-2 h-4 w-4" /> Print Order
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>Print Order Details</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
             </CardContent>
         </Card>
       </div>

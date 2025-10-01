@@ -1,7 +1,7 @@
 
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +27,18 @@ export default function OrdersPage() {
     const { searchTerm, setSearchTerm } = useSearch();
     const [statusFilter, setStatusFilter] = React.useState<string>("all");
     const [sortOption, setSortOption] = React.useState<SortOption>("orderedDate_desc");
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+          e.preventDefault();
+          searchInputRef.current?.focus();
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     const filteredAndSortedOrders = React.useMemo(() => {
         let filtered = orders;
@@ -54,7 +66,7 @@ export default function OrdersPage() {
         const [sortBy, sortDir] = sortOption.split('_');
 
         return [...filtered].sort((a, b) => {
-            let valA, valB;
+            let valA: string | number, valB: string | number;
 
             switch (sortBy) {
                 case 'orderedDate':
@@ -92,6 +104,7 @@ export default function OrdersPage() {
                 </div>
                 <div className="flex flex-col sm:flex-row items-center gap-2">
                     <Input
+                      ref={searchInputRef}
                       placeholder="Search orders (⌘K)..."
                       className="w-full md:w-[200px] lg:w-[336px]"
                       value={searchTerm}
@@ -99,7 +112,7 @@ export default function OrdersPage() {
                     />
                     <div className="flex w-full sm:w-auto items-center gap-2">
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="w-full sm:w-[180px]">
+                            <SelectTrigger className="w-full sm:w-auto">
                                 <SelectValue placeholder="Filter by status" />
                             </SelectTrigger>
                             <SelectContent>
@@ -112,7 +125,7 @@ export default function OrdersPage() {
                             </SelectContent>
                         </Select>
                         <Select value={sortOption} onValueChange={(value) => setSortOption(value as SortOption)}>
-                            <SelectTrigger className="w-full sm:w-[180px]">
+                            <SelectTrigger className="w-full sm:w-auto">
                                 <SelectValue placeholder="Sort by" />
                             </SelectTrigger>
                             <SelectContent>
