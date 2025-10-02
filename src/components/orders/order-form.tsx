@@ -108,8 +108,6 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
       processorName: "",
       borrowerName: "",
       priority: "normal",
-      // This will be set in useEffect to avoid hydration mismatch
-      // dueDate: addDays(new Date(), 7),
       feeAmount: "",
       assignedTo: "",
     },
@@ -121,7 +119,8 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
       ...form.getValues(),
       dueDate: addDays(new Date(), 7),
     });
-  }, [form]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   const handleQuickAddClient = (clientData: Omit<Client, 'id' | 'createdAt' | 'updatedAt' | 'isActive' | 'paymentTerms' | 'billingAddress'>) => {
     // In a real app, you'd save this to your backend and get the new client back
@@ -607,5 +606,3 @@ const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers, clients }: { s
         </div>
     )
 }
-
-    
