@@ -23,14 +23,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { CalendarIcon, ChevronLeft, ChevronRight, Loader2, Wand2 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { cn, formatCurrency } from "@/lib/utils";
-import { format, formatISO, subDays } from "date-fns";
+import { format, formatISO, subDays, addDays } from "date-fns";
 import { Progress } from "@/components/ui/progress";
 import { ClientSelector } from "./client-selector";
 import { suggestBestAppraiserForOrder } from "@/ai/flows/suggest-best-appraiser-for-order";
 import { useToast } from "@/hooks/use-toast";
 import type { User, Client, OrderType, PropertyType, OrderPriority, Order } from "@/lib/types";
 import { orderTypes, propertyTypes, orderPriorities } from "@/lib/types";
-import { orders as allOrders, clients as initialClients } from "@/lib/data";
+import { orders as allOrders } from "@/lib/data";
 import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../ui/alert-dialog";
 import { QuickClientForm } from "./quick-client-form";
@@ -109,7 +109,7 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
       processorName: "",
       borrowerName: "",
       priority: "normal",
-      dueDate: new Date(new Date().setDate(new Date().getDate() + 7)),
+      dueDate: addDays(new Date(), 7),
       feeAmount: "",
       assignedTo: "",
     },
@@ -599,3 +599,5 @@ const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers, clients }: { s
         </div>
     )
 }
+
+    
