@@ -640,7 +640,3 @@ const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers, clients }: { s
         </div>
     )
 }
-
-    
-
-    
