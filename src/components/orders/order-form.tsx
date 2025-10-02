@@ -33,6 +33,7 @@ import { orders as allOrders } from "@/lib/data";
 import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../ui/alert-dialog";
 import { QuickClientForm } from "./quick-client-form";
+import { useOrdersStore } from "@/store/orders";
   
 
 const formSchema = z.object({
@@ -88,6 +89,7 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
   const [potentialDuplicates, setPotentialDuplicates] = useState<Order[]>([]);
   const [clients, setClients] = useState<Client[]>(initialClients);
   const { toast } = useToast();
+  const addOrder = useOrdersStore((state) => state.addOrder);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -202,14 +204,46 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
 
   async function processForm(data: FormData) {
     setIsSubmitting(true);
-    console.log(data);
+    
+    const newOrder: Order = {
+        id: `order-${Date.now()}`,
+        orderNumber: `APR-2024-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
+        status: 'new',
+        priority: data.priority,
+        orderType: data.orderType,
+        propertyAddress: data.propertyAddress,
+        propertyCity: data.propertyCity,
+        propertyState: data.propertyState,
+        propertyZip: data.propertyZip,
+        propertyType: data.propertyType,
+        borrowerName: data.borrowerName,
+        clientId: data.clientId,
+        client: clients.find(c => c.id === data.clientId),
+        feeAmount: parseFloat(data.feeAmount),
+        totalAmount: parseFloat(data.feeAmount), // Simplified for now
+        dueDate: formatISO(data.dueDate),
+        orderedDate: formatISO(new Date()),
+        assignedTo: data.assignedTo === 'unassigned' ? undefined : data.assignedTo,
+        assignee: data.assignedTo && data.assignedTo !== 'unassigned' ? appraisers.find(a => a.id === data.assignedTo) : undefined,
+        createdBy: 'user-1', // Assuming a logged in user
+        createdAt: formatISO(new Date()),
+        updatedAt: formatISO(new Date()),
+        ...data,
+        loanAmount: data.loanAmount ? parseFloat(data.loanAmount) : undefined
+    };
+
+    addOrder(newOrder);
+
     await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
     setIsSubmitting(false);
     toast({
         title: "Order Created!",
         description: "The new order has been successfully created.",
     });
-    // This would typically redirect or clear the form
+
+    // Reset form for next entry
+    form.reset();
+     setCurrentStep(0);
   }
 
   type FieldName = keyof FormData;
@@ -606,5 +640,7 @@ const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers, clients }: { s
         </div>
     )
 }
+
+    
 
     

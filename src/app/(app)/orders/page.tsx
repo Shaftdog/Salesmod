@@ -6,12 +6,12 @@ import { PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { OrdersList } from "@/components/orders/orders-list";
-import { orders } from "@/lib/data";
 import Link from "next/link";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { orderStatuses, Order } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { useSearch } from "@/contexts/search-context";
+import { useOrdersStore } from "@/store/orders";
 
 type SortOption = 
   | "orderedDate_desc" 
@@ -29,6 +29,7 @@ export default function OrdersPage() {
     const [sortOption, setSortOption] = useState<SortOption>("orderedDate_desc");
     const [isLoading, setIsLoading] = useState(true);
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const orders = useOrdersStore((state) => state.orders);
 
     useEffect(() => {
       const timer = setTimeout(() => setIsLoading(false), 1500); // Simulate loading
@@ -97,7 +98,7 @@ export default function OrdersPage() {
             return 0;
         });
 
-    }, [statusFilter, searchTerm, sortOption]);
+    }, [orders, statusFilter, searchTerm, sortOption]);
 
     return (
         <Card>
@@ -162,3 +163,5 @@ export default function OrdersPage() {
         </Card>
     );
 }
+
+    
