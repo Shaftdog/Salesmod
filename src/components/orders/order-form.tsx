@@ -1,8 +1,7 @@
 
-
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useForm, FormProvider, useFormContext, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -109,11 +108,20 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
       processorName: "",
       borrowerName: "",
       priority: "normal",
-      dueDate: addDays(new Date(), 7),
+      // This will be set in useEffect to avoid hydration mismatch
+      // dueDate: addDays(new Date(), 7),
       feeAmount: "",
       assignedTo: "",
     },
   });
+
+  useEffect(() => {
+    // Set default due date on client side to avoid hydration mismatch
+    form.reset({
+      ...form.getValues(),
+      dueDate: addDays(new Date(), 7),
+    });
+  }, [form]);
   
   const handleQuickAddClient = (clientData: Omit<Client, 'id' | 'createdAt' | 'updatedAt' | 'isActive' | 'paymentTerms' | 'billingAddress'>) => {
     // In a real app, you'd save this to your backend and get the new client back
@@ -592,7 +600,7 @@ const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers, clients }: { s
              </div>
              <div className="space-y-2">
                 <h4 className="font-medium">Details</h4>
-                <p className="text-sm text-muted-foreground">Due Date: {format(values.dueDate, "PPP")}</p>
+                <p className="text-sm text-muted-foreground">Due Date: {values.dueDate ? format(values.dueDate, "PPP") : 'Not set'}</p>
                 <p className="text-sm text-muted-foreground">Fee: {formatCurrency(values.feeAmount || 0)}</p>
                 <p className="text-sm text-muted-foreground">Assigned To: {appraiser?.name || 'Unassigned'}</p>
              </div>
