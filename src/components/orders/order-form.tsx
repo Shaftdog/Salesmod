@@ -109,7 +109,7 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
       borrowerName: "",
       priority: "normal",
       feeAmount: "",
-      assignedTo: "",
+      assignedTo: "unassigned",
     },
   });
 
@@ -550,12 +550,12 @@ const Step4 = ({ appraisers, onSuggest, isLoading }: { appraisers: User[], onSug
                 <FormField control={control} name="assignedTo" render={({ field }) => (
                     <FormItem>
                         <FormLabel>Assign To Appraiser <span className="text-muted-foreground">(optional)</span></FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} defaultValue="">
+                        <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                         <FormControl>
                             <SelectTrigger><SelectValue placeholder="Select an appraiser" /></SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                            <SelectItem value="">Unassigned</SelectItem>
+                            <SelectItem value="unassigned">Unassigned</SelectItem>
                             {appraisers.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
                         </SelectContent>
                         </Select>
@@ -606,3 +606,5 @@ const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers, clients }: { s
         </div>
     )
 }
+
+    
