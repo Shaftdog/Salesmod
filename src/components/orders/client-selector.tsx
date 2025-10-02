@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -20,17 +21,27 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import type { Client } from "@/lib/types"
+import { QuickClientForm } from "./quick-client-form"
 
 type ClientSelectorProps = {
   clients: Client[];
   value: string;
   onChange: (value: string) => void;
+  onQuickAdd: (clientData: any) => void;
 };
 
-export function ClientSelector({ clients, value, onChange }: ClientSelectorProps) {
+export function ClientSelector({ clients, value, onChange, onQuickAdd }: ClientSelectorProps) {
   const [open, setOpen] = React.useState(false)
+  const [showQuickAdd, setShowQuickAdd] = React.useState(false)
+
+  const handleQuickAddSuccess = (clientData: any) => {
+    onQuickAdd(clientData);
+    setShowQuickAdd(false);
+    setOpen(false);
+  }
 
   return (
+    <>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
@@ -73,9 +84,7 @@ export function ClientSelector({ clients, value, onChange }: ClientSelectorProps
             <CommandSeparator />
             <CommandGroup>
                 <CommandItem onSelect={() => {
-                    // Quick Add logic would go here
-                    console.log("Quick add new client");
-                    setOpen(false);
+                    setShowQuickAdd(true);
                 }}>
                     <PlusCircle className="mr-2 h-4 w-4" />
                     Quick Add New Client
@@ -85,5 +94,7 @@ export function ClientSelector({ clients, value, onChange }: ClientSelectorProps
         </Command>
       </PopoverContent>
     </Popover>
+    <QuickClientForm open={showQuickAdd} onOpenChange={setShowQuickAdd} onSuccess={handleQuickAddSuccess} />
+    </>
   )
 }

@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState } from "react";
@@ -22,24 +23,17 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { CalendarIcon, ChevronLeft, ChevronRight, Loader2, Wand2 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { cn, formatCurrency } from "@/lib/utils";
-import { format, subDays } from "date-fns";
+import { format, formatISO, subDays } from "date-fns";
 import { Progress } from "@/components/ui/progress";
 import { ClientSelector } from "./client-selector";
 import { suggestBestAppraiserForOrder } from "@/ai/flows/suggest-best-appraiser-for-order";
 import { useToast } from "@/hooks/use-toast";
 import type { User, Client, OrderType, PropertyType, OrderPriority, Order } from "@/lib/types";
 import { orderTypes, propertyTypes, orderPriorities } from "@/lib/types";
-import { orders as allOrders } from "@/lib/data";
+import { orders as allOrders, clients as initialClients } from "@/lib/data";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-  } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../ui/alert-dialog";
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../ui/alert-dialog";
+import { QuickClientForm } from "./quick-client-form";
   
 
 const formSchema = z.object({
@@ -86,13 +80,14 @@ type OrderFormProps = {
   clients: Client[];
 };
 
-export function OrderForm({ appraisers, clients }: OrderFormProps) {
+export function OrderForm({ appraisers, clients: initialClients }: OrderFormProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<{appraiserId: string, reason: string} | null>(null);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const [potentialDuplicates, setPotentialDuplicates] = useState<Order[]>([]);
+  const [clients, setClients] = useState<Client[]>(initialClients);
   const { toast } = useToast();
 
   const form = useForm<FormData>({
@@ -119,10 +114,44 @@ export function OrderForm({ appraisers, clients }: OrderFormProps) {
       assignedTo: "",
     },
   });
+  
+  const handleQuickAddClient = (clientData: Omit<Client, 'id' | 'createdAt' | 'updatedAt' | 'isActive' | 'paymentTerms' | 'billingAddress'>) => {
+    // In a real app, you'd save this to your backend and get the new client back
+    const newClient: Client = {
+        ...clientData,
+        id: `client-${Date.now()}`,
+        createdAt: formatISO(new Date()),
+        updatedAt: formatISO(new Date()),
+        isActive: true,
+        paymentTerms: 30,
+        billingAddress: clientData.address,
+        activeOrders: 0,
+        totalRevenue: 0,
+    };
+    
+    setClients(prevClients => [...prevClients, newClient]);
+    form.setValue("clientId", newClient.id);
+    
+    toast({
+        title: "Client Added",
+        description: `${newClient.companyName} has been successfully added.`
+    });
+  };
+
 
   const handleAiSuggest = async () => {
     setIsAiLoading(true);
     setAiSuggestion(null);
+    const validation = await form.trigger(["propertyAddress", "propertyCity", "propertyState", "propertyZip", "priority", "orderType"]);
+    if (!validation) {
+        toast({
+            variant: "destructive",
+            title: "Missing Information",
+            description: "Please fill out property and order details before using AI suggestion.",
+        });
+        setIsAiLoading(false);
+        return;
+    }
     try {
         const orderDetails = form.getValues();
         const result = await suggestBestAppraiserForOrder({
@@ -246,9 +275,9 @@ export function OrderForm({ appraisers, clients }: OrderFormProps) {
             <fieldset disabled={isSubmitting}>
               {currentStep === 0 && <Step1 />}
               {currentStep === 1 && <Step2 />}
-              {currentStep === 2 && <Step3 clients={clients} />}
+              {currentStep === 2 && <Step3 clients={clients} onQuickAdd={handleQuickAddClient} />}
               {currentStep === 3 && <Step4 appraisers={appraisers} onSuggest={handleAiSuggest} isLoading={isAiLoading} />}
-              {currentStep === 4 && <ReviewStep onSelectSuggestion={handleSelectSuggestion} suggestion={aiSuggestion} appraisers={appraisers} />}
+              {currentStep === 4 && <ReviewStep onSelectSuggestion={handleSelectSuggestion} suggestion={aiSuggestion} appraisers={appraisers} clients={clients} />}
             </fieldset>
           </div>
 
@@ -414,14 +443,14 @@ const Step2 = () => {
     )
 }
 
-const Step3 = ({ clients }: { clients: Client[]}) => {
+const Step3 = ({ clients, onQuickAdd }: { clients: Client[], onQuickAdd: (data: any) => void }) => {
     const { control } = useFormContext();
     return (
         <div className="space-y-4">
              <FormField control={control} name="clientId" render={({ field }) => (
                 <FormItem className="flex flex-col">
                     <FormLabel>Client <span className="text-destructive">*</span></FormLabel>
-                    <ClientSelector clients={clients} value={field.value} onChange={field.onChange} />
+                    <ClientSelector clients={clients} value={field.value} onChange={field.onChange} onQuickAdd={onQuickAdd} />
                     <FormMessage />
                 </FormItem>
             )} />
@@ -536,7 +565,7 @@ const Step4 = ({ appraisers, onSuggest, isLoading }: { appraisers: User[], onSug
     )
 }
 
-const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers }: { suggestion: {appraiserId: string, reason: string} | null, onSelectSuggestion: () => void, appraisers: User[] }) => {
+const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers, clients }: { suggestion: {appraiserId: string, reason: string} | null, onSelectSuggestion: () => void, appraisers: User[], clients: Client[] }) => {
     const { getValues } = useFormContext();
     const values = getValues();
     const client = clients.find(c => c.id === values.clientId);
