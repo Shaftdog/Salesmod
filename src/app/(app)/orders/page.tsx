@@ -32,7 +32,7 @@ export default function OrdersPage() {
     const orders = useOrdersStore((state) => state.orders);
 
     useEffect(() => {
-      const timer = setTimeout(() => setIsLoading(false), 1500); // Simulate loading
+      const timer = setTimeout(() => setIsLoading(false), 1000); // Simulate loading
       return () => clearTimeout(timer);
     }, []);
 

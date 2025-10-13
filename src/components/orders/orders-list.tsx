@@ -15,10 +15,10 @@ import { Skeleton } from "../ui/skeleton";
 type OrdersListProps = {
     orders: Order[];
     isMinimal?: boolean;
-    isLoading: boolean;
+    isLoading?: boolean;
 };
 
-export function OrdersList({ orders, isMinimal = false, isLoading }: OrdersListProps) {
+export function OrdersList({ orders, isMinimal = false, isLoading = false }: OrdersListProps) {
     const isMobile = useIsMobile();
     const { searchTerm } = useSearch();
    
@@ -30,6 +30,10 @@ export function OrdersList({ orders, isMinimal = false, isLoading }: OrdersListP
                 ))}
             </div>
         )
+    }
+
+    if (isLoading) {
+        return <OrdersTableSkeleton isMinimal={isMinimal} />;
     }
 
     if (isMobile) {
@@ -67,9 +71,5 @@ export function OrdersList({ orders, isMinimal = false, isLoading }: OrdersListP
         );
     }
     
-    if (isLoading) {
-        return <OrdersTableSkeleton isMinimal={isMinimal} />;
-    }
-
     return <OrdersTable orders={orders} isMinimal={isMinimal} />;
 }

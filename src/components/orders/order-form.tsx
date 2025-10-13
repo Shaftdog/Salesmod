@@ -124,7 +124,7 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
-  const handleQuickAddClient = (clientData: Omit<Client, 'id' | 'createdAt' | 'updatedAt' | 'isActive' | 'paymentTerms' | 'billingAddress'>) => {
+  const handleQuickAddClient = (clientData: Omit<Client, 'id' | 'createdAt' | 'updatedAt' | 'isActive' | 'paymentTerms' | 'billingAddress' | 'activeOrders' | 'totalRevenue'>) => {
     // In a real app, you'd save this to your backend and get the new client back
     const newClient: Client = {
         ...clientData,
@@ -634,7 +634,7 @@ const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers, clients }: { s
              <div className="space-y-2">
                 <h4 className="font-medium">Details</h4>
                 <p className="text-sm text-muted-foreground">Due Date: {values.dueDate ? format(values.dueDate, "PPP") : 'Not set'}</p>
-                <p className="text-sm text-muted-foreground">Fee: {formatCurrency(values.feeAmount || 0)}</p>
+                <p className="text-sm text-muted-foreground">Fee: {formatCurrency(parseFloat(values.feeAmount || '0'))}</p>
                 <p className="text-sm text-muted-foreground">Assigned To: {appraiser?.name || 'Unassigned'}</p>
              </div>
         </div>
