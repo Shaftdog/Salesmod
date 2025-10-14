@@ -318,3 +318,48 @@ export interface CaseComment {
   // Relations
   creator?: User;
 }
+
+// =============================================
+// GOALS & TARGETS
+// =============================================
+
+export const goalMetricTypes = [
+  'order_volume',
+  'revenue', 
+  'new_clients',
+  'completion_rate',
+  'deal_value',
+  'deals_closed'
+] as const;
+export type GoalMetricType = typeof goalMetricTypes[number];
+
+export const periodTypes = ['monthly', 'quarterly', 'yearly'] as const;
+export type PeriodType = typeof periodTypes[number];
+
+export interface Goal {
+  id: string;
+  metricType: GoalMetricType;
+  targetValue: number;
+  periodType: PeriodType;
+  periodStart: string;
+  periodEnd: string;
+  assignedTo?: string; // User ID or null for team goal
+  description?: string;
+  isActive: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  
+  // Relations
+  assignee?: User;
+  creator?: User;
+}
+
+export interface GoalProgress {
+  goal: Goal;
+  currentValue: number;
+  progress: number; // percentage (0-100+)
+  isOnTrack: boolean;
+  daysRemaining: number;
+  periodProgressPct: number; // how far through the period we are
+}

@@ -37,9 +37,9 @@ export function AssignAppraiserDialog({
   onOpenChange,
 }: AssignAppraiserDialogProps) {
   const [selectedAppraiserId, setSelectedAppraiserId] = useState<string>(
-    order.assigneeId || ""
+    order.assignedTo || ""
   );
-  const { data: appraisers, isLoading } = useAppraisers();
+  const { appraisers, isLoading } = useAppraisers();
   const { toast } = useToast();
   const updateOrderMutation = useUpdateOrder();
 
@@ -58,7 +58,7 @@ export function AssignAppraiserDialog({
     try {
       await updateOrderMutation.mutateAsync({
         id: order.id,
-        assigneeId: selectedAppraiserId,
+        assignedTo: selectedAppraiserId,
       });
 
       const selectedAppraiser = appraisers?.find(
@@ -118,9 +118,9 @@ export function AssignAppraiserDialog({
                             </AvatarFallback>
                           </Avatar>
                           <span>{appraiser.name}</span>
-                          {appraiser.location && (
+                          {appraiser.geographicCoverage && (
                             <span className="text-xs text-muted-foreground">
-                              • {appraiser.location}
+                              • {appraiser.geographicCoverage}
                             </span>
                           )}
                         </div>
@@ -148,9 +148,9 @@ export function AssignAppraiserDialog({
                             </Avatar>
                             <div>
                               <p className="font-medium">{selected.name}</p>
-                              {selected.location && (
+                              {selected.geographicCoverage && (
                                 <p className="text-sm text-muted-foreground">
-                                  {selected.location}
+                                  {selected.geographicCoverage}
                                 </p>
                               )}
                             </div>
@@ -158,11 +158,6 @@ export function AssignAppraiserDialog({
                           {selected.email && (
                             <p className="text-sm text-muted-foreground">
                               Email: {selected.email}
-                            </p>
-                          )}
-                          {selected.phone && (
-                            <p className="text-sm text-muted-foreground">
-                              Phone: {selected.phone}
                             </p>
                           )}
                         </div>

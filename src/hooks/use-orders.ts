@@ -184,7 +184,7 @@ export function useUpdateOrder() {
       // Convert camelCase to snake_case for database
       const dbUpdates: any = {}
       if (updates.status) dbUpdates.status = updates.status
-      if (updates.assigneeId) dbUpdates.assigned_to = updates.assigneeId
+      if (updates.assignedTo) dbUpdates.assigned_to = updates.assignedTo
       if (updates.propertyAddress) dbUpdates.property_address = updates.propertyAddress
       if (updates.propertyCity) dbUpdates.property_city = updates.propertyCity
       if (updates.propertyState) dbUpdates.property_state = updates.propertyState

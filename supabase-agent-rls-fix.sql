@@ -74,3 +74,4 @@ CREATE POLICY "Authenticated users can create usage logs"
   ON ai_usage_logs FOR INSERT
   WITH CHECK (auth.uid() IS NOT NULL);
 
+

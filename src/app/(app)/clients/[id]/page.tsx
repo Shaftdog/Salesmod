@@ -289,7 +289,7 @@ export default function ClientDetailPage() {
         open={generateDraftOpen}
         onOpenChange={setGenerateDraftOpen}
         clientId={clientId}
-        clientName={client?.companyName || client?.name || "Client"}
+        clientName={client?.companyName || "Client"}
       />
     </div>
   );

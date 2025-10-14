@@ -88,13 +88,13 @@ export function CaseForm({
   });
 
   const handleSubmit = async (data: CaseFormData) => {
-    // Convert empty strings to null
+    // Convert empty strings to undefined
     const cleanedData = {
       ...data,
-      client_id: data.client_id || null,
-      contact_id: data.contact_id || null,
-      order_id: data.order_id || null,
-      assigned_to: data.assigned_to || null,
+      client_id: data.client_id || undefined,
+      contact_id: data.contact_id || undefined,
+      order_id: data.order_id || undefined,
+      assigned_to: data.assigned_to || undefined,
     };
     
     await onSubmit(cleanedData);

@@ -77,7 +77,7 @@ export function ChangeStatusDialog({
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="status">New Status</Label>
-              <Select value={newStatus} onValueChange={setNewStatus}>
+              <Select value={newStatus} onValueChange={(value) => setNewStatus(value as any)}>
                 <SelectTrigger id="status">
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>

@@ -7,6 +7,7 @@ import { OrdersList } from "@/components/orders/orders-list";
 import { useOrders } from "@/hooks/use-orders";
 import Link from "next/link";
 import { OrderStatusChart } from "./_components/order-status-chart";
+import { GoalsWidget } from "./_components/goals-widget";
 import { MyTasksWidget } from "@/components/tasks/my-tasks-widget";
 import { SuggestionsWidget } from "@/components/ai/suggestions-widget";
 import { useMemo } from "react";
@@ -97,7 +98,8 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <GoalsWidget />
         <MyTasksWidget />
         <SuggestionsWidget />
       </div>

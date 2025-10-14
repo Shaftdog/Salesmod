@@ -142,7 +142,7 @@ export async function GET(request: Request) {
         lastContactDate: lastActivity,
         daysSinceLastContact,
         totalActivitiesLast30Days: activities?.length || 0,
-        activityTrend: activities?.length > 0 ? 'active' : 'inactive'
+        activityTrend: (activities?.length || 0) > 0 ? 'active' : 'inactive'
       },
       recentActivities: activities?.slice(0, 10).map((activity: any) => ({
         type: activity.activity_type,

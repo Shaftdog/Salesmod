@@ -33,7 +33,7 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
 
   const { data: caseData, isLoading, error } = useCase(caseId || "");
   const { data: comments = [] } = useCaseComments(caseId || "");
-  const { data: clients = [] } = useClients();
+  const { clients } = useClients();
   const { data: currentUser } = useCurrentUser();
   const updateCase = useUpdateCase();
   const createComment = useCreateCaseComment();

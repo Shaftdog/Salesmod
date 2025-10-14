@@ -214,3 +214,4 @@ VALUES
   ('Appraisal quality concern', 'Client raised concerns about comparable properties used', 'quality_concern', 'resolved', 'urgent', (SELECT id FROM public.profiles LIMIT 1));
 */
 
+

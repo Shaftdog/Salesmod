@@ -46,8 +46,8 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   }, [params]);
 
   const { data: order, isLoading, error } = useOrder(orderId || "");
-  const { data: clients } = useClients();
-  const { data: appraisers } = useAppraisers();
+  const { clients } = useClients();
+  const { appraisers } = useAppraisers();
 
   // Dialog states
   const [changeStatusOpen, setChangeStatusOpen] = useState(false);
@@ -83,7 +83,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
 
   // Find the client and appraiser details
   const client = clients?.find(c => c.id === order.clientId);
-  const appraiser = appraisers?.find(a => a.id === order.assigneeId);
+  const appraiser = appraisers?.find(a => a.id === order.assignedTo);
 
   const statusIndex = orderStatuses.findIndex(s => s === order.status);
   const progressValue = (statusIndex + 1) / orderStatuses.length * 100;
