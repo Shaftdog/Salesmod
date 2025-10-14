@@ -8,6 +8,7 @@ import { useOrders } from "@/hooks/use-orders";
 import Link from "next/link";
 import { OrderStatusChart } from "./_components/order-status-chart";
 import { MyTasksWidget } from "@/components/tasks/my-tasks-widget";
+import { SuggestionsWidget } from "@/components/ai/suggestions-widget";
 import { useMemo } from "react";
 import { isToday, isPast, parseISO, startOfDay } from "date-fns";
 
@@ -96,8 +97,9 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
-      <div className="grid gap-4 md:grid-cols-1">
+      <div className="grid gap-4 md:grid-cols-2">
         <MyTasksWidget />
+        <SuggestionsWidget />
       </div>
     </div>
   );

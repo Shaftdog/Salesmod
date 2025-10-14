@@ -15,10 +15,13 @@ import { ActivityTimeline } from "@/components/activities/activity-timeline";
 import { TagSelector } from "@/components/tags/tag-selector";
 import { OrdersList } from "@/components/orders/orders-list";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Briefcase, DollarSign, FileText, Mail, Phone } from "lucide-react";
+import { ArrowLeft, Briefcase, DollarSign, FileText, Mail, Phone, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { GenerateDraftDialog } from "@/components/ai/generate-draft-dialog";
+import { DraftsList } from "@/components/ai/drafts-list";
+import { ClientIntelligencePanel } from "@/components/ai/client-intelligence-panel";
 
 export default function ClientDetailPage() {
   const params = useParams();
@@ -34,6 +37,8 @@ export default function ClientDetailPage() {
   
   const { mutateAsync: addTag } = useAddTagToClient();
   const { mutateAsync: removeTag } = useRemoveTagFromClient();
+
+  const [generateDraftOpen, setGenerateDraftOpen] = useState(false);
 
   const clientOrders = useMemo(() => {
     return orders.filter(order => order.clientId === clientId);
@@ -201,6 +206,10 @@ export default function ClientDetailPage() {
           <TabsTrigger value="orders">
             Orders ({clientOrders.length})
           </TabsTrigger>
+          <TabsTrigger value="ai-assistant">
+            <Sparkles className="h-4 w-4 mr-1" />
+            AI Assistant
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="contacts" className="space-y-4">
@@ -245,7 +254,43 @@ export default function ClientDetailPage() {
         <TabsContent value="orders" className="space-y-4">
           <OrdersList orders={clientOrders} />
         </TabsContent>
+
+        <TabsContent value="ai-assistant" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>AI Assistant</CardTitle>
+                  <CardDescription>
+                    Generate personalized communications and get AI-powered suggestions
+                  </CardDescription>
+                </div>
+                <Button onClick={() => setGenerateDraftOpen(true)}>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Generate Draft
+                </Button>
+              </div>
+            </CardHeader>
+          </Card>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <DraftsList clientId={clientId} />
+            </div>
+            <div>
+              <ClientIntelligencePanel clientId={clientId} />
+            </div>
+          </div>
+        </TabsContent>
       </Tabs>
+
+      {/* Generate Draft Dialog */}
+      <GenerateDraftDialog
+        open={generateDraftOpen}
+        onOpenChange={setGenerateDraftOpen}
+        clientId={clientId}
+        clientName={client?.companyName || client?.name || "Client"}
+      />
     </div>
   );
 }
