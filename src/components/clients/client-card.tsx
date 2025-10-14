@@ -16,6 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import { useClientTags } from "@/hooks/use-tags";
+import { TagBadge } from "../tags/tag-badge";
 
 type ClientCardProps = {
     client: Client;
@@ -25,6 +27,7 @@ export function ClientCard({ client }: ClientCardProps) {
     const { toast } = useToast();
     const router = useRouter();
     const formattedRevenue = formatCurrency(client.totalRevenue || 0);
+    const { data: clientTags = [] } = useClientTags(client.id);
 
     const handleAction = (e: React.MouseEvent, callback: () => void) => {
         e.preventDefault();
@@ -97,6 +100,18 @@ export function ClientCard({ client }: ClientCardProps) {
                        <p>{client.email}</p>
                        <p>{client.phone}</p>
                     </div>
+                    {clientTags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {clientTags.slice(0, 3).map((ct) => (
+                          ct.tag && <TagBadge key={ct.tagId} tag={ct.tag} />
+                        ))}
+                        {clientTags.length > 3 && (
+                          <span className="text-xs text-muted-foreground">
+                            +{clientTags.length - 3} more
+                          </span>
+                        )}
+                      </div>
+                    )}
                 </CardContent>
                 <div className="flex items-center justify-between p-6 pt-0 text-sm">
                     <div className="flex items-center gap-2 text-muted-foreground">

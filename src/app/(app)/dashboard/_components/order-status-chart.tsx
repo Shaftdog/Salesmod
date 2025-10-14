@@ -1,10 +1,12 @@
 'use client'
 
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
-import { orders } from "@/lib/data"
 import { orderStatuses } from "@/lib/types"
+import { useOrders } from "@/hooks/use-orders"
 
 export function OrderStatusChart() {
+    const { orders } = useOrders();
+    
     const data = orderStatuses.map(status => ({
         name: status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
         total: orders.filter(order => order.status === status).length

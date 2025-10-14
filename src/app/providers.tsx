@@ -6,6 +6,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { SearchProvider } from "@/contexts/search-context";
+import { AuthProvider } from "@/components/auth/auth-provider";
 
 export function Providers({ children }: PropsWithChildren) {
   const [queryClient] = useState(
@@ -21,11 +22,13 @@ export function Providers({ children }: PropsWithChildren) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SearchProvider>
-        {children}
-        <Toaster />
-      </SearchProvider>
-      <ReactQueryDevtools initialIsOpen={false} />
+      <AuthProvider>
+        <SearchProvider>
+          {children}
+          <Toaster />
+        </SearchProvider>
+        <ReactQueryDevtools initialIsOpen={false} />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

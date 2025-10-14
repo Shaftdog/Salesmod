@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useClients } from "@/hooks/use-clients";
 
 const formSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
@@ -34,6 +35,7 @@ type ClientFormData = z.infer<typeof formSchema>;
 export function ClientForm() {
   const { toast } = useToast();
   const router = useRouter();
+  const { createClient, isCreating } = useClients();
   
   const form = useForm<ClientFormData>({
     resolver: zodResolver(formSchema),
@@ -48,17 +50,32 @@ export function ClientForm() {
     },
   });
 
-  const { formState: { isSubmitting } } = form;
-
   async function onSubmit(data: ClientFormData) {
-    console.log("New client data:", data);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    toast({
-        title: "Client Created!",
-        description: "The new client has been successfully created.",
-    });
-    router.push("/clients");
+    try {
+      await createClient({
+        company_name: data.companyName,
+        primary_contact: data.primaryContact,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        billing_address: data.billingAddress || data.address,
+        payment_terms: data.paymentTerms || 30,
+        is_active: true,
+        active_orders: 0,
+        total_revenue: 0,
+      } as any);
+      
+      router.push("/clients");
+    } catch (error: any) {
+      console.error('Failed to create client:', error);
+      console.error('Error details:', {
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        code: error?.code,
+      });
+      // Error toast is already shown by the hook
+    }
   }
 
   return (
@@ -158,12 +175,12 @@ export function ClientForm() {
           )}
         />
         <div className="flex justify-end gap-4">
-            <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting}>
+            <Button type="button" variant="outline" onClick={() => router.back()} disabled={isCreating}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isSubmitting ? "Saving..." : "Save Client"}
+            <Button type="submit" disabled={isCreating}>
+                {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isCreating ? "Saving..." : "Save Client"}
             </Button>
         </div>
       </form>

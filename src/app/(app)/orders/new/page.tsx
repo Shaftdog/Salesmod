@@ -1,8 +1,17 @@
+"use client";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { OrderForm } from "@/components/orders/order-form";
-import { users, clients } from "@/lib/data";
+import { useAppraisers } from "@/hooks/use-appraisers";
+import { useClients } from "@/hooks/use-clients";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function NewOrderPage() {
+    const { appraisers, isLoading: appraisersLoading } = useAppraisers();
+    const { clients, isLoading: clientsLoading } = useClients();
+
+    const isLoading = appraisersLoading || clientsLoading;
+
     return (
         <div className="max-w-4xl mx-auto">
             <Card>
@@ -13,7 +22,15 @@ export default function NewOrderPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <OrderForm appraisers={users} clients={clients} />
+                    {isLoading ? (
+                        <div className="space-y-4">
+                            <Skeleton className="h-10 w-full" />
+                            <Skeleton className="h-10 w-full" />
+                            <Skeleton className="h-10 w-full" />
+                        </div>
+                    ) : (
+                        <OrderForm appraisers={appraisers} clients={clients} />
+                    )}
                 </CardContent>
             </Card>
         </div>

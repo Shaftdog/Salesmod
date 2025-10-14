@@ -1,21 +1,50 @@
+"use client";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowUpRight, PlusCircle } from "lucide-react";
 import { OrdersList } from "@/components/orders/orders-list";
-import { orders } from "@/lib/data";
+import { useOrders } from "@/hooks/use-orders";
 import Link from "next/link";
 import { OrderStatusChart } from "./_components/order-status-chart";
-
-const stats = [
-    { title: "New Orders Today", value: "12", change: "+25%", note: "since yesterday" },
-    { title: "In Progress", value: "48", change: "+10%", note: "this week" },
-    { title: "Due Today", value: "8", change: "-5%", note: "vs yesterday" },
-    { title: "Overdue", value: "3", change: "+1", note: "this week" },
-];
+import { MyTasksWidget } from "@/components/tasks/my-tasks-widget";
+import { useMemo } from "react";
+import { isToday, isPast, parseISO, startOfDay } from "date-fns";
 
 export default function Dashboard() {
-  const recentOrders = orders.slice(0, 5);
+  const { orders, isLoading } = useOrders();
+
+  const stats = useMemo(() => {
+    const today = startOfDay(new Date());
+    
+    const newOrdersToday = orders.filter(o => 
+      isToday(parseISO(o.orderedDate))
+    ).length;
+
+    const inProgressOrders = orders.filter(o => 
+      o.status === 'in_progress' || o.status === 'scheduled' || o.status === 'assigned'
+    ).length;
+
+    const dueToday = orders.filter(o => 
+      isToday(parseISO(o.dueDate))
+    ).length;
+
+    const overdue = orders.filter(o => 
+      isPast(parseISO(o.dueDate)) && 
+      o.status !== 'completed' && 
+      o.status !== 'delivered' && 
+      o.status !== 'cancelled'
+    ).length;
+
+    return [
+      { title: "New Orders Today", value: newOrdersToday.toString(), change: "", note: "created today" },
+      { title: "In Progress", value: inProgressOrders.toString(), change: "", note: "active orders" },
+      { title: "Due Today", value: dueToday.toString(), change: "", note: "need completion" },
+      { title: "Overdue", value: overdue.toString(), change: overdue > 0 ? "⚠️" : "✓", note: overdue > 0 ? "requires attention" : "all on track" },
+    ];
+  }, [orders]);
+  
+  const recentOrders = useMemo(() => orders.slice(0, 5), [orders]);
   
   return (
     <div className="flex-1 space-y-4">
@@ -66,6 +95,9 @@ export default function Dashboard() {
             <OrderStatusChart />
           </CardContent>
         </Card>
+      </div>
+      <div className="grid gap-4 md:grid-cols-1">
+        <MyTasksWidget />
       </div>
     </div>
   );

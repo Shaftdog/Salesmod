@@ -3,16 +3,17 @@
 import { PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { clients } from "@/lib/data";
 import Link from "next/link";
 import { ClientsList } from "@/components/clients/clients-list";
 import { Input } from "@/components/ui/input";
 import { useSearch } from "@/contexts/search-context";
 import { useEffect, useRef } from "react";
+import { useClients } from "@/hooks/use-clients";
 
 export default function ClientsPage() {
     const { searchTerm, setSearchTerm } = useSearch();
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const { clients, isLoading } = useClients();
 
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -54,7 +55,7 @@ export default function ClientsPage() {
                 </div>
             </CardHeader>
             <CardContent>
-                <ClientsList clients={clients} />
+                <ClientsList clients={clients} isLoading={isLoading} />
             </CardContent>
         </Card>
     );

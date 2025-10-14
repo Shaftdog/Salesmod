@@ -12,16 +12,11 @@ import { Skeleton } from "../ui/skeleton";
 
 type ClientsListProps = {
     clients: Client[];
+    isLoading?: boolean;
 };
 
-export function ClientsList({ clients }: ClientsListProps) {
+export function ClientsList({ clients, isLoading = false }: ClientsListProps) {
     const { searchTerm, setSearchTerm } = useSearch();
-    const [isLoading, setIsLoading] = React.useState(true);
-
-    React.useEffect(() => {
-        const timer = setTimeout(() => setIsLoading(false), 1000); // Simulate loading
-        return () => clearTimeout(timer);
-    }, []);
 
     const filteredClients = React.useMemo(() => {
         if (!searchTerm) return clients;

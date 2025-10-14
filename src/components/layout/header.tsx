@@ -11,6 +11,8 @@ import {
   Search,
   Briefcase,
   Settings,
+  Target,
+  CheckSquare,
 } from "lucide-react";
 import {
   Breadcrumb,
@@ -35,22 +37,41 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { cn } from "@/lib/utils";
 import { useSearch } from "@/contexts/search-context";
+import { useAuth } from "@/components/auth/auth-provider";
+import { useCurrentUser } from "@/hooks/use-appraisers";
 
 const navLinks = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
     { href: "/orders", label: "Orders", icon: Package },
     { href: "/clients", label: "Clients", icon: Briefcase },
+    { href: "/deals", label: "Deals", icon: Target },
+    { href: "/tasks", label: "Tasks", icon: CheckSquare },
     { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 function Header() {
   const pathname = usePathname();
+  const { signOut } = useAuth();
+  const { data: currentUser } = useCurrentUser();
   const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar-1');
   
   useEffect(() => {
     // We don't reset search term on navigation anymore as filtering is now on the pages.
     // setSearchTerm('');
   }, [pathname]);
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
+
+  const userInitials = currentUser?.name
+    ? currentUser.name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+    : 'AT';
 
   const breadcrumbItems = React.useMemo(() => {
     const pathParts = pathname.split('/').filter(part => part);
@@ -156,18 +177,29 @@ function Header() {
             className="overflow-hidden rounded-full"
           >
             <Avatar className="h-8 w-8">
-              {userAvatar && <AvatarImage src={userAvatar.imageUrl} alt="User" data-ai-hint={userAvatar.imageHint} />}
-              <AvatarFallback>AT</AvatarFallback>
+              {currentUser?.avatarUrl && <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} />}
+              <AvatarFallback>{userInitials}</AvatarFallback>
             </Avatar>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>My Account</DropdownMenuLabel>
+          <DropdownMenuLabel>
+            {currentUser?.name || 'My Account'}
+            {currentUser?.email && (
+              <div className="text-xs font-normal text-muted-foreground">
+                {currentUser.email}
+              </div>
+            )}
+          </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>Settings</DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href="/settings">Settings</Link>
+          </DropdownMenuItem>
           <DropdownMenuItem>Support</DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>Logout</DropdownMenuItem>
+          <DropdownMenuItem onClick={handleSignOut}>
+            Logout
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </header>

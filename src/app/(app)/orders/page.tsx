@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { orderStatuses, Order } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { useSearch } from "@/contexts/search-context";
-import { useOrdersStore } from "@/store/orders";
+import { useOrders } from "@/hooks/use-orders";
 
 type SortOption = 
   | "orderedDate_desc" 
@@ -27,14 +27,8 @@ export default function OrdersPage() {
     const { searchTerm, setSearchTerm } = useSearch();
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [sortOption, setSortOption] = useState<SortOption>("orderedDate_desc");
-    const [isLoading, setIsLoading] = useState(true);
     const searchInputRef = useRef<HTMLInputElement>(null);
-    const orders = useOrdersStore((state) => state.orders);
-
-    useEffect(() => {
-      const timer = setTimeout(() => setIsLoading(false), 1000); // Simulate loading
-      return () => clearTimeout(timer);
-    }, []);
+    const { orders, isLoading } = useOrders();
 
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {

@@ -25,15 +25,16 @@ import { cn, formatCurrency } from "@/lib/utils";
 import { format, formatISO, subDays, addDays } from "date-fns";
 import { Progress } from "@/components/ui/progress";
 import { ClientSelector } from "./client-selector";
-import { suggestBestAppraiserForOrder } from "@/ai/flows/suggest-best-appraiser-for-order";
 import { useToast } from "@/hooks/use-toast";
 import type { User, Client, OrderType, PropertyType, OrderPriority, Order } from "@/lib/types";
 import { orderTypes, propertyTypes, orderPriorities } from "@/lib/types";
-import { orders as allOrders } from "@/lib/data";
 import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../ui/alert-dialog";
 import { QuickClientForm } from "./quick-client-form";
-import { useOrdersStore } from "@/store/orders";
+import { useOrders } from "@/hooks/use-orders";
+import { useClients } from "@/hooks/use-clients";
+import { useCurrentUser } from "@/hooks/use-appraisers";
+import { useRouter } from "next/navigation";
   
 
 const formSchema = z.object({
@@ -83,13 +84,14 @@ type OrderFormProps = {
 export function OrderForm({ appraisers, clients: initialClients }: OrderFormProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<{appraiserId: string, reason: string} | null>(null);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const [potentialDuplicates, setPotentialDuplicates] = useState<Order[]>([]);
-  const [clients, setClients] = useState<Client[]>(initialClients);
   const { toast } = useToast();
-  const addOrder = useOrdersStore((state) => state.addOrder);
+  const router = useRouter();
+  const { orders: storeOrders, createOrder, isCreating } = useOrders();
+  const { clients, createClient } = useClients();
+  const { data: currentUser } = useCurrentUser();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -124,27 +126,25 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
-  const handleQuickAddClient = (clientData: Omit<Client, 'id' | 'createdAt' | 'updatedAt' | 'isActive' | 'paymentTerms' | 'billingAddress' | 'activeOrders' | 'totalRevenue'>) => {
-    // In a real app, you'd save this to your backend and get the new client back
-    const newClient: Client = {
-        ...clientData,
-        id: `client-${Date.now()}`,
-        createdAt: formatISO(new Date()),
-        updatedAt: formatISO(new Date()),
-        isActive: true,
-        paymentTerms: 30,
-        billingAddress: clientData.address,
-        activeOrders: 0,
-        totalRevenue: 0,
-    };
-    
-    setClients(prevClients => [...prevClients, newClient]);
-    form.setValue("clientId", newClient.id);
-    
-    toast({
-        title: "Client Added",
-        description: `${newClient.companyName} has been successfully added.`
-    });
+  const handleQuickAddClient = async (clientData: any) => {
+    try {
+      const newClient = await createClient({
+        company_name: clientData.companyName,
+        primary_contact: clientData.primaryContact,
+        email: clientData.email,
+        phone: clientData.phone,
+        address: clientData.address,
+        billing_address: clientData.address,
+        payment_terms: 30,
+        is_active: true,
+        active_orders: 0,
+        total_revenue: 0,
+      } as any);
+      
+      form.setValue("clientId", newClient.id);
+    } catch (error) {
+      console.error('Failed to add client:', error);
+    }
   };
 
 
@@ -163,23 +163,39 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
     }
     try {
         const orderDetails = form.getValues();
-        const result = await suggestBestAppraiserForOrder({
-            propertyAddress: orderDetails.propertyAddress,
-            propertyCity: orderDetails.propertyCity,
-            propertyState: orderDetails.propertyState,
-            propertyZip: orderDetails.propertyZip,
-            orderPriority: orderDetails.priority,
-            orderType: orderDetails.orderType,
-            appraisers: appraisers.map(a => ({
-                id: a.id,
-                name: a.name,
-                availability: a.availability ?? false,
-                geographicCoverage: a.geographicCoverage ?? '',
-                workload: a.workload ?? 0,
-                rating: a.rating ?? 0,
-            })),
+        const response = await fetch('/api/suggest-appraiser', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                propertyAddress: orderDetails.propertyAddress,
+                propertyCity: orderDetails.propertyCity,
+                propertyState: orderDetails.propertyState,
+                propertyZip: orderDetails.propertyZip,
+                orderPriority: orderDetails.priority,
+                orderType: orderDetails.orderType,
+                appraisers: appraisers.map(a => ({
+                    id: a.id,
+                    name: a.name,
+                    availability: a.availability ?? false,
+                    geographicCoverage: a.geographicCoverage ?? '',
+                    workload: a.workload ?? 0,
+                    rating: a.rating ?? 0,
+                })),
+            }),
         });
+
+        if (!response.ok) {
+            throw new Error('Failed to get AI suggestion');
+        }
+
+        const result = await response.json();
         setAiSuggestion(result);
+        toast({
+            title: "AI Suggestion Ready",
+            description: "Review the suggested appraiser below.",
+        });
     } catch (error) {
         console.error("AI suggestion failed:", error);
         toast({
@@ -203,47 +219,51 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
   }
 
   async function processForm(data: FormData) {
-    setIsSubmitting(true);
-    
-    const newOrder: Order = {
-        id: `order-${Date.now()}`,
-        orderNumber: `APR-2024-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, '0')}`,
+    if (!currentUser) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "You must be logged in to create an order.",
+      });
+      return;
+    }
+
+    try {
+      await createOrder({
         status: 'new',
         priority: data.priority,
-        orderType: data.orderType,
-        propertyAddress: data.propertyAddress,
-        propertyCity: data.propertyCity,
-        propertyState: data.propertyState,
-        propertyZip: data.propertyZip,
-        propertyType: data.propertyType,
-        borrowerName: data.borrowerName,
-        clientId: data.clientId,
-        client: clients.find(c => c.id === data.clientId),
-        feeAmount: parseFloat(data.feeAmount),
-        totalAmount: parseFloat(data.feeAmount), // Simplified for now
-        dueDate: formatISO(data.dueDate),
-        orderedDate: formatISO(new Date()),
-        assignedTo: data.assignedTo === 'unassigned' ? undefined : data.assignedTo,
-        assignee: data.assignedTo && data.assignedTo !== 'unassigned' ? appraisers.find(a => a.id === data.assignedTo) : undefined,
-        createdBy: 'user-1', // Assuming a logged in user
-        createdAt: formatISO(new Date()),
-        updatedAt: formatISO(new Date()),
-        ...data,
-        loanAmount: data.loanAmount ? parseFloat(data.loanAmount) : undefined
-    };
+        order_type: data.orderType,
+        property_address: data.propertyAddress,
+        property_city: data.propertyCity,
+        property_state: data.propertyState,
+        property_zip: data.propertyZip,
+        property_type: data.propertyType,
+        borrower_name: data.borrowerName,
+        client_id: data.clientId,
+        fee_amount: parseFloat(data.feeAmount),
+        total_amount: parseFloat(data.feeAmount),
+        due_date: formatISO(data.dueDate),
+        ordered_date: formatISO(new Date()),
+        assigned_to: data.assignedTo === 'unassigned' ? undefined : data.assignedTo,
+        created_by: currentUser.id,
+        loan_type: data.loanType,
+        loan_number: data.loanNumber,
+        loan_amount: data.loanAmount ? parseFloat(data.loanAmount) : undefined,
+        loan_officer: data.loanOfficer,
+        processor_name: data.processorName,
+        access_instructions: data.accessInstructions,
+        special_instructions: data.specialInstructions,
+      } as any);
 
-    addOrder(newOrder);
-
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-    setIsSubmitting(false);
-    toast({
-        title: "Order Created!",
-        description: "The new order has been successfully created.",
-    });
-
-    // Reset form for next entry
-    form.reset();
-     setCurrentStep(0);
+      // Reset form for next entry
+      form.reset();
+      setCurrentStep(0);
+      
+      // Redirect to orders page
+      router.push('/orders');
+    } catch (error) {
+      console.error('Failed to create order:', error);
+    }
   }
 
   type FieldName = keyof FormData;
@@ -278,7 +298,7 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
     const { propertyAddress, propertyCity, propertyState, propertyZip } = form.getValues();
     const thirtyDaysAgo = subDays(new Date(), 30);
 
-    const duplicates = allOrders.filter(order => {
+    const duplicates = storeOrders.filter(order => {
         const orderDate = new Date(order.orderedDate);
         return (
             order.propertyAddress.toLowerCase() === propertyAddress.toLowerCase() &&
@@ -313,7 +333,7 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
           <Progress value={progress} className="w-full" />
           
           <div className="min-h-[450px]">
-            <fieldset disabled={isSubmitting}>
+            <fieldset disabled={isCreating}>
               {currentStep === 0 && <Step1 />}
               {currentStep === 1 && <Step2 />}
               {currentStep === 2 && <Step3 clients={clients} onQuickAdd={handleQuickAddClient} />}
@@ -324,23 +344,23 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
 
           {/* Navigation */}
           <div className="flex justify-between">
-            <Button type="button" onClick={prev} variant="outline" disabled={currentStep === 0 || isSubmitting}>
+            <Button type="button" onClick={prev} variant="outline" disabled={currentStep === 0 || isCreating}>
               <ChevronLeft className="mr-2 h-4 w-4" /> Previous
             </Button>
             {currentStep < steps.length - 2 && (
-              <Button type="button" onClick={next} disabled={isSubmitting}>
+              <Button type="button" onClick={next} disabled={isCreating}>
                 Next <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             )}
              {currentStep === steps.length - 2 && (
-               <Button type="button" onClick={next} disabled={isSubmitting}>
+               <Button type="button" onClick={next} disabled={isCreating}>
                  Review Order
               </Button>
             )}
             {currentStep === steps.length - 1 && (
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isSubmitting ? "Submitting..." : "Submit Order"}
+              <Button type="submit" disabled={isCreating}>
+                {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isCreating ? "Submitting..." : "Submit Order"}
               </Button>
             )}
           </div>

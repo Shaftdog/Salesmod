@@ -132,3 +132,137 @@ export interface OrderNote {
   // Relations
   createdBy?: User;
 }
+
+// =============================================
+// CRM TYPES
+// =============================================
+
+export interface Contact {
+  id: string;
+  clientId: string;
+  firstName: string;
+  lastName: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  mobile?: string;
+  isPrimary: boolean;
+  department?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  
+  // Relations
+  client?: Client;
+}
+
+export const activityTypes = ['call', 'email', 'meeting', 'note', 'task'] as const;
+export type ActivityType = typeof activityTypes[number];
+
+export const activityStatuses = ['scheduled', 'completed', 'cancelled'] as const;
+export type ActivityStatus = typeof activityStatuses[number];
+
+export interface Activity {
+  id: string;
+  clientId?: string;
+  contactId?: string;
+  orderId?: string;
+  activityType: ActivityType;
+  subject: string;
+  description?: string;
+  status: ActivityStatus;
+  scheduledAt?: string;
+  completedAt?: string;
+  durationMinutes?: number;
+  outcome?: string;
+  createdBy: string;
+  assignedTo?: string;
+  createdAt: string;
+  updatedAt: string;
+  
+  // Relations
+  client?: Client;
+  contact?: Contact;
+  order?: Order;
+  creator?: User;
+  assignee?: User;
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: string;
+}
+
+export interface ClientTag {
+  clientId: string;
+  tagId: string;
+  createdAt: string;
+  
+  // Relations
+  tag?: Tag;
+}
+
+// =============================================
+// PHASE 2: DEALS & TASKS
+// =============================================
+
+export const dealStages = ['lead', 'qualified', 'proposal', 'negotiation', 'won', 'lost'] as const;
+export type DealStage = typeof dealStages[number];
+
+export interface Deal {
+  id: string;
+  clientId: string;
+  contactId?: string;
+  title: string;
+  description?: string;
+  value?: number;
+  probability: number; // 0-100
+  stage: DealStage;
+  expectedCloseDate?: string;
+  actualCloseDate?: string;
+  lostReason?: string;
+  assignedTo?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  
+  // Relations
+  client?: Client;
+  contact?: Contact;
+  assignee?: User;
+  creator?: User;
+}
+
+export const taskStatuses = ['pending', 'in_progress', 'completed', 'cancelled'] as const;
+export type TaskStatus = typeof taskStatuses[number];
+
+export const taskPriorities = ['low', 'normal', 'high', 'urgent'] as const;
+export type TaskPriority = typeof taskPriorities[number];
+
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  clientId?: string;
+  contactId?: string;
+  orderId?: string;
+  dealId?: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  dueDate?: string;
+  completedAt?: string;
+  assignedTo: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  
+  // Relations
+  client?: Client;
+  contact?: Contact;
+  order?: Order;
+  deal?: Deal;
+  assignee?: User;
+  creator?: User;
+}

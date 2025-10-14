@@ -174,7 +174,10 @@ export const OrdersTableColumns = ({ isMinimal = false, toast }: { isMinimal?: b
   ];
 
   if (isMinimal) {
-    return columns.filter(c => ['orderNumber', 'client.companyName', 'status', 'actions'].includes((c.accessorKey || c.id) as string));
+    return columns.filter(c => {
+      const key = 'accessorKey' in c ? c.accessorKey : c.id;
+      return ['orderNumber', 'client.companyName', 'status', 'actions'].includes(key as string);
+    });
   }
   return columns;
 };
