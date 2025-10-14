@@ -1,6 +1,9 @@
+"use client";
 
-import { orders, users } from "@/lib/data";
-import { notFound } from "next/navigation";
+import React from "react";
+import { useOrder } from "@/hooks/use-orders";
+import { useClients } from "@/hooks/use-clients";
+import { useAppraisers } from "@/hooks/use-appraisers";
 import {
   Card,
   CardContent,
@@ -19,14 +22,10 @@ import { OrderStatusBadge } from "@/components/orders/status-badge";
 import { format } from "date-fns";
 import {
   File,
-  ListOrdered,
+  Loader2,
   MessageSquare,
   Printer,
-  Share,
-  Truck,
-  User,
 } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
 import { OrderTimeline } from "@/components/orders/order-timeline";
 import { Progress } from "@/components/ui/progress";
 import { orderStatuses } from "@/lib/types";
@@ -34,12 +33,40 @@ import { OrderMap } from "@/components/orders/order-map";
 import { formatCurrency } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-export default function OrderDetailsPage({ params }: { params: { id: string } }) {
-  const order = orders.find((o) => o.id === params.id);
+export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
+  const [orderId, setOrderId] = React.useState<string | null>(null);
 
-  if (!order) {
-    notFound();
+  React.useEffect(() => {
+    params.then((p) => setOrderId(p.id));
+  }, [params]);
+
+  const { data: order, isLoading, error } = useOrder(orderId || "");
+  const { data: clients } = useClients();
+  const { data: appraisers } = useAppraisers();
+
+  if (!orderId || isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
+
+  if (error || !order) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[50vh]">
+        <h2 className="text-2xl font-bold">Order Not Found</h2>
+        <p className="text-muted-foreground mt-2">The order you're looking for doesn't exist.</p>
+        <Button className="mt-4" onClick={() => window.history.back()}>
+          Go Back
+        </Button>
+      </div>
+    );
+  }
+
+  // Find the client and appraiser details
+  const client = clients?.find(c => c.id === order.clientId);
+  const appraiser = appraisers?.find(a => a.id === order.assigneeId);
 
   const statusIndex = orderStatuses.findIndex(s => s === order.status);
   const progressValue = (statusIndex + 1) / orderStatuses.length * 100;
@@ -83,7 +110,7 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
                             </div>
                             <div>
                                 <h3 className="font-semibold">Client</h3>
-                                <p className="text-sm text-muted-foreground">{order.client?.companyName}</p>
+                                <p className="text-sm text-muted-foreground">{client?.companyName || "Unknown"}</p>
                             </div>
                             <div>
                                 <h3 className="font-semibold">Borrower</h3>
@@ -91,7 +118,7 @@ export default function OrderDetailsPage({ params }: { params: { id: string } })
                             </div>
                             <div>
                                 <h3 className="font-semibold">Assigned Appraiser</h3>
-                                <p className="text-sm text-muted-foreground">{order.assignee?.name || "Unassigned"}</p>
+                                <p className="text-sm text-muted-foreground">{appraiser?.name || "Unassigned"}</p>
                             </div>
                              <div>
                                 <h3 className="font-semibold">Fees</h3>
