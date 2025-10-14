@@ -1,6 +1,6 @@
 // Transform database snake_case to TypeScript camelCase
 
-import type { Client, Order, User, Contact, Activity, Tag, ClientTag, Deal, Task } from '@/lib/types'
+import type { Client, Order, User, Contact, Activity, Tag, ClientTag, Deal, Task, Case, CaseComment } from '@/lib/types'
 
 export function transformClient(dbClient: any): Client {
   return {
@@ -195,6 +195,45 @@ export function transformTask(dbTask: any): Task {
     deal: dbTask.deal ? transformDeal(dbTask.deal) : undefined,
     assignee: dbTask.assignee ? transformUser(dbTask.assignee) : undefined,
     creator: dbTask.creator ? transformUser(dbTask.creator) : undefined,
+  }
+}
+
+export function transformCase(dbCase: any): Case {
+  return {
+    id: dbCase.id,
+    caseNumber: dbCase.case_number,
+    subject: dbCase.subject,
+    description: dbCase.description,
+    caseType: dbCase.case_type,
+    status: dbCase.status,
+    priority: dbCase.priority,
+    clientId: dbCase.client_id,
+    contactId: dbCase.contact_id,
+    orderId: dbCase.order_id,
+    assignedTo: dbCase.assigned_to,
+    resolution: dbCase.resolution,
+    resolvedAt: dbCase.resolved_at,
+    createdBy: dbCase.created_by,
+    createdAt: dbCase.created_at,
+    updatedAt: dbCase.updated_at,
+    closedAt: dbCase.closed_at,
+    client: dbCase.client ? transformClient(dbCase.client) : undefined,
+    contact: dbCase.contact ? transformContact(dbCase.contact) : undefined,
+    order: dbCase.order ? transformOrder(dbCase.order) : undefined,
+    assignee: dbCase.assignee ? transformUser(dbCase.assignee) : undefined,
+    creator: dbCase.creator ? transformUser(dbCase.creator) : undefined,
+  }
+}
+
+export function transformCaseComment(dbComment: any): CaseComment {
+  return {
+    id: dbComment.id,
+    caseId: dbComment.case_id,
+    comment: dbComment.comment,
+    isInternal: dbComment.is_internal,
+    createdBy: dbComment.created_by,
+    createdAt: dbComment.created_at,
+    creator: dbComment.creator ? transformUser(dbComment.creator) : undefined,
   }
 }
 

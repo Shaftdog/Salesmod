@@ -266,3 +266,55 @@ export interface Task {
   assignee?: User;
   creator?: User;
 }
+
+// =============================================
+// CASE MANAGEMENT
+// =============================================
+
+export const caseStatuses = ['new', 'open', 'pending', 'in_progress', 'resolved', 'closed', 'reopened'] as const;
+export type CaseStatus = typeof caseStatuses[number];
+
+export const casePriorities = ['low', 'normal', 'high', 'urgent', 'critical'] as const;
+export type CasePriority = typeof casePriorities[number];
+
+export const caseTypes = ['support', 'billing', 'quality_concern', 'complaint', 'service_request', 'technical', 'feedback', 'other'] as const;
+export type CaseType = typeof caseTypes[number];
+
+export interface Case {
+  id: string;
+  caseNumber: string;
+  subject: string;
+  description?: string;
+  caseType: CaseType;
+  status: CaseStatus;
+  priority: CasePriority;
+  clientId?: string;
+  contactId?: string;
+  orderId?: string;
+  assignedTo?: string;
+  resolution?: string;
+  resolvedAt?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  closedAt?: string;
+  
+  // Relations
+  client?: Client;
+  contact?: Contact;
+  order?: Order;
+  assignee?: User;
+  creator?: User;
+}
+
+export interface CaseComment {
+  id: string;
+  caseId: string;
+  comment: string;
+  isInternal: boolean;
+  createdBy: string;
+  createdAt: string;
+  
+  // Relations
+  creator?: User;
+}

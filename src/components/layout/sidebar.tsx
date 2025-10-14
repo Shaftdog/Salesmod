@@ -17,6 +17,7 @@ import {
   Target,
   CheckSquare,
   Brain,
+  LifeBuoy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,7 @@ const navItems = [
   { href: "/clients", icon: Briefcase, label: "Clients" },
   { href: "/deals", icon: Target, label: "Deals" },
   { href: "/tasks", icon: CheckSquare, label: "Tasks" },
+  { href: "/cases", icon: LifeBuoy, label: "Cases" },
 ];
 
 function Sidebar() {
