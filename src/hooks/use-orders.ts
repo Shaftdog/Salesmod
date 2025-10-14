@@ -175,5 +175,42 @@ export function useOrder(id: string) {
   })
 }
 
+export function useUpdateOrder() {
+  const supabase = createClient()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: any) => {
+      // Convert camelCase to snake_case for database
+      const dbUpdates: any = {}
+      if (updates.status) dbUpdates.status = updates.status
+      if (updates.assigneeId) dbUpdates.assigned_to = updates.assigneeId
+      if (updates.propertyAddress) dbUpdates.property_address = updates.propertyAddress
+      if (updates.propertyCity) dbUpdates.property_city = updates.propertyCity
+      if (updates.propertyState) dbUpdates.property_state = updates.propertyState
+      if (updates.propertyZip) dbUpdates.property_zip = updates.propertyZip
+      if (updates.propertyType) dbUpdates.property_type = updates.propertyType
+
+      const { data, error } = await supabase
+        .from('orders')
+        .update(dbUpdates)
+        .eq('id', id)
+        .select(`
+          *,
+          client:clients(*),
+          assignee:profiles!orders_assigned_to_fkey(*)
+        `)
+        .single()
+      
+      if (error) throw error
+      return transformOrder(data)
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+      queryClient.invalidateQueries({ queryKey: ['orders', variables.id] })
+    },
+  })
+}
+
 
 

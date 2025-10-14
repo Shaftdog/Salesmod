@@ -1,9 +1,14 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useOrder } from "@/hooks/use-orders";
 import { useClients } from "@/hooks/use-clients";
 import { useAppraisers } from "@/hooks/use-appraisers";
+import { ChangeStatusDialog } from "@/components/orders/change-status-dialog";
+import { AssignAppraiserDialog } from "@/components/orders/assign-appraiser-dialog";
+import { ScheduleInspectionDialog } from "@/components/orders/schedule-inspection-dialog";
+import { AddNoteDialog } from "@/components/orders/add-note-dialog";
+import { UploadDocumentDialog } from "@/components/orders/upload-document-dialog";
 import {
   Card,
   CardContent,
@@ -44,6 +49,18 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   const { data: clients } = useClients();
   const { data: appraisers } = useAppraisers();
 
+  // Dialog states
+  const [changeStatusOpen, setChangeStatusOpen] = useState(false);
+  const [assignAppraiserOpen, setAssignAppraiserOpen] = useState(false);
+  const [scheduleInspectionOpen, setScheduleInspectionOpen] = useState(false);
+  const [addNoteOpen, setAddNoteOpen] = useState(false);
+  const [uploadDocumentOpen, setUploadDocumentOpen] = useState(false);
+
+  // Print handler
+  const handlePrint = () => {
+    window.print();
+  };
+
   if (!orderId || isLoading) {
     return (
       <div className="flex items-center justify-center h-[50vh]">
@@ -74,6 +91,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
 
 
   return (
+    <>
     <div className="grid gap-4 md:grid-cols-4 md:gap-8 lg:grid-cols-5">
       <div className="grid auto-rows-max items-start gap-4 md:gap-8 lg:col-span-3">
         <Card>
@@ -140,7 +158,9 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                     <p className="mb-4 mt-2 text-sm text-muted-foreground">
                         Drag and drop files here to upload.
                     </p>
-                    <Button>Upload Document</Button>
+                    <Button onClick={() => setUploadDocumentOpen(true)}>
+                      Upload Document
+                    </Button>
                 </div>
               </TabsContent>
                <TabsContent value="communication">
@@ -150,7 +170,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                     <p className="mb-4 mt-2 text-sm text-muted-foreground">
                         Notes and messages will appear here.
                     </p>
-                    <Button>Add Note</Button>
+                    <Button onClick={() => setAddNoteOpen(true)}>Add Note</Button>
                 </div>
               </TabsContent>
               <TabsContent value="history">
@@ -166,13 +186,29 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-2">
-                <Button>Change Status</Button>
-                <Button variant="secondary">Assign Appraiser</Button>
-                <Button variant="secondary">Schedule Inspection</Button>
+                <Button onClick={() => setChangeStatusOpen(true)}>
+                  Change Status
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => setAssignAppraiserOpen(true)}
+                >
+                  Assign Appraiser
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => setScheduleInspectionOpen(true)}
+                >
+                  Schedule Inspection
+                </Button>
                 <TooltipProvider>
                     <Tooltip>
                         <TooltipTrigger asChild>
-                            <Button variant="outline" className="w-full">
+                            <Button
+                              variant="outline"
+                              className="w-full"
+                              onClick={handlePrint}
+                            >
                                 <Printer className="mr-2 h-4 w-4" /> Print Order
                             </Button>
                         </TooltipTrigger>
@@ -185,5 +221,37 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
         </Card>
       </div>
     </div>
+
+    {/* Dialogs */}
+    {order && (
+      <>
+        <ChangeStatusDialog
+          order={order}
+          open={changeStatusOpen}
+          onOpenChange={setChangeStatusOpen}
+        />
+        <AssignAppraiserDialog
+          order={order}
+          open={assignAppraiserOpen}
+          onOpenChange={setAssignAppraiserOpen}
+        />
+        <ScheduleInspectionDialog
+          order={order}
+          open={scheduleInspectionOpen}
+          onOpenChange={setScheduleInspectionOpen}
+        />
+        <AddNoteDialog
+          order={order}
+          open={addNoteOpen}
+          onOpenChange={setAddNoteOpen}
+        />
+        <UploadDocumentDialog
+          order={order}
+          open={uploadDocumentOpen}
+          onOpenChange={setUploadDocumentOpen}
+        />
+      </>
+    )}
+    </>
   );
 }
