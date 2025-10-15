@@ -50,6 +50,13 @@ CREATE INDEX idx_goals_assigned_to ON public.goals(assigned_to);
 CREATE INDEX idx_goals_active ON public.goals(is_active) WHERE is_active = true;
 CREATE INDEX idx_goals_created_by ON public.goals(created_by);
 
+-- Composite index for personal dashboard queries
+CREATE INDEX idx_goals_assigned_active ON public.goals(assigned_to, is_active);
+
+-- Partial unique index for team goals (where assigned_to IS NULL)
+-- This is needed because Postgres doesn't consider multiple NULLs as equal
+CREATE UNIQUE INDEX uniq_team_goals ON public.goals(metric_type, period_start, period_end) WHERE assigned_to IS NULL;
+
 -- =============================================
 -- TRIGGERS
 -- =============================================

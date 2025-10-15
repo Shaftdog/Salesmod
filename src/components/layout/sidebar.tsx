@@ -18,6 +18,7 @@ import {
   CheckSquare,
   Brain,
   LifeBuoy,
+  Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -76,6 +77,20 @@ function Sidebar() {
           ))}
       </nav>
       <nav className="mt-auto flex flex-col items-center gap-4 px-2 sm:py-5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/agent"
+                className={cn("flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8 md:w-8",
+                    pathname.startsWith('/agent') && "bg-accent text-accent-foreground"
+                )}
+              >
+                <Bot className="h-5 w-5" />
+                <span className="sr-only">AI Agent</span>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">AI Agent</TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Link

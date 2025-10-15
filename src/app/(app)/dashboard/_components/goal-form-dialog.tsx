@@ -79,6 +79,19 @@ export function GoalFormDialog({ open, onOpenChange, goal }: GoalFormDialogProps
       return;
     }
     
+    // Validate completion_rate is between 0-100
+    if (metricType === 'completion_rate') {
+      const value = parseFloat(targetValue);
+      if (value < 0 || value > 100) {
+        toast({
+          title: "Invalid completion rate",
+          description: "Completion rate must be between 0 and 100",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+    
     try {
       await createGoal.mutateAsync({
         metricType,
@@ -177,6 +190,7 @@ export function GoalFormDialog({ open, onOpenChange, goal }: GoalFormDialogProps
                 type="number"
                 step={metricType === 'revenue' || metricType === 'deal_value' ? '0.01' : '1'}
                 min="0"
+                max={metricType === 'completion_rate' ? '100' : undefined}
                 value={targetValue}
                 onChange={(e) => setTargetValue(e.target.value)}
                 placeholder="Enter target value"

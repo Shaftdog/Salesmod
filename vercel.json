@@ -1,0 +1,14 @@
+{
+  "crons": [
+    {
+      "path": "/api/agent/run",
+      "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/agent/chat/cleanup",
+      "schedule": "0 2 * * *"
+    }
+  ]
+}
+
+

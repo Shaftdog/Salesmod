@@ -3,18 +3,30 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { useCurrentGoals, useGoalProgress, useDeleteGoal } from "@/hooks/use-goals";
+import { useCurrentGoals, getGoalProgress, useDeleteGoal } from "@/hooks/use-goals";
 import { useOrders } from "@/hooks/use-orders";
 import { useDeals } from "@/hooks/use-deals";
 import { useClients } from "@/hooks/use-clients";
 import { useToast } from "@/hooks/use-toast";
 import { Target, TrendingUp, Settings, Plus, Calendar, Trash2 } from "lucide-react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { GoalFormDialog } from "./goal-form-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export function GoalsWidget() {
   const [showGoalDialog, setShowGoalDialog] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [goalToDelete, setGoalToDelete] = useState<{ id: string; label: string } | null>(null);
   const { data: goals, isLoading } = useCurrentGoals();
   const { orders } = useOrders();
   const { data: deals } = useDeals();
@@ -24,23 +36,30 @@ export function GoalsWidget() {
   
   const currentMonth = format(new Date(), 'MMMM yyyy');
   
-  const handleDeleteGoal = async (goalId: string, metricLabel: string) => {
-    if (window.confirm(`Are you sure you want to delete the ${metricLabel} goal? This action cannot be undone.`)) {
-      try {
-        await deleteGoal.mutateAsync(goalId);
-        toast({
-          title: "Goal deleted",
-          description: "The goal has been removed successfully."
-        });
-      } catch (error) {
-        console.error('Error deleting goal:', error);
-        toast({
-          title: "Error",
-          description: "Failed to delete goal. Please try again.",
-          variant: "destructive"
-        });
-      }
+  const handleDeleteGoal = async () => {
+    if (!goalToDelete) return;
+    
+    try {
+      await deleteGoal.mutateAsync(goalToDelete.id);
+      toast({
+        title: "Goal deleted",
+        description: "The goal has been removed successfully."
+      });
+      setDeleteDialogOpen(false);
+      setGoalToDelete(null);
+    } catch (error) {
+      console.error('Error deleting goal:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete goal. Please try again.",
+        variant: "destructive"
+      });
     }
+  };
+  
+  const openDeleteDialog = (goalId: string, metricLabel: string) => {
+    setGoalToDelete({ id: goalId, label: metricLabel });
+    setDeleteDialogOpen(true);
   };
   
   return (
@@ -50,7 +69,7 @@ export function GoalsWidget() {
           <div className="space-y-1">
             <CardTitle className="flex items-center gap-2 text-base">
               <Target className="h-5 w-5 text-primary" />
-              Monthly Goals
+              Current Goals
             </CardTitle>
             <CardDescription className="flex items-center gap-1 text-xs">
               <Calendar className="h-3 w-3" />
@@ -75,7 +94,8 @@ export function GoalsWidget() {
           ) : goals && goals.length > 0 ? (
             <div className="space-y-5">
               {goals.slice(0, 4).map(goal => {
-                const progressData = useGoalProgress(goal, orders, deals, clients);
+                // Calculate progress for this goal
+                const progressData = getGoalProgress(goal, orders, deals, clients);
                 const progressCapped = Math.min(progressData.progress, 100);
                 
                 // Determine color based on status
@@ -116,7 +136,7 @@ export function GoalsWidget() {
                             variant="ghost"
                             size="sm"
                             className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                            onClick={() => handleDeleteGoal(goal.id, metricLabel)}
+                            onClick={() => openDeleteDialog(goal.id, metricLabel)}
                             disabled={deleteGoal.isPending}
                           >
                             <Trash2 className="h-3 w-3" />
@@ -174,14 +194,9 @@ export function GoalsWidget() {
               })}
               
               {goals.length > 4 && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="w-full"
-                  onClick={() => setShowGoalDialog(true)}
-                >
-                  View all {goals.length} goals
-                </Button>
+                <div className="pt-2 text-center text-xs text-muted-foreground">
+                  Showing 4 of {goals.length} goals
+                </div>
               )}
             </div>
           ) : (
@@ -214,6 +229,28 @@ export function GoalsWidget() {
         open={showGoalDialog}
         onOpenChange={setShowGoalDialog}
       />
+      
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Goal</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the {goalToDelete?.label} goal? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setGoalToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteGoal}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

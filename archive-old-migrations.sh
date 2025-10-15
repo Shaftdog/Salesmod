@@ -35,3 +35,4 @@ echo "   supabase/migrations/     - Active migrations (managed by CLI)"
 echo "   supabase/archive/        - Reference copies of manually applied migrations"
 
 
+

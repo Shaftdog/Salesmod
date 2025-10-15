@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { Goal, GoalProgress, Order, Deal, Client } from '@/lib/types';
-import { startOfMonth, endOfMonth, differenceInDays, parseISO } from 'date-fns';
+import { startOfMonth, endOfMonth, differenceInCalendarDays, parseISO } from 'date-fns';
 
 // =============================================
 // QUERY: Fetch Goals
@@ -84,6 +84,7 @@ export function calculateGoalProgress(
   
   // Filter data for the goal period
   const periodOrders = orders.filter(order => {
+    if (!order.orderedDate) return false; // Skip orders without a date
     const orderDate = parseISO(order.orderedDate);
     return orderDate >= periodStart && orderDate <= periodEnd;
   });
@@ -96,7 +97,7 @@ export function calculateGoalProgress(
       break;
       
     case 'revenue':
-      currentValue = periodOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+      currentValue = periodOrders.reduce((sum, o) => sum + parseFloat(String(o.totalAmount)), 0);
       break;
       
     case 'completion_rate':
@@ -111,6 +112,7 @@ export function calculateGoalProgress(
     case 'new_clients':
       if (clients) {
         currentValue = clients.filter(client => {
+          if (!client.createdAt) return false;
           const createdDate = parseISO(client.createdAt);
           return createdDate >= periodStart && createdDate <= periodEnd;
         }).length;
@@ -120,6 +122,7 @@ export function calculateGoalProgress(
     case 'deal_value':
       if (deals) {
         const periodDeals = deals.filter(deal => {
+          if (!deal.createdAt) return false;
           const dealDate = parseISO(deal.createdAt);
           return dealDate >= periodStart && 
                  dealDate <= periodEnd &&
@@ -147,10 +150,10 @@ export function calculateGoalProgress(
     ? (currentValue / goal.targetValue) * 100 
     : 0;
     
-  const daysRemaining = differenceInDays(periodEnd, now);
+  const daysRemaining = differenceInCalendarDays(periodEnd, now);
   
-  const periodDuration = differenceInDays(periodEnd, periodStart);
-  const daysElapsed = differenceInDays(now, periodStart);
+  const periodDuration = differenceInCalendarDays(periodEnd, periodStart);
+  const daysElapsed = differenceInCalendarDays(now, periodStart);
   const periodProgressPct = periodDuration > 0 
     ? Math.min((daysElapsed / periodDuration) * 100, 100)
     : 100;
@@ -169,10 +172,11 @@ export function calculateGoalProgress(
 }
 
 // =============================================
-// HOOK: Goal Progress with Data
+// HELPER: Goal Progress with Data
+// Note: Not a hook - safe to call in loops/maps
 // =============================================
 
-export function useGoalProgress(
+export function getGoalProgress(
   goal: Goal,
   orders: Order[],
   deals?: Deal[],
