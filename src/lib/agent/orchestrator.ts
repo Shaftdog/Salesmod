@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { buildContext } from './context-builder';
 import { generatePlan, validatePlan, ProposedAction } from './planner';
+import { executeCard, ExecutionResult } from './executor';
 
 export interface AgentRun {
   id: string;
@@ -53,8 +54,15 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
   }
 
   const errors: any[] = [];
+  let executedCount = 0;
 
   try {
+    // Step 0: Execute approved cards first
+    console.log(`[${run.id}] Checking for approved cards to execute...`);
+    const approvedResults = await executeApprovedCards(orgId);
+    executedCount = approvedResults.filter(r => r.success).length;
+    console.log(`[${run.id}] Executed ${executedCount} of ${approvedResults.length} approved cards`);
+
     // Step 1: Build context
     console.log(`[${run.id}] Building context for org ${orgId}...`);
     const context = await buildContext(orgId);
@@ -89,6 +97,8 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
     const cards = await createKanbanCards(orgId, run.id, plan.actions);
 
     // Step 5: Update run with results
+    const emailsSent = approvedResults.filter(r => r.success && r.metadata?.simulated === false).length;
+    
     await supabase
       .from('agent_runs')
       .update({
@@ -96,8 +106,8 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
         ended_at: new Date().toISOString(),
         goal_pressure: avgGoalPressure,
         planned_actions: cards.length,
-        approved: 0,
-        sent: 0,
+        approved: 0, // New cards start as suggested, not approved
+        sent: emailsSent,
         errors: errors.length > 0 ? errors : [],
       })
       .eq('id', run.id);
@@ -107,7 +117,7 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
       console.error(`[${run.id}] Failed to create reflection:`, err);
     });
 
-    console.log(`[${run.id}] Work block completed. Created ${cards.length} cards.`);
+    console.log(`[${run.id}] Work block completed. Executed ${executedCount} approved cards, created ${cards.length} new cards.`);
 
     return {
       ...run,
@@ -116,7 +126,7 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
       goal_pressure: avgGoalPressure,
       planned_actions: cards.length,
       approved: 0,
-      sent: 0,
+      sent: emailsSent,
       errors,
     } as AgentRun;
   } catch (error: any) {
@@ -206,6 +216,66 @@ async function createKanbanCards(
   }
 
   return cards;
+}
+
+/**
+ * Execute all approved cards
+ */
+async function executeApprovedCards(orgId: string): Promise<ExecutionResult[]> {
+  const supabase = await createClient();
+
+  // Get all approved cards
+  const { data: approvedCards, error } = await supabase
+    .from('kanban_cards')
+    .select('*')
+    .eq('org_id', orgId)
+    .eq('state', 'approved')
+    .order('priority', { ascending: false }); // High priority first
+
+  if (error) {
+    console.error('[Execute] Failed to fetch approved cards:', error);
+    return [];
+  }
+
+  if (!approvedCards || approvedCards.length === 0) {
+    console.log('[Execute] No approved cards to execute');
+    return [];
+  }
+
+  console.log(`[Execute] Found ${approvedCards.length} approved cards to execute`);
+
+  const results: ExecutionResult[] = [];
+
+  // Execute each card sequentially
+  for (const card of approvedCards) {
+    try {
+      console.log(`[Execute] Executing card: ${card.title} (${card.type})`);
+      const result = await executeCard(card.id);
+      results.push(result);
+      
+      if (result.success) {
+        console.log(`[Execute] ✓ ${card.title}: Success`);
+      } else {
+        console.error(`[Execute] ✗ ${card.title}: ${result.error}`);
+      }
+      
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } catch (error: any) {
+      console.error(`[Execute] Card ${card.id} threw error:`, error);
+      results.push({
+        success: false,
+        cardId: card.id,
+        message: 'Execution error',
+        error: error.message,
+      });
+    }
+  }
+
+  const successCount = results.filter(r => r.success).length;
+  console.log(`[Execute] Completed: ${successCount}/${results.length} successful`);
+
+  return results;
 }
 
 /**

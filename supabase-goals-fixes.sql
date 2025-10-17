@@ -22,3 +22,4 @@ COMMENT ON INDEX uniq_team_goals IS 'Ensures unique team goals (NULL assigned_to
 COMMENT ON INDEX idx_goals_assigned_active IS 'Optimizes personal dashboard queries filtering by user and active status';
 
 
+

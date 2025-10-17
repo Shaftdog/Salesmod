@@ -149,6 +149,17 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
   const supabase = await createClient();
   const payload = card.action_payload;
 
+  // Get authenticated user
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return {
+      success: false,
+      cardId: card.id,
+      message: 'User not authenticated',
+      error: 'No authenticated user found',
+    };
+  }
+
   // Check for email suppression
   const contactId = card.contact_id;
   if (contactId) {
@@ -188,7 +199,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
           status: 'completed',
           completed_at: new Date().toISOString(),
           outcome: 'sent',
-          created_by: card.org_id,
+          created_by: user.id,
         });
 
       return {
@@ -239,7 +250,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
         status: 'completed',
         completed_at: new Date().toISOString(),
         outcome: 'sent',
-        created_by: card.org_id,
+        created_by: user.id,
       });
 
     return {
@@ -270,6 +281,21 @@ async function executeCreateTask(card: KanbanCard): Promise<ExecutionResult> {
   const payload = card.action_payload;
 
   try {
+    // Get authenticated user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    // Map priority values from kanban card to tasks table
+    // Kanban: low, medium, high → Tasks: low, normal, high, urgent
+    const priorityMap: Record<string, string> = {
+      'low': 'low',
+      'medium': 'normal',
+      'high': 'high',
+    };
+    const taskPriority = priorityMap[card.priority] || 'normal';
+
     const { data, error } = await supabase
       .from('tasks')
       .insert({
@@ -277,16 +303,29 @@ async function executeCreateTask(card: KanbanCard): Promise<ExecutionResult> {
         description: payload.description || card.description,
         client_id: card.client_id,
         contact_id: card.contact_id,
-        priority: card.priority === 'high' ? 'urgent' : card.priority,
+        priority: taskPriority,
         status: 'pending',
         due_date: payload.dueDate || null,
-        assigned_to: card.org_id,
-        created_by: card.org_id,
+        assigned_to: user.id,
+        created_by: user.id,
       })
       .select()
       .single();
 
     if (error) throw error;
+
+    // Log activity for visibility in client timeline
+    await supabase
+      .from('activities')
+      .insert({
+        client_id: card.client_id,
+        contact_id: card.contact_id,
+        activity_type: 'task',
+        subject: card.title,
+        description: `Task created via AI agent: ${card.rationale}\n\nTask Details: ${payload.description || card.description || 'No details provided'}`,
+        status: 'scheduled',
+        created_by: user.id,
+      });
 
     return {
       success: true,
@@ -310,6 +349,17 @@ async function executeCreateTask(card: KanbanCard): Promise<ExecutionResult> {
 async function executeFollowUp(card: KanbanCard): Promise<ExecutionResult> {
   const supabase = await createClient();
 
+  // Get authenticated user
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return {
+      success: false,
+      cardId: card.id,
+      message: 'User not authenticated',
+      error: 'No authenticated user found',
+    };
+  }
+
   // Create an activity record for the follow-up
   try {
     await supabase
@@ -322,7 +372,7 @@ async function executeFollowUp(card: KanbanCard): Promise<ExecutionResult> {
         description: card.description || card.rationale,
         status: 'completed',
         completed_at: new Date().toISOString(),
-        created_by: card.org_id,
+        created_by: user.id,
       });
 
     return {
@@ -348,6 +398,12 @@ async function executeCreateDeal(card: KanbanCard): Promise<ExecutionResult> {
   const payload = card.action_payload;
 
   try {
+    // Get authenticated user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
     const { data, error } = await supabase
       .from('deals')
       .insert({
@@ -358,13 +414,27 @@ async function executeCreateDeal(card: KanbanCard): Promise<ExecutionResult> {
         value: payload.value || null,
         probability: 50, // Default 50% probability
         stage: payload.stage || 'lead',
-        assigned_to: card.org_id,
-        created_by: card.org_id,
+        assigned_to: user.id,
+        created_by: user.id,
       })
       .select()
       .single();
 
     if (error) throw error;
+
+    // Log activity for visibility in client timeline
+    await supabase
+      .from('activities')
+      .insert({
+        client_id: card.client_id,
+        contact_id: card.contact_id,
+        activity_type: 'note',
+        subject: `Deal Created: ${data.title}`,
+        description: `AI agent created new deal opportunity: ${card.rationale}\n\nDeal Stage: ${data.stage}\nEstimated Value: ${data.value ? `$${data.value}` : 'Not specified'}\n\n${data.description || ''}`,
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        created_by: user.id,
+      });
 
     return {
       success: true,
@@ -384,41 +454,64 @@ async function executeCreateDeal(card: KanbanCard): Promise<ExecutionResult> {
 
 /**
  * Execute: Schedule Call
+ * NOTE: This creates a TASK for the user to complete (agent can't make actual calls)
  */
 async function executeScheduleCall(card: KanbanCard): Promise<ExecutionResult> {
   const supabase = await createClient();
   const payload = card.action_payload;
 
   try {
-    // Create a scheduled activity
-    const scheduledAt = payload.scheduledAt || new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(); // Default 2 days from now
+    // Get authenticated user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
 
+    // Create a task for the user to actually make the call
+    const dueDate = payload.scheduledAt || new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+    
+    const { data: task, error: taskError } = await supabase
+      .from('tasks')
+      .insert({
+        title: card.title,
+        description: `${card.rationale}\n\nCall Purpose: ${card.description || 'Strategic discussion'}\nDuration: ${payload.durationMinutes || 30} minutes`,
+        client_id: card.client_id,
+        contact_id: card.contact_id,
+        priority: card.priority === 'high' ? 'high' : card.priority === 'low' ? 'low' : 'normal',
+        status: 'pending',
+        due_date: dueDate,
+        assigned_to: user.id,
+        created_by: user.id,
+      })
+      .select()
+      .single();
+
+    if (taskError) throw taskError;
+
+    // Also create an activity record for the timeline
     await supabase
       .from('activities')
       .insert({
         client_id: card.client_id,
         contact_id: card.contact_id,
-        activity_type: 'call',
-        subject: card.title,
-        description: card.description || 'Scheduled by AI agent',
+        activity_type: 'task',
+        subject: `Task Created: ${card.title}`,
+        description: `AI agent created call task: ${card.rationale}\n\nThis is a task for you to complete - the agent cannot make calls automatically.`,
         status: 'scheduled',
-        scheduled_at: scheduledAt,
-        duration_minutes: payload.durationMinutes || 30,
-        assigned_to: card.org_id,
-        created_by: card.org_id,
+        created_by: user.id,
       });
 
     return {
       success: true,
       cardId: card.id,
-      message: 'Call scheduled successfully',
-      metadata: { scheduledAt },
+      message: 'Call task created successfully',
+      metadata: { taskId: task.id, dueDate },
     };
   } catch (error: any) {
     return {
       success: false,
       cardId: card.id,
-      message: 'Call scheduling failed',
+      message: 'Call task creation failed',
       error: error.message,
     };
   }
@@ -428,31 +521,125 @@ async function executeScheduleCall(card: KanbanCard): Promise<ExecutionResult> {
  * Execute: Research
  */
 async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
-  // For now, research is just marked as done
-  // In the future, this could trigger web search, data gathering, etc.
-
   const supabase = await createClient();
 
   try {
-    // Log as an internal note
-    await supabase
+    // Get authenticated user for created_by field
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    // Dynamic imports to avoid errors if modules don't exist
+    const { gatherClientIntel, formatClientIntel } = await import('../research/internal-search');
+    const { searchWeb } = await import('../research/web-search');
+    const { summarizeResearch, extractKeyInsights } = await import('../research/summarizer');
+    const { indexContent } = await import('../agent/rag');
+
+    console.log(`[Research] Starting research for client ${card.client_id}`);
+
+    // Step 1: Gather internal data
+    const intel = await gatherClientIntel(card.client_id);
+    console.log(`[Research] Gathered internal data: ${intel.metrics.totalOrders} orders, ${intel.metrics.totalRevenue} revenue`);
+
+    // Step 2: Web search (if API key configured)
+    let webResults: any[] = [];
+    const hasSearchAPI = process.env.TAVILY_API_KEY || process.env.BRAVE_SEARCH_API_KEY;
+    
+    if (hasSearchAPI && intel.client) {
+      try {
+        const query = `${intel.client.company_name} company information business`;
+        webResults = await searchWeb(query, 5);
+        console.log(`[Research] Found ${webResults.length} web results`);
+      } catch (error) {
+        console.error('[Research] Web search failed, continuing with internal data only:', error);
+      }
+    } else {
+      console.log('[Research] No search API key, using internal data only');
+    }
+
+    // Step 3: AI summarization
+    const summary = await summarizeResearch(intel, webResults);
+    console.log(`[Research] Generated summary (${summary.length} chars)`);
+
+    // Step 4: Save to activities
+    const { data: activity, error: activityError } = await supabase
       .from('activities')
       .insert({
         client_id: card.client_id,
         activity_type: 'note',
-        subject: `Research: ${card.title}`,
-        description: card.description || card.rationale,
+        subject: `Research Complete: ${intel.client.company_name}`,
+        description: summary,
         status: 'completed',
         completed_at: new Date().toISOString(),
-        created_by: card.org_id,
+        created_by: user.id,
+      })
+      .select()
+      .single();
+    
+    if (activityError) {
+      console.error('[Research] Failed to save activity:', activityError);
+      throw new Error(`Failed to save research to activities: ${activityError.message}`);
+    }
+    
+    console.log('[Research] Saved to activities:', activity.id);
+
+    // Step 5: Index to RAG for future reference
+    try {
+      await indexContent(
+        card.org_id,
+        'research',
+        card.id,
+        `Research: ${intel.client.company_name}`,
+        summary,
+        {
+          client_id: card.client_id,
+          client_name: intel.client.company_name,
+          research_date: new Date().toISOString(),
+          sources: webResults.length > 0 ? ['internal', 'web'] : ['internal'],
+          web_results_count: webResults.length,
+          metrics: intel.metrics,
+        }
+      );
+      console.log('[Research] Indexed to RAG');
+    } catch (error) {
+      console.error('[Research] RAG indexing failed:', error);
+    }
+
+    // Step 6: Save key insights to agent_memories
+    try {
+      const insights = extractKeyInsights(summary);
+      
+      await supabase.from('agent_memories').insert({
+        org_id: card.org_id,
+        scope: 'client_context',
+        key: `research_${card.client_id}_${Date.now()}`,
+        content: {
+          client_id: card.client_id,
+          client_name: intel.client.company_name,
+          ...insights,
+          metrics: intel.metrics,
+        },
+        importance: 0.8,
+        expires_at: null, // Never expires
       });
+      console.log('[Research] Saved insights to agent_memories');
+    } catch (error) {
+      console.error('[Research] Memory save failed:', error);
+    }
 
     return {
       success: true,
       cardId: card.id,
-      message: 'Research task completed',
+      message: 'Research completed and indexed',
+      metadata: {
+        summary: summary.substring(0, 200) + '...',
+        sources: webResults.length > 0 ? 'internal + web' : 'internal only',
+        web_results: webResults.length,
+      },
     };
   } catch (error: any) {
+    console.error('[Research] Research execution failed:', error);
     return {
       success: false,
       cardId: card.id,

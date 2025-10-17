@@ -14,7 +14,7 @@ export interface ChatMessage {
 /**
  * Fetch chat message history
  */
-export function useChatMessages(limit: number = 50) {
+export function useChatMessages(limit: number = 500) {
   return useQuery({
     queryKey: ['chat-messages', limit],
     queryFn: async () => {
@@ -34,6 +34,7 @@ export function useChatMessages(limit: number = 50) {
 
       if (error) throw error;
 
+      console.log(`[ChatMessages] Loaded ${data?.length || 0} messages from database`);
       return (data || []) as ChatMessage[];
     },
     refetchInterval: 5000, // Refresh every 5 seconds to get new messages
@@ -55,6 +56,12 @@ export function useSaveChatMessage() {
 
       if (!user) throw new Error('Not authenticated');
 
+      console.log('[ChatMessages] Saving message:', {
+        role: message.role,
+        contentLength: message.content.length,
+        userId: user.id,
+      });
+
       const { data, error } = await supabase
         .from('chat_messages')
         .insert({
@@ -68,11 +75,20 @@ export function useSaveChatMessage() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[ChatMessages] Save failed:', error);
+        throw error;
+      }
+      
+      console.log('[ChatMessages] Save successful:', data.id);
       return data as ChatMessage;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('[ChatMessages] Invalidating queries after save');
       queryClient.invalidateQueries({ queryKey: ['chat-messages'] });
+    },
+    onError: (error) => {
+      console.error('[ChatMessages] Mutation error:', error);
     },
   });
 }

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { KanbanBoard } from '@/components/agent/kanban-board';
 import { AgentPanel } from '@/components/agent/agent-panel';
 import { EmailDraftSheet } from '@/components/agent/email-draft-sheet';
+import { CardDetailSheet } from '@/components/agent/card-detail-sheet';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { KanbanCard, useAgentStats } from '@/hooks/use-agent';
@@ -13,12 +14,15 @@ export default function AgentPage() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [isDraftSheetOpen, setIsDraftSheetOpen] = useState(false);
+  const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const { data: stats } = useAgentStats(30);
 
   const handleCardClick = (card: KanbanCard) => {
     setSelectedCard(card);
     if (card.type === 'send_email') {
       setIsDraftSheetOpen(true);
+    } else {
+      setIsDetailSheetOpen(true);
     }
   };
 
@@ -105,6 +109,13 @@ export default function AgentPage() {
         card={selectedCard}
         open={isDraftSheetOpen}
         onOpenChange={setIsDraftSheetOpen}
+      />
+
+      {/* Card Detail Sheet (for non-email cards) */}
+      <CardDetailSheet
+        card={selectedCard}
+        open={isDetailSheetOpen}
+        onOpenChange={setIsDetailSheetOpen}
       />
     </div>
   );

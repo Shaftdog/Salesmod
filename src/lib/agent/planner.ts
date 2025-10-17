@@ -5,7 +5,7 @@ import { AgentContext } from './context-builder';
 
 // Schema for a single action plan
 const ActionSchema = z.object({
-  type: z.enum(['send_email', 'schedule_call', 'research', 'create_task', 'follow_up', 'create_deal']),
+  type: z.enum(['send_email', 'research', 'create_task', 'follow_up', 'create_deal']),
   clientId: z.string(),
   contactId: z.string().optional(),
   priority: z.enum(['low', 'medium', 'high']),
@@ -151,10 +151,15 @@ Analyze the current situation and propose 3-7 high-impact actions to achieve the
 
 ## Action Types Available
 - **send_email**: Reach out via email (follow-ups, check-ins, proposals)
-- **schedule_call**: Propose a call or meeting
-- **create_task**: Internal task to research or prepare something
+- **research**: Gather intelligence about a client (market activity, portfolio changes, expansion plans)
+- **create_task**: Create a task for any action requiring human completion (calls, meetings, preparation, analysis, etc.)
 - **follow_up**: Follow up on a previous interaction or order
 - **create_deal**: Create a new deal opportunity in the pipeline
+
+## Important Notes
+- For calls or meetings: Use **create_task** to request the user schedule and conduct them
+- Only use actions that can be fully executed automatically (emails, research, deals)
+- Tasks are for actions that require human involvement
 
 ## Email Best Practices
 - Keep subject lines clear and actionable

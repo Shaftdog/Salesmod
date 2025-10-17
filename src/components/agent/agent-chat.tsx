@@ -17,7 +17,7 @@ interface Message {
 }
 
 export function AgentChat() {
-  const { data: chatHistory, isLoading: historyLoading } = useChatMessages(50);
+  const { data: chatHistory, isLoading: historyLoading } = useChatMessages(500);
   const saveChatMessage = useSaveChatMessage();
   const clearHistory = useClearChatHistory();
   
@@ -65,7 +65,7 @@ export function AgentChat() {
     saveChatMessage.mutate({ role: 'user', content: userMessage.content });
 
     try {
-      const response = await fetch('/api/agent/chat-simple', {
+      const response = await fetch('/api/agent/chat-simple', { // Using simple for now - tools version has schema issues
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

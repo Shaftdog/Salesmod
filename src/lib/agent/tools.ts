@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { searchRAG } from './rag';
 import { calculateGoalProgress } from '@/hooks/use-goals';
+import { searchWeb as webSearchFunction } from '../research/web-search';
 
 /**
  * Agent tools for conversational interaction
@@ -14,8 +15,8 @@ export const agentTools = {
   searchClients: tool({
     description: 'Search for clients by name, email, or other criteria. Use this when user asks about specific clients or wants to find clients.',
     parameters: z.object({
-      query: z.string().describe('Search term (company name, contact name, email, etc.)'),
-    }),
+      query: z.string().min(1).describe('Search term (company name, contact name, email, etc.)'),
+    }).strict(),
     execute: async ({ query }) => {
       const supabase = await createClient();
       
@@ -113,9 +114,9 @@ export const agentTools = {
    * Create an action card
    */
   createCard: tool({
-    description: 'Create a new action card on the Kanban board. Use this when user requests to create a task, draft an email, or propose an action.',
+    description: 'Create a new action card on the Kanban board. Use this when user requests to create a task, draft an email, or propose an action. For calls/meetings, create a task instead.',
     parameters: z.object({
-      type: z.enum(['send_email', 'create_task', 'schedule_call', 'create_deal', 'follow_up', 'research']),
+      type: z.enum(['send_email', 'create_task', 'create_deal', 'follow_up', 'research']),
       clientId: z.string().describe('UUID of the client'),
       title: z.string().describe('Brief title for the action'),
       rationale: z.string().describe('Why this action is recommended'),
@@ -322,6 +323,48 @@ export const agentTools = {
         runs: data || [],
         count: data?.length || 0,
       };
+    },
+  }),
+
+  /**
+   * Search the web
+   */
+  searchWeb: tool({
+    description: 'Search the internet for information about companies, people, news, or any topic. Use this when the user asks you to search for something or when you need external information not available in the database.',
+    parameters: z.object({
+      query: z.string().describe('Search query - what to look up on the internet'),
+      maxResults: z.number().optional().default(5).describe('Maximum number of results to return'),
+    }),
+    execute: async ({ query, maxResults }) => {
+      try {
+        const results = await webSearchFunction(query, maxResults);
+        
+        if (results.length === 0) {
+          return {
+            message: 'No search results found. Tavily API key may not be configured.',
+            results: [],
+            count: 0,
+          };
+        }
+
+        return {
+          results: results.map(r => ({
+            title: r.title,
+            url: r.url,
+            snippet: r.snippet,
+            score: r.score,
+          })),
+          count: results.length,
+          query,
+        };
+      } catch (error: any) {
+        return {
+          error: error.message,
+          message: 'Web search failed. Check Tavily API key configuration.',
+          results: [],
+          count: 0,
+        };
+      }
     },
   }),
 };
