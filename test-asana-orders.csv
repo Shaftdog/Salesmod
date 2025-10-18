@@ -1,4 +1,0 @@
-Task ID,Created At,Due Date,ORDER STATUS,PURPOSE,Appraised Property Address,Appraisal Fee,Lender Client,Loan Officer,Processor,Contact For Entry,Contact Primary Phone,GLA,Type of Value,Report Format,Additional Forms Required,Invoice #,Invoice Date,Invoice Amount
-12345,2024-01-15,2024-01-25,In Production,Purchase,13716 Fox Glove St, Winter Garden FL 34787,450.00,First National Bank,John Smith,Jane Doe,Bob Wilson,555-1234,2500,Market Value,URAR,None,INV-001,2024-01-15,450.00
-12346,2024-01-16,2024-01-26,Delivered,Refinance,123 Main St, Tampa, FL 33602,425.00,SunTrust Bank,Mary Johnson,Tom Brown,Sue Davis,555-5678,2200,Market Value,URAR,None,INV-002,2024-01-16,425.00
-12347,2024-01-17,2024-01-27,Scheduled,Home Equity,44 River Rd, Boise ID,500.00,Chase Bank,Mike Wilson,Alice Green,Paul Miller,555-9012,3000,Market Value,URAR,None,INV-003,2024-01-17,500.00
