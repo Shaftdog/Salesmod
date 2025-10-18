@@ -21,7 +21,7 @@ export function ContactCard({ contact, onEdit, onDelete }: ContactCardProps) {
   const fullName = `${contact.firstName} ${contact.lastName}`;
 
   return (
-    <Card>
+    <Card className="hover:shadow-md transition-shadow">
       <CardContent className="pt-6">
         <div className="flex items-start justify-between">
           <div className="flex-1 space-y-1">
@@ -45,7 +45,11 @@ export function ContactCard({ contact, onEdit, onDelete }: ContactCardProps) {
               {contact.email && (
                 <div className="flex items-center gap-2 text-sm">
                   <Mail className="h-4 w-4 text-muted-foreground" />
-                  <a href={`mailto:${contact.email}`} className="text-primary hover:underline">
+                  <a 
+                    href={`mailto:${contact.email}`} 
+                    className="text-primary hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {contact.email}
                   </a>
                 </div>
@@ -53,7 +57,11 @@ export function ContactCard({ contact, onEdit, onDelete }: ContactCardProps) {
               {contact.phone && (
                 <div className="flex items-center gap-2 text-sm">
                   <Phone className="h-4 w-4 text-muted-foreground" />
-                  <a href={`tel:${contact.phone}`} className="hover:underline">
+                  <a 
+                    href={`tel:${contact.phone}`} 
+                    className="hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {contact.phone}
                   </a>
                 </div>
@@ -61,7 +69,11 @@ export function ContactCard({ contact, onEdit, onDelete }: ContactCardProps) {
               {contact.mobile && (
                 <div className="flex items-center gap-2 text-sm">
                   <Smartphone className="h-4 w-4 text-muted-foreground" />
-                  <a href={`tel:${contact.mobile}`} className="hover:underline">
+                  <a 
+                    href={`tel:${contact.mobile}`} 
+                    className="hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {contact.mobile}
                   </a>
                 </div>
@@ -71,20 +83,30 @@ export function ContactCard({ contact, onEdit, onDelete }: ContactCardProps) {
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {onEdit && (
-                <DropdownMenuItem onClick={() => onEdit(contact)}>
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(contact);
+                }}>
                   <Edit className="mr-2 h-4 w-4" />
                   Edit
                 </DropdownMenuItem>
               )}
               {onDelete && (
                 <DropdownMenuItem 
-                  onClick={() => onDelete(contact)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(contact);
+                  }}
                   className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />

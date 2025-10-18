@@ -10,6 +10,7 @@ import { PlusCircle } from "lucide-react";
 import { useCreateContact, useUpdateContact, useDeleteContact } from "@/hooks/use-contacts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentUser } from "@/hooks/use-appraisers";
+import { useRouter } from "next/navigation";
 
 type ContactsListProps = {
   clientId: string;
@@ -25,6 +26,7 @@ export function ContactsList({ clientId, contacts, isLoading }: ContactsListProp
   const { mutateAsync: updateContact, isPending: isUpdating } = useUpdateContact();
   const { mutateAsync: deleteContact } = useDeleteContact();
   const { data: currentUser } = useCurrentUser();
+  const router = useRouter();
 
   const handleAdd = () => {
     setEditingContact(null);
@@ -40,6 +42,10 @@ export function ContactsList({ clientId, contacts, isLoading }: ContactsListProp
     if (window.confirm(`Delete ${contact.firstName} ${contact.lastName}?`)) {
       await deleteContact(contact.id);
     }
+  };
+
+  const handleContactClick = (contact: Contact) => {
+    router.push(`/contacts/${contact.id}`);
   };
 
   const handleSubmit = async (data: any) => {
@@ -98,12 +104,17 @@ export function ContactsList({ clientId, contacts, isLoading }: ContactsListProp
       ) : (
         <div className="grid gap-3">
           {contacts.map((contact) => (
-            <ContactCard
+            <div
               key={contact.id}
-              contact={contact}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            />
+              onClick={() => handleContactClick(contact)}
+              className="cursor-pointer"
+            >
+              <ContactCard
+                contact={contact}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
+            </div>
           ))}
         </div>
       )}

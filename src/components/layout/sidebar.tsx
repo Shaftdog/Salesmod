@@ -19,6 +19,8 @@ import {
   Brain,
   LifeBuoy,
   Bot,
+  Database,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,9 +28,11 @@ const navItems = [
   { href: "/dashboard", icon: Home, label: "Dashboard" },
   { href: "/orders", icon: Package, label: "Orders" },
   { href: "/clients", icon: Briefcase, label: "Clients" },
+  { href: "/contacts", icon: Users, label: "Contacts" },
   { href: "/deals", icon: Target, label: "Deals" },
   { href: "/tasks", icon: CheckSquare, label: "Tasks" },
   { href: "/cases", icon: LifeBuoy, label: "Cases" },
+  { href: "/migrations", icon: Database, label: "Migrations" },
 ];
 
 function Sidebar() {
