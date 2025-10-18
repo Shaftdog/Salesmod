@@ -101,15 +101,42 @@ export function MigrationProgress({ state, setState, onNext }: MigrationProgress
   };
 
   const handleCancel = async () => {
-    // In a full implementation, you'd call an API to cancel the job
-    setPolling(false);
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
+    if (!state.jobId) return;
+
+    try {
+      const response = await fetch('/api/migrations/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: state.jobId }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to cancel migration');
+      }
+
+      setPolling(false);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+
+      toast({
+        title: "Migration Cancelled",
+        description: "The migration has been cancelled. Records already processed will remain.",
+      });
+
+      // Update status to reflect cancellation
+      setStatus((prev: any) => ({
+        ...prev,
+        status: 'cancelled',
+      }));
+    } catch (error: any) {
+      console.error('Cancel error:', error);
+      toast({
+        title: "Cancel Failed",
+        description: error.message || "Failed to cancel migration",
+        variant: "destructive",
+      });
     }
-    toast({
-      title: "Migration Cancelled",
-      description: "The migration has been cancelled",
-    });
   };
 
   const totals = status?.totals || { total: 0, inserted: 0, updated: 0, skipped: 0, errors: 0 };

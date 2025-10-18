@@ -6,9 +6,10 @@ import {
   DuplicateStrategy,
   MigrationTotals,
 } from '@/lib/migrations/types';
-import { applyTransform, generateHash, normalizeCompanyName, transformExtractDomain } from '@/lib/migrations/transforms';
+import { applyTransform, generateHash, normalizeCompanyName, transformExtractDomain, splitUSAddress } from '@/lib/migrations/transforms';
 
 const BATCH_SIZE = 500;
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 /**
  * POST /api/migrations/run
@@ -42,6 +43,15 @@ export async function POST(request: NextRequest) {
 
     if (!fileData || !mappings || !entity) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+    }
+
+    // Validate file size (50MB limit)
+    const fileSizeBytes = new Blob([fileData]).size;
+    if (fileSizeBytes > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB.` },
+        { status: 400 }
+      );
     }
 
     // Generate idempotency key
@@ -148,6 +158,26 @@ async function processMigration(
 
     // Process in batches
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      // Check if job was cancelled before processing next batch
+      const { data: jobStatus } = await supabase
+        .from('migration_jobs')
+        .select('status')
+        .eq('id', jobId)
+        .single();
+
+      if (jobStatus?.status === 'cancelled') {
+        console.log(`Migration ${jobId} was cancelled. Stopping gracefully.`);
+        // Update final totals and exit
+        await supabase
+          .from('migration_jobs')
+          .update({ 
+            totals,
+            finished_at: new Date().toISOString()
+          })
+          .eq('id', jobId);
+        return;
+      }
+
       const batch = rows.slice(i, Math.min(i + BATCH_SIZE, rows.length));
 
       for (let batchIndex = 0; batchIndex < batch.length; batchIndex++) {
@@ -171,13 +201,14 @@ async function processMigration(
         } catch (error: any) {
           totals.errors++;
 
-          // Log error
+          // Log error with context
           await supabase.from('migration_errors').insert({
             job_id: jobId,
             row_index: rowIndex + 2, // +2 for header and 1-based index
             raw_data: row,
             error_message: error.message || 'Unknown error',
             field: error.field || null,
+            matched_on: error.matched_on || null, // Include duplicate match context
           });
         }
       }
@@ -278,7 +309,7 @@ async function processContact(
   duplicateStrategy: DuplicateStrategy,
   userId: string
 ): Promise<{ type: 'inserted' | 'updated' | 'skipped' }> {
-  // Resolve client_id
+  // Resolve client_id (optional - contacts can exist without company)
   let clientId = null;
 
   if (row._client_domain || row._client_name) {
@@ -295,19 +326,52 @@ async function processContact(
   delete row._client_domain;
   delete row._client_name;
 
+  // If no client resolved, try to get or create "Unassigned Contacts" client
   if (!clientId) {
-    throw new Error('Unable to resolve client for contact');
+    const { data: unassignedClient } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('company_name', '[Unassigned Contacts]')
+      .maybeSingle();
+
+    if (unassignedClient) {
+      clientId = unassignedClient.id;
+    } else {
+      // Create the unassigned client placeholder
+      const { data: newUnassigned, error: createError } = await supabase
+        .from('clients')
+        .insert({
+          company_name: '[Unassigned Contacts]',
+          primary_contact: 'System',
+          email: 'unassigned-contacts@system.local',
+          phone: '000-000-0000',
+          address: 'N/A',
+          billing_address: 'N/A',
+        })
+        .select('id')
+        .maybeSingle();
+
+      if (!createError && newUnassigned) {
+        clientId = newUnassigned.id;
+      }
+    }
+
+    // Store that this contact needs manual company assignment
+    if (!row.props) row.props = {};
+    row.props.needs_company_assignment = true;
+    row.props.unassigned_reason = 'No company information available during import';
   }
 
   row.client_id = clientId;
 
-  // Check for duplicate
+  // Check for duplicate using functional index on lower(email)
   if (row.email) {
+    const emailLower = String(row.email).toLowerCase();
     const { data: existing } = await supabase
       .from('contacts')
       .select('id')
-      .ilike('email', row.email)
-      .single();
+      .eq('email', emailLower)
+      .maybeSingle();
 
     if (existing) {
       if (duplicateStrategy === 'skip') {
@@ -318,6 +382,11 @@ async function processContact(
       }
       // 'create' strategy falls through to insert
     }
+  }
+  
+  // Ensure email is stored in lowercase for index compatibility
+  if (row.email) {
+    row.email = String(row.email).toLowerCase();
   }
 
   await supabase.from('contacts').insert(row);
@@ -338,13 +407,18 @@ async function processClient(
     row.props = { ...(row.props || {}), import_source: source };
   }
 
-  // Check for duplicate by domain
+  // Ensure domain is stored in lowercase for index compatibility
+  if (row.domain) {
+    row.domain = String(row.domain).toLowerCase();
+  }
+
+  // Check for duplicate by domain using functional index
   if (row.domain) {
     const { data: existing } = await supabase
       .from('clients')
       .select('id')
-      .ilike('domain', row.domain)
-      .single();
+      .eq('domain', row.domain)
+      .maybeSingle();
 
     if (existing) {
       if (duplicateStrategy === 'skip') {
@@ -398,6 +472,25 @@ async function processOrder(
   // Set created_by
   row.created_by = userId;
 
+  // Handle address parsing if original_address exists in props
+  if (row.props?.original_address && !row.property_address) {
+    try {
+      const addressParts = splitUSAddress(row.props.original_address);
+      row.property_address = addressParts.street;
+      row.property_city = addressParts.city;
+      row.property_state = addressParts.state;
+      row.property_zip = addressParts.zip;
+      
+      // Set default property_type if not provided
+      if (!row.property_type) {
+        row.property_type = 'single_family';
+      }
+    } catch (error) {
+      console.warn('Address parsing failed:', error);
+      // Continue with import - address parsing failure shouldn't block the row
+    }
+  }
+
   // Generate order_number if not provided
   if (!row.order_number) {
     const timestamp = Date.now();
@@ -409,18 +502,60 @@ async function processOrder(
     row.total_amount = row.fee_amount + (row.tech_fee || 0);
   }
 
-  // For now, associate with first available client (in production, you'd need better logic)
+  // Resolve client_id - REQUIRED for orders
   if (!row.client_id) {
-    const { data: firstClient } = await supabase
-      .from('clients')
-      .select('id')
-      .limit(1)
-      .single();
+    // Try to infer from borrower email domain
+    if (row.borrower_email) {
+      const domain = transformExtractDomain(row.borrower_email);
+      if (domain) {
+        const { data: clientByDomain } = await supabase
+          .from('clients')
+          .select('id')
+          .eq('domain', domain)
+          .maybeSingle();
+        
+        if (clientByDomain) {
+          row.client_id = clientByDomain.id;
+        }
+      }
+    }
 
-    if (firstClient) {
-      row.client_id = firstClient.id;
-    } else {
-      throw new Error('No clients available to associate order with');
+    // Still no client? Try to get or create "Unassigned Orders" client
+    if (!row.client_id) {
+      const { data: unassignedClient } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('company_name', '[Unassigned Orders]')
+        .maybeSingle();
+
+      if (unassignedClient) {
+        row.client_id = unassignedClient.id;
+      } else {
+        // Create the unassigned client
+        const { data: newUnassigned, error: createError } = await supabase
+          .from('clients')
+          .insert({
+            company_name: '[Unassigned Orders]',
+            primary_contact: 'System',
+            email: 'unassigned@system.local',
+            phone: '000-000-0000',
+            address: 'N/A',
+            billing_address: 'N/A',
+          })
+          .select('id')
+          .single();
+
+        if (createError || !newUnassigned) {
+          throw new Error('Unable to associate order with client. Please provide client information in mapping.');
+        }
+        
+        row.client_id = newUnassigned.id;
+      }
+
+      // Log that this order needs manual client assignment
+      if (!row.props) row.props = {};
+      row.props.needs_client_assignment = true;
+      row.props.unassigned_reason = 'No client information provided in import';
     }
   }
 

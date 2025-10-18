@@ -4,7 +4,7 @@ export type MigrationSource = 'asana' | 'hubspot' | 'csv' | 'other';
 export type MigrationEntity = 'orders' | 'contacts' | 'clients' | 'deals' | 'tasks';
 export type MigrationStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export type DuplicateStrategy = 'skip' | 'update' | 'create';
-export type TransformFunction = 'lowercase' | 'toNumber' | 'toDate' | 'concat' | 'coalesce' | 'extract_domain' | 'none';
+export type TransformFunction = 'lowercase' | 'toNumber' | 'toDate' | 'concat' | 'coalesce' | 'extract_domain' | 'splitUSAddress' | 'mapOrderStatus' | 'mapOrderType' | 'none';
 
 export interface FieldMapping {
   sourceColumn: string;
@@ -45,6 +45,7 @@ export interface MigrationError {
   raw_data: Record<string, any>;
   error_message: string;
   field?: string;
+  matched_on?: string; // Field used for duplicate detection
   created_at: string;
 }
 

@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS public.migration_errors (
   raw_data JSONB,
   error_message TEXT NOT NULL,
   field TEXT,
+  matched_on TEXT, -- What field was used for duplicate detection (email, external_id, etc.)
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

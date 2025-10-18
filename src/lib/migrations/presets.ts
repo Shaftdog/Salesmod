@@ -48,29 +48,49 @@ export const ASANA_ORDERS_PRESET: MigrationPreset = {
   name: 'Asana Orders',
   source: 'asana',
   entity: 'orders',
-  description: 'Import orders/tasks from Asana',
+  description: 'Import orders/tasks from Asana with address parsing and status mapping',
   mappings: [
-    { sourceColumn: 'gid', targetField: 'external_id', required: true },
-    { sourceColumn: 'name', targetField: 'property_address', required: true },
-    { sourceColumn: 'due_on', targetField: 'due_date', transform: 'toDate' },
-    { sourceColumn: 'created_at', targetField: 'ordered_date', transform: 'toDate' },
-    { sourceColumn: 'completed_at', targetField: 'completed_date', transform: 'toDate' },
-    { sourceColumn: 'custom_fields.Status', targetField: 'status' },
-    { sourceColumn: 'custom_fields.Priority', targetField: 'priority' },
-    { sourceColumn: 'custom_fields.Service_Type', targetField: 'order_type' },
-    { sourceColumn: 'custom_fields.Fee', targetField: 'fee_amount', transform: 'toNumber' },
-    { sourceColumn: 'custom_fields.Property_Address', targetField: 'property_address' },
-    { sourceColumn: 'custom_fields.City', targetField: 'property_city' },
-    { sourceColumn: 'custom_fields.State', targetField: 'property_state' },
-    { sourceColumn: 'custom_fields.Zip', targetField: 'property_zip' },
-    { sourceColumn: 'custom_fields.Property_Type', targetField: 'property_type' },
-    { sourceColumn: 'custom_fields.Borrower_Name', targetField: 'borrower_name' },
-    { sourceColumn: 'custom_fields.Borrower_Email', targetField: 'borrower_email', transform: 'lowercase' },
-    { sourceColumn: 'custom_fields.Borrower_Phone', targetField: 'borrower_phone' },
-    { sourceColumn: 'custom_fields.Lender', targetField: 'lender_name' },
-    { sourceColumn: 'custom_fields.Loan_Officer', targetField: 'loan_officer' },
-    { sourceColumn: 'custom_fields.Loan_Number', targetField: 'loan_number' },
-    { sourceColumn: 'notes', targetField: 'special_instructions' },
+    // Core identifiers
+    { sourceColumn: 'Task ID', targetField: 'external_id', required: true },
+    
+    // Dates
+    { sourceColumn: 'Created At', targetField: 'ordered_date', transform: 'toDate' },
+    { sourceColumn: 'Due Date', targetField: 'due_date', transform: 'toDate' },
+    { sourceColumn: 'Completed At', targetField: 'completed_date', transform: 'toDate' },
+    
+    // Address handling - store original address
+    { sourceColumn: 'Appraised Property Address', targetField: 'props.original_address' },
+    
+    // Status and type mapping
+    { sourceColumn: 'ORDER STATUS', targetField: 'status', transform: 'mapOrderStatus' },
+    { sourceColumn: 'PURPOSE', targetField: 'order_type', transform: 'mapOrderType' },
+    
+    // Priority mapping (simple ruleset: A→rush, B→high, else normal)
+    { sourceColumn: 'Top Priority', targetField: 'priority' },
+    
+    // Financial fields
+    { sourceColumn: 'Appraisal Fee', targetField: 'fee_amount', transform: 'toNumber' },
+    { sourceColumn: 'Fixed Cost', targetField: 'tech_fee', transform: 'toNumber' },
+    { sourceColumn: 'Inspection Fee', targetField: 'tech_fee', transform: 'toNumber' },
+    { sourceColumn: 'Amount', targetField: 'total_amount', transform: 'toNumber' },
+    
+    // Lender and loan information
+    { sourceColumn: 'Lender Client', targetField: 'lender_name' },
+    { sourceColumn: 'Loan Officer', targetField: 'loan_officer' },
+    { sourceColumn: 'Processor', targetField: 'processor_name' },
+    
+    // Property contact information
+    { sourceColumn: 'Contact For Entry', targetField: 'property_contact_name' },
+    { sourceColumn: 'Contact Primary Phone', targetField: 'property_contact_phone' },
+    
+    // Store additional Asana fields in props
+    { sourceColumn: 'GLA', targetField: 'props.gla' },
+    { sourceColumn: 'Type of Value', targetField: 'props.value_type' },
+    { sourceColumn: 'Report Format', targetField: 'props.report_format' },
+    { sourceColumn: 'Additional Forms Required', targetField: 'props.additional_forms' },
+    { sourceColumn: 'Invoice #', targetField: 'props.invoice.number' },
+    { sourceColumn: 'Invoice Date', targetField: 'props.invoice.date' },
+    { sourceColumn: 'Invoice Amount', targetField: 'props.invoice.amount', transform: 'toNumber' },
   ],
 };
 
