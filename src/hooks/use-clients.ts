@@ -14,7 +14,7 @@ export function useClients() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
-        .select('*')
+        .select('*, party_roles(*)')
         .order('company_name')
       
       if (error) throw error
@@ -28,7 +28,7 @@ export function useClients() {
       const { data, error } = await supabase
         .from('clients')
         .insert(client)
-        .select()
+        .select('*, party_roles(*)')
         .single()
       
       if (error) throw error
@@ -63,7 +63,7 @@ export function useClients() {
         .from('clients')
         .update(updates)
         .eq('id', id)
-        .select()
+        .select('*, party_roles(*)')
         .single()
       
       if (error) throw error
@@ -133,7 +133,7 @@ export function useClient(id: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
-        .select('*')
+        .select('*, party_roles(*)')
         .eq('id', id)
         .single()
       

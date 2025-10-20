@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import Papa from 'papaparse';
 import {
   FieldMapping,
@@ -8,7 +8,9 @@ import {
 } from '@/lib/migrations/types';
 import { applyTransform, generateHash, normalizeCompanyName, transformExtractDomain, splitUSAddress } from '@/lib/migrations/transforms';
 import { normalizeAddressKey, extractUnit } from '@/lib/addresses';
+import { normalizeUnit, shouldCreateUnit } from '@/lib/units';
 import { validateAddressWithGoogle } from '@/lib/address-validation';
+import { mapPartyRole, isJunkRole } from '@/lib/roles/mapPartyRole';
 
 const BATCH_SIZE = 500;
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -115,6 +117,7 @@ export async function POST(request: NextRequest) {
 
 /**
  * Process migration in background
+ * Uses service role client to bypass RLS for bulk operations
  */
 async function processMigration(
   jobId: string,
@@ -125,7 +128,8 @@ async function processMigration(
   duplicateStrategy: DuplicateStrategy,
   userId: string
 ) {
-  const supabase = await createClient();
+  // Use service role client to bypass RLS for bulk imports
+  const supabase = createServiceRoleClient();
 
   try {
     // Update job to processing
@@ -328,6 +332,25 @@ async function processContact(
   delete row._client_domain;
   delete row._client_name;
 
+  // Handle role mapping
+  if (row._role) {
+    const roleCode = mapPartyRole(row._role);
+    row.primary_role_code = roleCode;
+    
+    // Store original label in props
+    if (!row.props) row.props = {};
+    row.props.source_role_label = row._role;
+    
+    // Flag junk records for exclusion
+    if (isJunkRole(roleCode)) {
+      row.primary_role_code = 'unknown';
+      row.props.exclude = true;
+      row.props.exclude_reason = `Junk role: ${row._role}`;
+    }
+    
+    delete row._role; // Remove special field
+  }
+
   // If no client resolved, try to get or create "Unassigned Contacts" client
   if (!clientId) {
     const { data: unassignedClient } = await supabase
@@ -414,6 +437,25 @@ async function processClient(
     row.domain = String(row.domain).toLowerCase();
   }
 
+  // Handle role mapping
+  if (row._role) {
+    const roleCode = mapPartyRole(row._role);
+    row.primary_role_code = roleCode;
+    
+    // Store original label in props
+    if (!row.props) row.props = {};
+    row.props.source_role_label = row._role;
+    
+    // Flag junk records for exclusion
+    if (isJunkRole(roleCode)) {
+      row.primary_role_code = 'unknown';
+      row.props.exclude = true;
+      row.props.exclude_reason = `Junk role: ${row._role}`;
+    }
+    
+    delete row._role; // Remove special field
+  }
+
   // Check for duplicate by domain using functional index
   if (row.domain) {
     const { data: existing } = await supabase
@@ -471,8 +513,9 @@ async function processOrder(
     row.source = source;
   }
 
-  // Set created_by
+  // Set created_by and org_id (for tenant isolation)
   row.created_by = userId;
+  row.org_id = userId; // org_id matches created_by for tenant boundary
 
   // Two-phase property upsert: Property → Order
   let propertyId: string | null = null;
@@ -484,7 +527,7 @@ async function processOrder(
       const { street, city, state, zip } = addressParts;
       
       // Extract unit from street address
-      const { street: streetNoUnit, unit } = extractUnit(street);
+      const { street: streetNoUnit, unit, unitType } = extractUnit(street);
       
       // Set order snapshot address (building-level, no unit)
       row.property_address = streetNoUnit;
@@ -497,7 +540,7 @@ async function processOrder(
         row.property_type = 'single_family';
       }
       
-      // Store unit in props if extracted
+      // Store unit in props if extracted (for backward compatibility)
       if (unit) {
         if (!row.props) row.props = {};
         row.props.unit = unit;
@@ -512,6 +555,55 @@ async function processOrder(
           zip,
           type: row.property_type
         });
+      }
+      
+      // Create property_unit if unit extracted and should be created
+      if (propertyId && unit && shouldCreateUnit(row.property_type, unit, row.props)) {
+        try {
+          const unitNorm = normalizeUnit(unit);
+          if (unitNorm) {
+            // Upsert property_unit (idempotent via unique index)
+            const { data: propertyUnit, error: unitError } = await supabase
+              .from('property_units')
+              .upsert(
+                {
+                  property_id: propertyId,
+                  unit_identifier: unit.trim(),
+                  unit_norm: unitNorm,
+                  unit_type: unitType || (row.property_type === 'condo' ? 'condo' : null),
+                  props: {
+                    imported_from: source,
+                    imported_at: new Date().toISOString()
+                  }
+                },
+                {
+                  onConflict: 'property_id,unit_norm',
+                  ignoreDuplicates: false
+                }
+              )
+              .select('id')
+              .single();
+
+            if (!unitError && propertyUnit) {
+              row.property_unit_id = propertyUnit.id;
+              
+              // Cache USPAP counts for both unit and building
+              const { data: unitPriorWork } = await supabase
+                .rpc('property_unit_prior_work_count', { _property_unit_id: propertyUnit.id });
+              
+              const { data: buildingPriorWork } = await supabase
+                .rpc('property_building_prior_work_count', { _property_id: propertyId });
+              
+              if (!row.props.uspap) row.props.uspap = {};
+              row.props.uspap.unit_prior_work_3y = unitPriorWork || 0;
+              row.props.uspap.building_prior_work_3y = buildingPriorWork || 0;
+              row.props.uspap.as_of = new Date().toISOString();
+            }
+          }
+        } catch (unitCreateError) {
+          console.warn('Failed to create property_unit:', unitCreateError);
+          // Continue with import - unit creation failure shouldn't block the order
+        }
       }
     } catch (error) {
       console.warn('Address parsing failed:', error);
@@ -630,13 +722,38 @@ async function processOrder(
     }
   }
 
-  // Check for duplicate by external_id
+  // GUARD: Require external_id for idempotent imports
+  // The unique constraint ignores NULL external_id by design (partial index)
+  // Without external_id, we can't prevent duplicates on re-import
+  if (!row.external_id || row.external_id.trim() === '') {
+    console.warn('Order missing external_id, generating from order_number:', row.order_number);
+    
+    // Option 1: Use order_number as external_id if available
+    if (row.order_number && row.order_number.trim() !== '') {
+      row.external_id = `order-${row.order_number}`;
+      console.log(`Generated external_id: ${row.external_id}`);
+    } 
+    // Option 2: Skip if no stable identifier available
+    else {
+      console.error('Order has no external_id or order_number - cannot ensure idempotency, skipping');
+      throw new Error('Order requires either external_id or order_number for idempotent imports');
+    }
+  }
+
+  // Ensure source is set (required for unique constraint with COALESCE)
+  if (!row.source || row.source.trim() === '') {
+    row.source = source || 'unknown';
+  }
+
+  // Check for duplicate by (org_id, source, external_id)
   if (row.external_id) {
     const { data: existing } = await supabase
       .from('orders')
       .select('id')
+      .eq('org_id', userId)
+      .eq('source', row.source)
       .eq('external_id', row.external_id)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       if (duplicateStrategy === 'skip') {

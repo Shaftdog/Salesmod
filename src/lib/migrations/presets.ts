@@ -17,6 +17,9 @@ export const HUBSPOT_CONTACTS_PRESET: MigrationPreset = {
     { sourceColumn: 'jobtitle', targetField: 'title' },
     { sourceColumn: 'company', targetField: '_client_name' }, // Special: resolve to client_id
     { sourceColumn: 'company_domain', targetField: '_client_domain' }, // Special: resolve to client_id
+    { sourceColumn: 'category', targetField: '_role' }, // Map to party role
+    { sourceColumn: 'type', targetField: '_role' }, // Fallback role field
+    { sourceColumn: 'contact_type', targetField: '_role' }, // Alternative role field
     { sourceColumn: 'hs_object_id', targetField: 'props.hubspot_id' },
     { sourceColumn: 'notes', targetField: 'notes' },
     { sourceColumn: 'department', targetField: 'department' },
@@ -38,6 +41,9 @@ export const HUBSPOT_COMPANIES_PRESET: MigrationPreset = {
     { sourceColumn: 'state', targetField: 'props.state' },
     { sourceColumn: 'zip', targetField: 'props.zip' },
     { sourceColumn: 'website', targetField: 'props.website' },
+    { sourceColumn: 'category', targetField: '_role' }, // Map to party role
+    { sourceColumn: 'type', targetField: '_role' }, // Fallback role field
+    { sourceColumn: 'company_type', targetField: '_role' }, // Alternative role field
     { sourceColumn: 'hs_object_id', targetField: 'props.hubspot_id' },
     { sourceColumn: 'industry', targetField: 'props.industry' },
   ],

@@ -37,6 +37,9 @@ import { useCurrentUser } from "@/hooks/use-appraisers";
 import { useRouter } from "next/navigation";
 import { AddressValidator } from "@/components/shared/address-validator";
 import { AddressValidationResult, StandardizedAddress } from "@/lib/address-validation";
+import { UnitSelector } from "@/components/properties/unit-selector";
+import { isFeeSimplePropertyType } from "@/lib/units";
+import { usePropertyUnits } from "@/hooks/use-property-units";
   
 
 const formSchema = z.object({
@@ -46,6 +49,7 @@ const formSchema = z.object({
   propertyState: z.string().min(1, "State is required"),
   propertyZip: z.string().min(1, "ZIP code is required"),
   propertyType: z.enum(propertyTypes, { required_error: "Please select a property type" }),
+  unitId: z.string().optional(),
   accessInstructions: z.string().optional(),
   specialInstructions: z.string().optional(),
 
@@ -71,7 +75,7 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 const steps = [
-  { id: "Step 1", name: "Property Info", fields: ["propertyAddress", "propertyCity", "propertyState", "propertyZip", "propertyType", "accessInstructions", "specialInstructions"] },
+  { id: "Step 1", name: "Property Info", fields: ["propertyAddress", "propertyCity", "propertyState", "propertyZip", "propertyType", "unitId", "accessInstructions", "specialInstructions"] },
   { id: "Step 2", name: "Loan Info", fields: ["loanType", "loanNumber", "loanAmount", "orderType"] },
   { id: "Step 3", name: "Contact Info", fields: ["clientId", "loanOfficer", "processorName", "borrowerName"] },
   { id: "Step 4", name: "Order Details", fields: ["priority", "dueDate", "feeAmount", "assignedTo"] },
@@ -106,6 +110,7 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
       propertyState: initialValues?.propertyState || "",
       propertyZip: initialValues?.propertyZip || "",
       propertyType: initialValues?.propertyType || "single_family",
+      unitId: "",
       accessInstructions: "",
       specialInstructions: "",
       loanType: "",
@@ -261,6 +266,7 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
         property_zip: data.propertyZip,
         property_type: data.propertyType,
         property_id: propertyIdFromUrl || undefined,
+        property_unit_id: data.unitId || undefined,
         borrower_name: data.borrowerName,
         client_id: data.clientId,
         fee_amount: parseFloat(data.feeAmount),
@@ -360,6 +366,7 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
               {currentStep === 0 && <Step1 
                 onAddressValidation={handleAddressValidation}
                 onAcceptAddressSuggestion={handleAcceptAddressSuggestion}
+                propertyId={propertyIdFromUrl}
               />}
               {currentStep === 1 && <Step2 />}
               {currentStep === 2 && <Step3 clients={clients} onQuickAdd={handleQuickAddClient} />}
@@ -423,16 +430,28 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
 
 const Step1 = ({ 
   onAddressValidation, 
-  onAcceptAddressSuggestion 
+  onAcceptAddressSuggestion,
+  propertyId
 }: { 
   onAddressValidation: (result: AddressValidationResult) => void;
   onAcceptAddressSuggestion: (standardized: StandardizedAddress, overrideReason?: string) => void;
+  propertyId?: string;
 }) => {
-  const { control, watch } = useFormContext();
+  const { control, watch, setValue } = useFormContext();
   const propertyAddress = watch("propertyAddress");
   const propertyCity = watch("propertyCity");
   const propertyState = watch("propertyState");
   const propertyZip = watch("propertyZip");
+  const propertyType = watch("propertyType");
+  const unitId = watch("unitId");
+  
+  // Fetch units if we have a propertyId
+  const { data: units = [] } = usePropertyUnits(propertyId);
+  
+  // Show unit selector if property is fee-simple type OR if property has units
+  const shouldShowUnitSelector = propertyId && (
+    isFeeSimplePropertyType(propertyType) || units.length > 0
+  );
 
   return (
     <div className="space-y-4">
@@ -492,6 +511,25 @@ const Step1 = ({
             <FormMessage />
         </FormItem>
         )} />
+      
+      {/* Unit Selector - only for fee-simple properties or properties with existing units */}
+      {shouldShowUnitSelector && (
+        <div className="space-y-2">
+          <label className="text-sm font-medium">
+            Unit <span className="text-muted-foreground">(optional)</span>
+          </label>
+          <UnitSelector
+            propertyId={propertyId!}
+            propertyType={propertyType}
+            selectedUnitId={unitId}
+            onSelectUnit={(selectedUnitId) => {
+              setValue("unitId", selectedUnitId || "");
+            }}
+            allowCreate={true}
+          />
+        </div>
+      )}
+      
       <FormField name="accessInstructions" control={control} render={({ field }) => (
         <FormItem>
           <FormLabel>Access Instructions <span className="text-muted-foreground">(optional)</span></FormLabel>

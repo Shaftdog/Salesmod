@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useClients } from "@/hooks/use-clients";
+import { RoleSelect } from "@/components/shared/role-select";
 
 const formSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
@@ -28,6 +29,7 @@ const formSchema = z.object({
   address: z.string().min(1, "Address is required"),
   billingAddress: z.string().optional(),
   paymentTerms: z.coerce.number().positive().optional(),
+  primaryRoleCode: z.string().optional(),
 });
 
 type ClientFormData = z.infer<typeof formSchema>;
@@ -47,6 +49,7 @@ export function ClientForm() {
       address: "",
       billingAddress: "",
       paymentTerms: 30,
+      primaryRoleCode: "",
     },
   });
 
@@ -60,6 +63,7 @@ export function ClientForm() {
         address: data.address,
         billing_address: data.billingAddress || data.address,
         payment_terms: data.paymentTerms || 30,
+        primary_role_code: data.primaryRoleCode || null,
         is_active: true,
         active_orders: 0,
         total_revenue: 0,
@@ -129,6 +133,23 @@ export function ClientForm() {
                 <FormLabel>Phone Number <span className="text-destructive">*</span></FormLabel>
                 <FormControl>
                   <Input placeholder="(123) 456-7890" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="primaryRoleCode"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Role</FormLabel>
+                <FormControl>
+                  <RoleSelect
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="Select company role..."
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

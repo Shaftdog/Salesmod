@@ -13,6 +13,7 @@ import { ActivityTimeline } from "@/components/activities/activity-timeline";
 import { CompanyHistoryTimeline } from "@/components/contacts/company-history-timeline";
 import { TransferCompanyDialog } from "@/components/contacts/transfer-company-dialog";
 import { ContactForm } from "@/components/contacts/contact-form";
+import { RoleBadge } from "@/components/shared/role-badge";
 import { 
   ArrowLeft,
   Mail, 
@@ -83,6 +84,7 @@ export default function ContactDetailPage() {
         department: data.department,
         notes: data.notes,
         is_primary: data.isPrimary,
+        primary_role_code: data.primaryRoleCode || null,
       });
       toast({
         title: "Contact Updated",
@@ -127,6 +129,10 @@ export default function ContactDetailPage() {
                     Primary Contact
                   </Badge>
                 )}
+                <RoleBadge 
+                  code={contact.primary_role_code} 
+                  label={contact.role?.label} 
+                />
               </div>
               {contact.title && (
                 <p className="text-lg text-muted-foreground mt-1">

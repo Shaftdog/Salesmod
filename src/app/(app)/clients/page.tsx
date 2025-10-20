@@ -7,13 +7,25 @@ import Link from "next/link";
 import { ClientsList } from "@/components/clients/clients-list";
 import { Input } from "@/components/ui/input";
 import { useSearch } from "@/contexts/search-context";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useClients } from "@/hooks/use-clients";
+import { RoleFilter } from "@/components/shared/role-filter";
 
 export default function ClientsPage() {
     const { searchTerm, setSearchTerm } = useSearch();
+    const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const { clients, isLoading } = useClients();
+
+    // Filter clients by role
+    const filteredClients = useMemo(() => {
+      if (!clients) return [];
+      if (selectedRoles.length === 0) return clients;
+      
+      return clients.filter(client => 
+        client.primaryRoleCode && selectedRoles.includes(client.primaryRoleCode)
+      );
+    }, [clients, selectedRoles]);
 
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -44,6 +56,10 @@ export default function ClientsPage() {
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
+                    <RoleFilter 
+                      selectedRoles={selectedRoles} 
+                      onChange={setSelectedRoles} 
+                    />
                     <Button asChild size="sm" className="gap-1">
                         <Link href="/clients/new">
                             <PlusCircle className="h-3.5 w-3.5" />
@@ -55,7 +71,7 @@ export default function ClientsPage() {
                 </div>
             </CardHeader>
             <CardContent>
-                <ClientsList clients={clients} isLoading={isLoading} />
+                <ClientsList clients={filteredClients} isLoading={isLoading} />
             </CardContent>
         </Card>
     );

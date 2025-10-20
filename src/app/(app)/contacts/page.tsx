@@ -21,9 +21,11 @@ import { useToast } from "@/hooks/use-toast";
 import type { Contact } from "@/lib/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { RoleFilter } from "@/components/shared/role-filter";
 
 export default function ContactsPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   
@@ -34,23 +36,36 @@ export default function ContactsPage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  // Filter contacts based on search term
+  // Filter contacts based on search term and role
   const filteredContacts = useMemo(() => {
     if (!contacts) return [];
-    if (!searchTerm) return contacts;
-
-    const search = searchTerm.toLowerCase();
-    return contacts.filter(contact => {
-      return (
-        contact.firstName?.toLowerCase().includes(search) ||
-        contact.lastName?.toLowerCase().includes(search) ||
-        contact.email?.toLowerCase().includes(search) ||
-        contact.title?.toLowerCase().includes(search) ||
-        contact.department?.toLowerCase().includes(search) ||
-        contact.client?.company_name?.toLowerCase().includes(search)
+    
+    let filtered = contacts;
+    
+    // Filter by search term
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(contact => {
+        return (
+          contact.firstName?.toLowerCase().includes(search) ||
+          contact.lastName?.toLowerCase().includes(search) ||
+          contact.email?.toLowerCase().includes(search) ||
+          contact.title?.toLowerCase().includes(search) ||
+          contact.department?.toLowerCase().includes(search) ||
+          contact.client?.companyName?.toLowerCase().includes(search)
+        );
+      });
+    }
+    
+    // Filter by role
+    if (selectedRoles.length > 0) {
+      filtered = filtered.filter(contact => 
+        contact.primaryRoleCode && selectedRoles.includes(contact.primaryRoleCode)
       );
-    });
-  }, [contacts, searchTerm]);
+    }
+    
+    return filtered;
+  }, [contacts, searchTerm, selectedRoles]);
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -197,7 +212,7 @@ export default function ContactsPage() {
         </Card>
       </div>
 
-      {/* Search */}
+      {/* Search and Filters */}
       <div className="flex gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -208,6 +223,10 @@ export default function ContactsPage() {
             className="pl-10"
           />
         </div>
+        <RoleFilter 
+          selectedRoles={selectedRoles} 
+          onChange={setSelectedRoles} 
+        />
       </div>
 
       {/* Contacts Grid */}

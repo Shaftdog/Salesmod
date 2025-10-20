@@ -10,20 +10,54 @@ export function useContacts(clientId?: string) {
   return useQuery({
     queryKey: clientId ? ['contacts', 'client', clientId] : ['contacts'],
     queryFn: async () => {
-      let query = supabase
+      // Use explicit FK name to avoid ambiguity with contact_companies table
+      let { data, error } = await supabase
         .from('contacts')
-        .select('*, client:clients(*)')
+        .select('*, clients!contacts_client_id_fkey(*), party_roles(*)')
         .order('is_primary', { ascending: false })
         .order('last_name')
       
       if (clientId) {
-        query = query.eq('client_id', clientId)
+        const queryWithFilter = supabase
+          .from('contacts')
+          .select('*, clients!contacts_client_id_fkey(*), party_roles(*)')
+          .eq('client_id', clientId)
+          .order('is_primary', { ascending: false })
+          .order('last_name');
+        
+        const result = await queryWithFilter;
+        data = result.data;
+        error = result.error;
       }
       
-      const { data, error } = await query
+      // Fallback if party_roles doesn't exist yet
+      if (error) {
+        console.warn('Falling back to contacts without party_roles:', error.message)
+        let fallbackQuery = supabase
+          .from('contacts')
+          .select('*, clients!contacts_client_id_fkey(*)')
+          .order('is_primary', { ascending: false })
+          .order('last_name')
+        
+        if (clientId) {
+          fallbackQuery = fallbackQuery.eq('client_id', clientId)
+        }
+        
+        const fallbackResult = await fallbackQuery
+        data = fallbackResult.data
+        error = fallbackResult.error
+        
+        if (error) throw error
+      }
       
-      if (error) throw error
-      return (data || []).map(transformContact)
+      // Normalize clients FK to client for compatibility
+      const normalizedData = (data || []).map(contact => ({
+        ...contact,
+        client: contact.clients || null,
+        clients: undefined,
+      }));
+      
+      return normalizedData.map(transformContact)
     },
     enabled: !clientId || !!clientId,
     staleTime: 1000 * 60 * 2, // 2 minutes
@@ -36,14 +70,35 @@ export function useContact(id: string) {
   return useQuery({
     queryKey: ['contacts', id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('contacts')
-        .select('*, client:clients(*)')
+        .select('*, clients!contacts_client_id_fkey(*), party_roles(*)')
         .eq('id', id)
         .single()
       
-      if (error) throw error
-      return transformContact(data)
+      // Fallback if party_roles column doesn't exist
+      if (error) {
+        console.warn('Falling back to contact without party_roles:', error.message)
+        const fallbackResult = await supabase
+          .from('contacts')
+          .select('*, clients!contacts_client_id_fkey(*)')
+          .eq('id', id)
+          .single()
+        
+        data = fallbackResult.data
+        error = fallbackResult.error
+        
+        if (error) throw error
+      }
+      
+      // Normalize clients FK to client
+      const normalizedContact = {
+        ...data,
+        client: data?.clients || null,
+      };
+      delete normalizedContact.clients;
+      
+      return transformContact(normalizedContact)
     },
     enabled: !!id,
   })
@@ -59,11 +114,19 @@ export function useCreateContact() {
       const { data, error } = await supabase
         .from('contacts')
         .insert(contact)
-        .select('*, client:clients(*)')
+        .select('*, clients!contacts_client_id_fkey(*), party_roles(*)')
         .single()
       
       if (error) throw error
-      return transformContact(data)
+      
+      // Normalize
+      const normalized = {
+        ...data,
+        client: data?.clients || null,
+      };
+      delete normalized.clients;
+      
+      return transformContact(normalized)
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['contacts'] })
@@ -95,11 +158,19 @@ export function useUpdateContact() {
         .from('contacts')
         .update(updates)
         .eq('id', id)
-        .select('*, client:clients(*)')
+        .select('*, clients!contacts_client_id_fkey(*), party_roles(*)')
         .single()
       
       if (error) throw error
-      return transformContact(data)
+      
+      // Normalize
+      const normalized = {
+        ...data,
+        client: data?.clients || null,
+      };
+      delete normalized.clients;
+      
+      return transformContact(normalized)
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['contacts'] })

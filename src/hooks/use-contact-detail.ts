@@ -46,22 +46,50 @@ export function useContactDetail(id: string) {
   return useQuery({
     queryKey: ['contact-detail', id],
     queryFn: async () => {
-      // Fetch contact with client info
-      const { data: contact, error: contactError } = await supabase
+      // Fetch contact with explicit FK to avoid ambiguity
+      let { data: contact, error: contactError } = await supabase
         .from('contacts')
         .select(`
           *,
-          client:clients(
+          clients!contacts_client_id_fkey(
             id,
             company_name,
             email,
             phone
-          )
+          ),
+          party_roles(*)
         `)
         .eq('id', id)
         .single();
 
-      if (contactError) throw contactError;
+      // Fallback if party_roles doesn't exist yet
+      if (contactError) {
+        const fallbackResult = await supabase
+          .from('contacts')
+          .select(`
+            *,
+            clients!contacts_client_id_fkey(
+              id,
+              company_name,
+              email,
+              phone
+            )
+          `)
+          .eq('id', id)
+          .single();
+        
+        contact = fallbackResult.data;
+        contactError = fallbackResult.error;
+        
+        if (contactError) throw contactError;
+      }
+
+      // Normalize the clients FK result to 'client' for compatibility
+      const normalizedContact = {
+        ...contact,
+        client: contact?.clients || null,
+      };
+      delete normalizedContact.clients;
 
       // Get activity count
       const { count: activityCount } = await supabase
@@ -70,7 +98,7 @@ export function useContactDetail(id: string) {
         .eq('contact_id', id);
 
       return {
-        ...contact,
+        ...normalizedContact,
         activityCount: activityCount || 0,
       } as ContactWithCompany;
     },

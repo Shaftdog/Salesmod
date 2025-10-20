@@ -46,29 +46,82 @@ export function normalizeAddressKey(
 
 /**
  * Extract unit number from street address
- * Handles common unit patterns: Apt, Unit, Ste, Suite, #
+ * Handles common unit patterns: Apt, Unit, Ste, Suite, #, and half-duplex patterns
  * 
  * @param line1 - Street address that may contain unit
- * @returns Object with street (without unit) and extracted unit
+ * @returns Object with street (without unit), extracted unit, and optional unit type
  * 
  * @example
  * extractUnit("123 Main St Apt 2B") // { street: "123 Main St", unit: "2B" }
  * extractUnit("456 Oak Ave #305") // { street: "456 Oak Ave", unit: "305" }
- * extractUnit("789 Elm St") // { street: "789 Elm St" }
+ * extractUnit("789 Elm St East Unit") // { street: "789 Elm St", unit: "EAST", unitType: "half_duplex" }
+ * extractUnit("123 Oak A Side") // { street: "123 Oak", unit: "A", unitType: "half_duplex" }
+ * extractUnit("456 Main St") // { street: "456 Main St" }
  */
-export function extractUnit(line1: string): { street: string; unit?: string } {
+export function extractUnit(line1: string): { 
+  street: string; 
+  unit?: string;
+  unitType?: string;
+} {
   if (!line1) return { street: "" };
   
   const trimmed = line1.trim();
   
-  // Match unit patterns: APT|UNIT|STE|SUITE|# followed by alphanumeric
-  const unitMatch = trimmed.match(/^(.*?)(?:\s+(?:APT|UNIT|STE|SUITE|#)\s*([A-Z0-9\-]+))$/i);
+  // Pattern 1: Standard unit patterns (APT, UNIT, STE, SUITE, #, RM, FLOOR, FL, BLDG)
+  const standardMatch = trimmed.match(
+    /^(.*?)(?:\s+(?:APT|APARTMENT|UNIT|STE|SUITE|RM|ROOM|FL|FLOOR|BLDG|BUILDING|#)\s*([A-Z0-9\-]+))$/i
+  );
   
-  if (unitMatch) {
+  if (standardMatch) {
     return {
-      street: unitMatch[1].trim(),
-      unit: unitMatch[2].toUpperCase()
+      street: standardMatch[1].trim(),
+      unit: standardMatch[2].toUpperCase()
     };
+  }
+  
+  // Pattern 2: Half-duplex patterns (East/West Unit, A/B Side, Left/Right, Upper/Lower)
+  const halfDuplexMatch = trimmed.match(
+    /^(.*?)(?:\s+(EAST|WEST|LEFT|RIGHT|UPPER|LOWER|FRONT|REAR)\s*(?:UNIT|SIDE)?|(?:SIDE\s+)?(A|B|C|D)(?:\s+SIDE)?)$/i
+  );
+  
+  if (halfDuplexMatch) {
+    const unitLabel = (halfDuplexMatch[2] || halfDuplexMatch[3] || "").toUpperCase();
+    
+    // Map to single letter for common patterns
+    const unitMap: Record<string, string> = {
+      'EAST': 'E',
+      'WEST': 'W',
+      'LEFT': 'L',
+      'RIGHT': 'R',
+      'UPPER': 'U',
+      'LOWER': 'L',
+      'FRONT': 'F',
+      'REAR': 'R'
+    };
+    
+    return {
+      street: halfDuplexMatch[1].trim(),
+      unit: unitMap[unitLabel] || unitLabel,
+      unitType: 'half_duplex'
+    };
+  }
+  
+  // Pattern 3: Trailing single letter/number that might be a unit (be conservative)
+  // Only match if preceded by clear separator to avoid false positives
+  const trailingSingleMatch = trimmed.match(/^(.*?)[\s,]+([A-D]|\d{1,3})$/);
+  
+  if (trailingSingleMatch) {
+    const possibleUnit = trailingSingleMatch[2];
+    const possibleStreet = trailingSingleMatch[1].trim();
+    
+    // Only extract if it looks like a deliberate unit designation
+    // (avoid capturing street numbers like "123 Main 5" where 5 is part of address)
+    if (possibleStreet.match(/\b(STREET|ST|AVENUE|AVE|ROAD|RD|DRIVE|DR|LANE|LN|COURT|CT|PLACE|PL|BOULEVARD|BLVD|WAY|CIRCLE|CIR|TRAIL|TRL)\.?\s*$/i)) {
+      return {
+        street: possibleStreet,
+        unit: possibleUnit.toUpperCase()
+      };
+    }
   }
   
   return { street: trimmed };

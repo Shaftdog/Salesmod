@@ -1,3 +1,5 @@
+import { PartyRoleCode } from './roles/mapPartyRole';
+
 export const orderStatuses = ['new', 'assigned', 'scheduled', 'in_progress', 'in_review', 'revisions', 'completed', 'delivered', 'cancelled'] as const;
 export type OrderStatus = typeof orderStatuses[number];
 
@@ -35,6 +37,7 @@ export interface Client {
   billingAddress: string;
   paymentTerms: number;
   isActive: boolean;
+  primaryRoleCode?: PartyRoleCode | null;
   createdAt: string;
   updatedAt: string;
   activeOrders?: number;
@@ -42,6 +45,9 @@ export interface Client {
   feeSchedule?: any; // jsonb
   preferredTurnaround?: number;
   specialRequirements?: string;
+  
+  // Relations
+  role?: PartyRole;
 }
 
 export interface Order {
@@ -55,7 +61,8 @@ export interface Order {
   propertyState: string;
   propertyZip: string;
   propertyType: PropertyType;
-  propertyId?: string; // Link to canonical property
+  propertyId?: string; // Link to canonical property (building-level)
+  propertyUnitId?: string; // Link to specific unit (optional, for fee-simple properties)
   loanNumber?: string;
   loanType?: string;
   loanAmount?: number;
@@ -102,6 +109,7 @@ export interface Order {
   client?: Client;
   assignee?: User;
   property?: Property;
+  propertyUnit?: PropertyUnit;
 }
 
 export interface OrderHistory {
@@ -160,11 +168,23 @@ export interface Contact {
   isPrimary: boolean;
   department?: string;
   notes?: string;
+  primaryRoleCode?: PartyRoleCode | null;
   createdAt: string;
   updatedAt: string;
   
   // Relations
   client?: Client;
+  role?: PartyRole;
+}
+
+export interface PartyRole {
+  code: PartyRoleCode;
+  label: string;
+  description?: string;
+  category?: string;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
 }
 
 export const activityTypes = ['call', 'email', 'meeting', 'note', 'task'] as const;
@@ -405,6 +425,26 @@ export interface Property {
   
   // Relations
   orders?: Order[]; // Related orders
+  units?: PropertyUnit[]; // Related units (for fee-simple properties)
+}
+
+export interface PropertyUnit {
+  id: string;
+  propertyId: string; // FK to properties
+  unitIdentifier: string; // User-facing: "Apt 2B", "305", "Unit A"
+  unitNorm: string | null; // Normalized key for dedupe: "2B", "305", "A"
+  unitType?: string; // 'condo', 'apartment', 'townhouse', 'office', etc.
+  props?: any; // jsonb for flexible storage (bed/bath, sqft, owner, etc.)
+  createdAt: string;
+  updatedAt: string;
+  
+  // Computed fields
+  priorWork3y?: number; // USPAP prior work count (3 years) for this unit
+  orderCount?: number; // Total orders for this unit
+  
+  // Relations
+  property?: Property;
+  orders?: Order[];
 }
 
 export interface PropertyFilters {
