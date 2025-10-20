@@ -37,6 +37,7 @@ import { orderStatuses } from "@/lib/types";
 import { OrderMap } from "@/components/orders/order-map";
 import { formatCurrency } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { PropertyChip } from "@/components/orders/property-chip";
 
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const [orderId, setOrderId] = React.useState<string | null>(null);
@@ -123,8 +124,14 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                         <div className="space-y-4">
                             <div>
                                 <h3 className="font-semibold">Property</h3>
-                                <p className="text-sm text-muted-foreground">{order.propertyAddress}</p>
-                                <p className="text-sm text-muted-foreground">{order.propertyCity}, {order.propertyState} {order.propertyZip}</p>
+                                {order.propertyId ? (
+                                    <PropertyChip order={order} variant="card" />
+                                ) : (
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">{order.propertyAddress}</p>
+                                        <p className="text-sm text-muted-foreground">{order.propertyCity}, {order.propertyState} {order.propertyZip}</p>
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <h3 className="font-semibold">Client</h3>

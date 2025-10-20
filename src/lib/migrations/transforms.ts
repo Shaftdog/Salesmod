@@ -27,6 +27,12 @@ export function applyTransform(
       return transformCoalesce(value, params);
     case 'extract_domain':
       return transformExtractDomain(value);
+    case 'splitUSAddress':
+      return splitUSAddress(value);
+    case 'mapOrderStatus':
+      return mapOrderStatus(value);
+    case 'mapOrderType':
+      return mapOrderType(value);
     case 'none':
     default:
       return value;
@@ -189,5 +195,66 @@ export function sanitizeFieldName(name: string): string {
     .replace(/[^a-z0-9_]/g, '_')
     .replace(/_{2,}/g, '_')
     .replace(/^_|_$/g, '');
+}
+
+/**
+ * Split US address into components
+ * Handles formats like "123 Main St, Tampa FL 33602" or "123 Main St, Tampa, FL 33602"
+ */
+export function splitUSAddress(input: string): { street: string; city: string; state: string; zip: string } {
+  if (!input) return { street: "", city: "", state: "", zip: "" };
+  
+  const t = input.trim().replace(/\s{2,}/g, " ");
+  
+  // Primary pattern: "123 Main St, Tampa FL 33602" or "123 Main St, Tampa, FL 33602"
+  const m = t.match(/^(.*?),(?:\s*)(.*?)[,\s]+([A-Z]{2})[,\s]+(\d{5})(?:-\d{4})?$/i);
+  if (m) {
+    return {
+      street: m[1].trim(),
+      city: m[2].trim(),
+      state: m[3].toUpperCase(),
+      zip: m[4]
+    };
+  }
+  
+  // Fallback: split by commas; try last tokens for state + zip
+  const parts = t.split(",");
+  const last = parts[parts.length - 1] || "";
+  const zip = (last.match(/(\d{5})(?:-\d{4})?/) || [])[1] || "";
+  const state = (last.match(/\b([A-Z]{2})\b/i) || [])[1]?.toUpperCase() || "";
+  const city = parts.length > 1 ? parts[parts.length - 2].trim() : "";
+  const street = parts[0].trim();
+  
+  return { street, city, state, zip };
+}
+
+/**
+ * Map order status from various formats to standardized values
+ */
+export function mapOrderStatus(s?: string): string {
+  const t = (s || "").toUpperCase();
+  if (t.includes("DELIVER")) return "delivered";
+  if (t.includes("SCHEDULE")) return "scheduled";
+  if (t.includes("PRODUCTION") || t.includes("INSPECTION")) return "in_progress";
+  if (t.includes("REVIEW")) return "in_review";
+  if (t.includes("REVISION")) return "revisions";
+  if (t.includes("CANCEL")) return "cancelled";
+  if (t.includes("COMPLETE")) return "completed";
+  if (t.includes("ASSIGN")) return "assigned";
+  return "new";
+}
+
+/**
+ * Map order type from various formats to standardized values
+ */
+export function mapOrderType(p?: string): string {
+  const t = (p || "").toLowerCase();
+  if (t.includes("purchase")) return "purchase";
+  if (t.includes("refinance")) return "refinance";
+  if (t.includes("home equity")) return "home_equity";
+  if (t.includes("estate")) return "estate";
+  if (t.includes("divorce")) return "divorce";
+  if (t.includes("tax")) return "tax_appeal";
+  return "other";
 }
 

@@ -103,3 +103,4 @@ export function CompanyHistoryTimeline({ history, currentCompanyId }: CompanyHis
   );
 }
 
+

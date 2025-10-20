@@ -482,3 +482,4 @@ AI-powered contact health score:
 - [ ] Contact merge functionality
 - [ ] Contact scoring algorithm
 
+

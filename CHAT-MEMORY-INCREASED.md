@@ -136,3 +136,4 @@ refetchInterval: 5000, // Check for new messages every 5 seconds
 **Impact**: 10x more conversation history available
 **Performance**: Minimal (text is lightweight)
 
+

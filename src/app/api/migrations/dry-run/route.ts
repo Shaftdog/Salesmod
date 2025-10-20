@@ -8,7 +8,7 @@ import {
   ValidationError,
   DuplicateMatch 
 } from '@/lib/migrations/types';
-import { applyTransform, isValidEmail, isValidPhone, normalizeCompanyName } from '@/lib/migrations/transforms';
+import { applyTransform, isValidEmail, isValidPhone, normalizeCompanyName, splitUSAddress } from '@/lib/migrations/transforms';
 
 const MAX_ERRORS_INLINE = 25;
 
@@ -119,6 +119,34 @@ export async function POST(request: NextRequest) {
             field: targetField,
             message: `Transform error: ${error.message}`,
             value: value,
+          });
+        }
+      }
+
+      // Handle address parsing for orders
+      if (entity === 'orders' && transformedRow['props.original_address'] && !transformedRow.property_address) {
+        try {
+          const addressParts = splitUSAddress(transformedRow['props.original_address']);
+          transformedRow.property_address = addressParts.street;
+          transformedRow.property_city = addressParts.city;
+          transformedRow.property_state = addressParts.state;
+          transformedRow.property_zip = addressParts.zip;
+          
+          // Check for parsing issues
+          if (!addressParts.state || !addressParts.zip) {
+            rowErrors.push({
+              rowIndex: rowIndex + 2,
+              field: 'property_address',
+              message: `Address parsing incomplete: missing state (${addressParts.state}) or zip (${addressParts.zip})`,
+              value: transformedRow['props.original_address'],
+            });
+          }
+        } catch (error: any) {
+          rowErrors.push({
+            rowIndex: rowIndex + 2,
+            field: 'property_address',
+            message: `Address parsing failed: ${error.message}`,
+            value: transformedRow['props.original_address'],
           });
         }
       }
@@ -240,14 +268,15 @@ async function checkForDuplicate(
   try {
     switch (entity) {
       case 'contacts': {
-        // Match by email (case-insensitive)
+        // Match by email (case-insensitive) using functional index
         if (row.email) {
+          const emailLower = String(row.email).toLowerCase();
           const { data, error } = await supabase
             .from('contacts')
             .select('*')
-            .ilike('email', row.email)
+            .eq('email', emailLower)
             .limit(1)
-            .single();
+            .maybeSingle();
 
           if (!error && data) {
             return {
@@ -263,12 +292,13 @@ async function checkForDuplicate(
       case 'clients': {
         // Match by domain (primary) or normalized company name
         if (row.domain) {
+          const domainLower = String(row.domain).toLowerCase();
           const { data, error } = await supabase
             .from('clients')
             .select('*')
-            .ilike('domain', row.domain)
+            .eq('domain', domainLower)
             .limit(1)
-            .single();
+            .maybeSingle();
 
           if (!error && data) {
             return {
