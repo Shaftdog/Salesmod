@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { normalizeAddressKey, extractUnit } from '@/lib/addresses';
 import { BackfillResult } from '@/lib/types';
 import { validateAddressWithGoogle } from '@/lib/address-validation';
@@ -7,6 +7,7 @@ import { validateAddressWithGoogle } from '@/lib/address-validation';
 /**
  * POST /api/admin/properties/backfill
  * Backfill existing orders to link them to properties
+ * Uses service role client for deterministic, idempotent bulk operations
  * 
  * Body: {
  *   orgId?: string,
@@ -17,8 +18,9 @@ import { validateAddressWithGoogle } from '@/lib/address-validation';
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Use regular client for authentication
+    const authClient = await createClient();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -36,6 +38,10 @@ export async function POST(request: NextRequest) {
     if (orgId !== user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    // Use service role client for deterministic bulk operations
+    // This ensures RLS doesn't silently drop writes during backfill
+    const supabase = createServiceRoleClient();
 
     const result: BackfillResult = {
       scanned: 0,
@@ -285,8 +291,9 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Use regular client for authentication
+    const authClient = await createClient();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -294,6 +301,9 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const orgId = searchParams.get('orgId') || user.id;
+
+    // Use service role client for consistent query behavior
+    const supabase = createServiceRoleClient();
 
     // Get statistics
     const { count: totalOrdersCount } = await supabase

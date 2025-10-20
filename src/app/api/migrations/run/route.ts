@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import Papa from 'papaparse';
 import {
   FieldMapping,
@@ -117,6 +117,7 @@ export async function POST(request: NextRequest) {
 
 /**
  * Process migration in background
+ * Uses service role client to bypass RLS for bulk operations
  */
 async function processMigration(
   jobId: string,
@@ -127,7 +128,8 @@ async function processMigration(
   duplicateStrategy: DuplicateStrategy,
   userId: string
 ) {
-  const supabase = await createClient();
+  // Use service role client to bypass RLS for bulk imports
+  const supabase = createServiceRoleClient();
 
   try {
     // Update job to processing
@@ -511,8 +513,9 @@ async function processOrder(
     row.source = source;
   }
 
-  // Set created_by
+  // Set created_by and org_id (for tenant isolation)
   row.created_by = userId;
+  row.org_id = userId; // org_id matches created_by for tenant boundary
 
   // Two-phase property upsert: Property → Order
   let propertyId: string | null = null;
@@ -719,13 +722,38 @@ async function processOrder(
     }
   }
 
-  // Check for duplicate by external_id
+  // GUARD: Require external_id for idempotent imports
+  // The unique constraint ignores NULL external_id by design (partial index)
+  // Without external_id, we can't prevent duplicates on re-import
+  if (!row.external_id || row.external_id.trim() === '') {
+    console.warn('Order missing external_id, generating from order_number:', row.order_number);
+    
+    // Option 1: Use order_number as external_id if available
+    if (row.order_number && row.order_number.trim() !== '') {
+      row.external_id = `order-${row.order_number}`;
+      console.log(`Generated external_id: ${row.external_id}`);
+    } 
+    // Option 2: Skip if no stable identifier available
+    else {
+      console.error('Order has no external_id or order_number - cannot ensure idempotency, skipping');
+      throw new Error('Order requires either external_id or order_number for idempotent imports');
+    }
+  }
+
+  // Ensure source is set (required for unique constraint with COALESCE)
+  if (!row.source || row.source.trim() === '') {
+    row.source = source || 'unknown';
+  }
+
+  // Check for duplicate by (org_id, source, external_id)
   if (row.external_id) {
     const { data: existing } = await supabase
       .from('orders')
       .select('id')
+      .eq('org_id', userId)
+      .eq('source', row.source)
       .eq('external_id', row.external_id)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       if (duplicateStrategy === 'skip') {
