@@ -409,3 +409,4 @@ LEFT JOIN public.clients cl ON c.client_id = cl.id;
 
 SELECT 'Migrations completed successfully!' as status;
 
+

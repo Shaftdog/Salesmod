@@ -48,49 +48,59 @@ export const ASANA_ORDERS_PRESET: MigrationPreset = {
   name: 'Asana Orders',
   source: 'asana',
   entity: 'orders',
-  description: 'Import orders/tasks from Asana with address parsing and status mapping',
+  description: 'Import orders/tasks from Asana with complete field mappings and property linking',
   mappings: [
-    // Core identifiers
+    // Core Identity & Dates
     { sourceColumn: 'Task ID', targetField: 'external_id', required: true },
-    
-    // Dates
     { sourceColumn: 'Created At', targetField: 'ordered_date', transform: 'toDate' },
     { sourceColumn: 'Due Date', targetField: 'due_date', transform: 'toDate' },
     { sourceColumn: 'Completed At', targetField: 'completed_date', transform: 'toDate' },
+    { sourceColumn: 'Inspection Date', targetField: 'props.inspection_date', transform: 'toDate' },
     
-    // Address handling - store original address
+    // Address (Two-Phase Processing)
     { sourceColumn: 'Appraised Property Address', targetField: 'props.original_address' },
+    { sourceColumn: 'Address', targetField: 'props.original_address' }, // Fallback
     
-    // Status and type mapping
-    { sourceColumn: 'ORDER STATUS', targetField: 'status', transform: 'mapOrderStatus' },
-    { sourceColumn: 'PURPOSE', targetField: 'order_type', transform: 'mapOrderType' },
-    
-    // Priority mapping (simple ruleset: A→rush, B→high, else normal)
-    { sourceColumn: 'Top Priority', targetField: 'priority' },
-    
-    // Financial fields
+    // Money Fields
     { sourceColumn: 'Appraisal Fee', targetField: 'fee_amount', transform: 'toNumber' },
-    { sourceColumn: 'Fixed Cost', targetField: 'tech_fee', transform: 'toNumber' },
     { sourceColumn: 'Inspection Fee', targetField: 'tech_fee', transform: 'toNumber' },
     { sourceColumn: 'Amount', targetField: 'total_amount', transform: 'toNumber' },
     
-    // Lender and loan information
+    // Type & Status (Derived)
+    { sourceColumn: 'PURPOSE', targetField: 'order_type', transform: 'mapOrderType' },
+    { sourceColumn: 'PURPOSE', targetField: 'props.purpose_raw' }, // Store original
+    
+    // People & Associations
     { sourceColumn: 'Lender Client', targetField: 'lender_name' },
     { sourceColumn: 'Loan Officer', targetField: 'loan_officer' },
     { sourceColumn: 'Processor', targetField: 'processor_name' },
-    
-    // Property contact information
     { sourceColumn: 'Contact For Entry', targetField: 'property_contact_name' },
     { sourceColumn: 'Contact Primary Phone', targetField: 'property_contact_phone' },
+    { sourceColumn: 'Assignee', targetField: 'props.assignee' },
     
-    // Store additional Asana fields in props
-    { sourceColumn: 'GLA', targetField: 'props.gla' },
-    { sourceColumn: 'Type of Value', targetField: 'props.value_type' },
+    // Client Resolution (try in order)
+    { sourceColumn: 'Client Name', targetField: '_client_name' },
+    { sourceColumn: 'AMC CLIENT', targetField: '_amc_client' },
+    { sourceColumn: 'Lender Client', targetField: '_lender_client' },
+    
+    // Props Fields (No Native Columns)
+    { sourceColumn: 'AMC CLIENT', targetField: 'props.amc_client' },
+    { sourceColumn: 'AREA', targetField: 'props.area' },
+    { sourceColumn: 'Date of Value (Current or specific date)', targetField: 'props.value_date', transform: 'toDate' },
+    { sourceColumn: 'Site Influence', targetField: 'props.site_influence' },
+    { sourceColumn: 'Site Size', targetField: 'props.site_size' },
+    { sourceColumn: 'SCOPE OF WORK', targetField: 'props.scope_of_work' },
     { sourceColumn: 'Report Format', targetField: 'props.report_format' },
-    { sourceColumn: 'Additional Forms Required', targetField: 'props.additional_forms' },
-    { sourceColumn: 'Invoice #', targetField: 'props.invoice.number' },
-    { sourceColumn: 'Invoice Date', targetField: 'props.invoice.date' },
-    { sourceColumn: 'Invoice Amount', targetField: 'props.invoice.amount', transform: 'toNumber' },
+    { sourceColumn: 'Addition Forms Required', targetField: 'props.additional_forms' },
+    { sourceColumn: 'Prior Interest...', targetField: 'props.prior_interest' },
+    { sourceColumn: 'GLA', targetField: 'props.gla' },
+    { sourceColumn: 'Billing Method', targetField: 'props.billing_method' },
+    { sourceColumn: 'Complex', targetField: 'props.complex' },
+    { sourceColumn: 'Foreclosure/REO', targetField: 'props.foreclosure' },
+    { sourceColumn: 'Multifamily', targetField: 'props.multifamily' },
+    { sourceColumn: 'Client Due Date', targetField: 'props.client_due_date', transform: 'toDate' },
+    { sourceColumn: 'Notes', targetField: 'props.notes' },
+    { sourceColumn: 'Name', targetField: 'props.asana_task_name' },
   ],
 };
 

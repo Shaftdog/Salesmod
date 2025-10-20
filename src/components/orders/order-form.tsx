@@ -35,6 +35,8 @@ import { useOrders } from "@/hooks/use-orders";
 import { useClients } from "@/hooks/use-clients";
 import { useCurrentUser } from "@/hooks/use-appraisers";
 import { useRouter } from "next/navigation";
+import { AddressValidator } from "@/components/shared/address-validator";
+import { AddressValidationResult, StandardizedAddress } from "@/lib/address-validation";
   
 
 const formSchema = z.object({
@@ -79,14 +81,17 @@ const steps = [
 type OrderFormProps = {
   appraisers: User[];
   clients: Client[];
+  initialValues?: Partial<FormData & { propertyId?: string }>;
 };
 
-export function OrderForm({ appraisers, clients: initialClients }: OrderFormProps) {
+export function OrderForm({ appraisers, clients: initialClients, initialValues }: OrderFormProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<{appraiserId: string, reason: string} | null>(null);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const [potentialDuplicates, setPotentialDuplicates] = useState<Order[]>([]);
+  const [propertyIdFromUrl, setPropertyIdFromUrl] = useState<string | undefined>(initialValues?.propertyId);
+  const [addressValidationResult, setAddressValidationResult] = useState<AddressValidationResult | null>(null);
   const { toast } = useToast();
   const router = useRouter();
   const { orders: storeOrders, createOrder, isCreating } = useOrders();
@@ -96,11 +101,11 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      propertyAddress: "",
-      propertyCity: "",
-      propertyState: "",
-      propertyZip: "",
-      propertyType: "single_family",
+      propertyAddress: initialValues?.propertyAddress || "",
+      propertyCity: initialValues?.propertyCity || "",
+      propertyState: initialValues?.propertyState || "",
+      propertyZip: initialValues?.propertyZip || "",
+      propertyType: initialValues?.propertyType || "single_family",
       accessInstructions: "",
       specialInstructions: "",
       loanType: "",
@@ -218,6 +223,23 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
     }
   }
 
+  const handleAddressValidation = (result: AddressValidationResult) => {
+    setAddressValidationResult(result);
+  };
+
+  const handleAcceptAddressSuggestion = (standardized: StandardizedAddress, overrideReason?: string) => {
+    // Update form fields with standardized address
+    form.setValue("propertyAddress", standardized.street);
+    form.setValue("propertyCity", standardized.city);
+    form.setValue("propertyState", standardized.state);
+    form.setValue("propertyZip", standardized.zip);
+    
+    toast({
+      title: "Address Standardized",
+      description: overrideReason ? `Address updated: ${overrideReason}` : "Address has been standardized",
+    });
+  };
+
   async function processForm(data: FormData) {
     if (!currentUser) {
       toast({
@@ -238,6 +260,7 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
         property_state: data.propertyState,
         property_zip: data.propertyZip,
         property_type: data.propertyType,
+        property_id: propertyIdFromUrl || undefined,
         borrower_name: data.borrowerName,
         client_id: data.clientId,
         fee_amount: parseFloat(data.feeAmount),
@@ -334,7 +357,10 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
           
           <div className="min-h-[450px]">
             <fieldset disabled={isCreating}>
-              {currentStep === 0 && <Step1 />}
+              {currentStep === 0 && <Step1 
+                onAddressValidation={handleAddressValidation}
+                onAcceptAddressSuggestion={handleAcceptAddressSuggestion}
+              />}
               {currentStep === 1 && <Step2 />}
               {currentStep === 2 && <Step3 clients={clients} onQuickAdd={handleQuickAddClient} />}
               {currentStep === 3 && <Step4 appraisers={appraisers} onSuggest={handleAiSuggest} isLoading={isAiLoading} />}
@@ -395,8 +421,19 @@ export function OrderForm({ appraisers, clients: initialClients }: OrderFormProp
   );
 }
 
-const Step1 = () => {
-  const { control } = useFormContext();
+const Step1 = ({ 
+  onAddressValidation, 
+  onAcceptAddressSuggestion 
+}: { 
+  onAddressValidation: (result: AddressValidationResult) => void;
+  onAcceptAddressSuggestion: (standardized: StandardizedAddress, overrideReason?: string) => void;
+}) => {
+  const { control, watch } = useFormContext();
+  const propertyAddress = watch("propertyAddress");
+  const propertyCity = watch("propertyCity");
+  const propertyState = watch("propertyState");
+  const propertyZip = watch("propertyZip");
+
   return (
     <div className="space-y-4">
       <FormField name="propertyAddress" control={control} render={({ field }) => (
@@ -429,6 +466,18 @@ const Step1 = () => {
         </FormItem>
       )} />
       </div>
+      
+      {/* Address Validation Component */}
+      <AddressValidator
+        street={propertyAddress || ""}
+        city={propertyCity || ""}
+        state={propertyState || ""}
+        zip={propertyZip || ""}
+        onValidated={onAddressValidation}
+        onAcceptSuggestion={onAcceptAddressSuggestion}
+        autoValidate={true}
+        className="mt-4"
+      />
        <FormField control={control} name="propertyType" render={({ field }) => (
         <FormItem>
             <FormLabel>Property Type <span className="text-destructive">*</span></FormLabel>

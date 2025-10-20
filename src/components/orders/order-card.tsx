@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import { PropertyChipInline } from "./property-chip";
 
 type OrderCardProps = {
     order: Order;
@@ -70,7 +71,13 @@ export function OrderCard({ order }: OrderCardProps) {
                             <CardTitle className="text-lg">
                                 {order.orderNumber}
                             </CardTitle>
-                            <CardDescription>{order.propertyAddress}</CardDescription>
+                            <CardDescription>
+                                {order.propertyId ? (
+                                    <PropertyChipInline order={order} />
+                                ) : (
+                                    order.propertyAddress
+                                )}
+                            </CardDescription>
                         </div>
                          <TooltipProvider>
                             <DropdownMenu>

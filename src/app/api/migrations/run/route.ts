@@ -7,6 +7,8 @@ import {
   MigrationTotals,
 } from '@/lib/migrations/types';
 import { applyTransform, generateHash, normalizeCompanyName, transformExtractDomain, splitUSAddress } from '@/lib/migrations/transforms';
+import { normalizeAddressKey, extractUnit } from '@/lib/addresses';
+import { validateAddressWithGoogle } from '@/lib/address-validation';
 
 const BATCH_SIZE = 500;
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -472,22 +474,73 @@ async function processOrder(
   // Set created_by
   row.created_by = userId;
 
-  // Handle address parsing if original_address exists in props
+  // Two-phase property upsert: Property → Order
+  let propertyId: string | null = null;
+  
+  // Handle address parsing and property creation
   if (row.props?.original_address && !row.property_address) {
     try {
       const addressParts = splitUSAddress(row.props.original_address);
-      row.property_address = addressParts.street;
-      row.property_city = addressParts.city;
-      row.property_state = addressParts.state;
-      row.property_zip = addressParts.zip;
+      const { street, city, state, zip } = addressParts;
+      
+      // Extract unit from street address
+      const { street: streetNoUnit, unit } = extractUnit(street);
+      
+      // Set order snapshot address (building-level, no unit)
+      row.property_address = streetNoUnit;
+      row.property_city = city;
+      row.property_state = state.toUpperCase();
+      row.property_zip = zip;
       
       // Set default property_type if not provided
       if (!row.property_type) {
         row.property_type = 'single_family';
       }
+      
+      // Store unit in props if extracted
+      if (unit) {
+        if (!row.props) row.props = {};
+        row.props.unit = unit;
+      }
+      
+      // Upsert property (building-level, no unit in identity)
+      if (streetNoUnit && city && state && zip) {
+        propertyId = await upsertPropertyForOrder(supabase, userId, {
+          street: streetNoUnit,
+          city,
+          state: state.toUpperCase(),
+          zip,
+          type: row.property_type
+        });
+      }
     } catch (error) {
       console.warn('Address parsing failed:', error);
       // Continue with import - address parsing failure shouldn't block the row
+    }
+  }
+  
+  // Set property_id if we successfully created/linked a property
+  if (propertyId) {
+    row.property_id = propertyId;
+  }
+
+  // Derived status logic for Asana imports (no explicit STATUS column)
+  if (source === 'asana' && !row.status) {
+    const now = new Date();
+    const completedAt = row.completed_date ? new Date(row.completed_date) : null;
+    const inspectionDate = row.props?.inspection_date ? new Date(row.props.inspection_date) : null;
+    const dueDate = row.due_date ? new Date(row.due_date) : null;
+    
+    if (completedAt) {
+      row.status = 'completed';
+    } else if (inspectionDate && inspectionDate < now) {
+      row.status = 'in_progress';
+    } else if (inspectionDate && inspectionDate >= now) {
+      row.status = 'scheduled';
+    } else if (dueDate) {
+      row.status = 'assigned';
+    } else {
+      row.status = 'new';
     }
   }
 
@@ -504,8 +557,26 @@ async function processOrder(
 
   // Resolve client_id - REQUIRED for orders
   if (!row.client_id) {
+    // Try Asana client resolution (in order of preference)
+    if (row._client_name) {
+      row.client_id = await resolveClientId(supabase, null, row._client_name);
+    }
+    
+    if (!row.client_id && row._amc_client) {
+      row.client_id = await resolveClientId(supabase, null, row._amc_client);
+    }
+    
+    if (!row.client_id && row._lender_client) {
+      row.client_id = await resolveClientId(supabase, null, row._lender_client);
+    }
+    
+    // Clean up special fields
+    delete row._client_name;
+    delete row._amc_client;
+    delete row._lender_client;
+    
     // Try to infer from borrower email domain
-    if (row.borrower_email) {
+    if (!row.client_id && row.borrower_email) {
       const domain = transformExtractDomain(row.borrower_email);
       if (domain) {
         const { data: clientByDomain } = await supabase
@@ -596,7 +667,137 @@ async function processOrder(
   }
 
   await supabase.from('orders').insert(row);
+  
+  // USPAP cache: Update order with prior work count if property was linked
+  if (propertyId) {
+    try {
+      const { data: prior } = await supabase.rpc('property_prior_work_count', { 
+        _property_id: propertyId 
+      });
+      
+      // Update the order with USPAP cache
+      await supabase
+        .from('orders')
+        .update({
+          props: {
+            ...(row.props || {}),
+            uspap: {
+              prior_work_3y: prior ?? 0,
+              as_of: new Date().toISOString()
+            }
+          }
+        })
+        .eq('external_id', row.external_id);
+    } catch (error) {
+      console.warn('USPAP cache update failed:', error);
+      // Don't fail the import for USPAP cache issues
+    }
+  }
+  
   return { type: 'inserted' };
+}
+
+/**
+ * Upsert property for order (two-phase approach)
+ * Creates building-level property and returns property_id
+ */
+async function upsertPropertyForOrder(
+  supabase: any,
+  orgId: string,
+  addr: {
+    street: string;
+    city: string;
+    state: string;
+    zip: string;
+    type?: string;
+  }
+): Promise<string | null> {
+  try {
+    // Validate address if we have all required fields
+    let validationResult = null;
+    let standardizedAddress = addr;
+    
+    if (addr.street && addr.city && addr.state && addr.zip && addr.zip.length >= 5) {
+      try {
+        const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+        if (apiKey) {
+          validationResult = await validateAddressWithGoogle(
+            addr.street,
+            addr.city,
+            addr.state,
+            addr.zip,
+            apiKey
+          );
+          
+          // Use standardized address if validation succeeded
+          if (validationResult.isValid && validationResult.standardized) {
+            standardizedAddress = {
+              street: validationResult.standardized.street,
+              city: validationResult.standardized.city,
+              state: validationResult.standardized.state,
+              zip: validationResult.standardized.zip,
+              type: addr.type
+            };
+          }
+        }
+      } catch (validationError) {
+        console.warn('Address validation failed during import:', validationError);
+        // Continue with original address if validation fails
+      }
+    }
+
+    // Use standardized address for hash calculation
+    const addr_hash = normalizeAddressKey(
+      standardizedAddress.street, 
+      standardizedAddress.city, 
+      standardizedAddress.state, 
+      standardizedAddress.zip
+    );
+    
+    const propertyData: any = {
+      org_id: orgId,
+      address_line1: standardizedAddress.street,
+      city: standardizedAddress.city,
+      state: (standardizedAddress.state || '').toUpperCase(),
+      postal_code: (standardizedAddress.zip || '').slice(0, 5),
+      property_type: standardizedAddress.type || 'single_family',
+      addr_hash
+    };
+
+    // Add validation metadata if available
+    if (validationResult) {
+      propertyData.validation_status = validationResult.isValid ? 'verified' : 'partial';
+      propertyData.verified_at = new Date().toISOString();
+      propertyData.verification_source = 'google';
+      
+      if (validationResult.standardized) {
+        propertyData.zip4 = validationResult.standardized.zip4;
+        propertyData.county = validationResult.standardized.county;
+        propertyData.latitude = validationResult.standardized.latitude;
+        propertyData.longitude = validationResult.standardized.longitude;
+      }
+      
+      if (validationResult.metadata) {
+        propertyData.dpv_code = validationResult.metadata.dpvCode;
+      }
+    }
+    
+    const { data, error } = await supabase
+      .from('properties')
+      .upsert(propertyData, { onConflict: 'org_id,addr_hash' })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Property upsert error:', error);
+      return null;
+    }
+
+    return data?.id ?? null;
+  } catch (error) {
+    console.error('Property upsert failed:', error);
+    return null;
+  }
 }
 
 /**

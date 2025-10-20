@@ -203,11 +203,39 @@ export function useUpdateOrder() {
         .single()
       
       if (error) throw error
+      
+      // If order was completed and has a property_id, refresh USPAP cache
+      if (updates.status === 'completed' && data.property_id) {
+        try {
+          const { data: priorWork } = await supabase.rpc('property_prior_work_count', {
+            _property_id: data.property_id
+          });
+          
+          const updatedProps = {
+            ...(data.props || {}),
+            uspap: {
+              prior_work_3y: priorWork || 0,
+              as_of: new Date().toISOString()
+            }
+          };
+          
+          await supabase
+            .from('orders')
+            .update({ props: updatedProps })
+            .eq('id', id);
+        } catch (uspapError) {
+          console.warn('Failed to refresh USPAP cache for order', id, uspapError);
+        }
+      }
+      
       return transformOrder(data)
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] })
       queryClient.invalidateQueries({ queryKey: ['orders', variables.id] })
+      // Also invalidate properties queries since USPAP cache was updated
+      queryClient.invalidateQueries({ queryKey: ['properties'] })
+      queryClient.invalidateQueries({ queryKey: ['property'] })
     },
   })
 }

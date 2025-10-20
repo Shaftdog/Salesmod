@@ -55,6 +55,7 @@ export interface Order {
   propertyState: string;
   propertyZip: string;
   propertyType: PropertyType;
+  propertyId?: string; // Link to canonical property
   loanNumber?: string;
   loanType?: string;
   loanAmount?: number;
@@ -87,10 +88,20 @@ export interface Order {
   createdAt: string;
   updatedAt: string;
   metadata?: any; // jsonb
+  props?: {
+    // Custom fields from imports
+    unit?: string; // Unit number if extracted from address
+    uspap?: {
+      prior_work_3y: number;
+      as_of: string;
+    };
+    [key: string]: any; // Other custom fields
+  };
   
   // Relations
   client?: Client;
   assignee?: User;
+  property?: Property;
 }
 
 export interface OrderHistory {
@@ -362,4 +373,58 @@ export interface GoalProgress {
   isOnTrack: boolean;
   daysRemaining: number;
   periodProgressPct: number; // how far through the period we are
+}
+
+// =============================================
+// PROPERTIES SYSTEM
+// =============================================
+
+export interface Property {
+  id: string;
+  orgId: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string; // 2-letter uppercase
+  postalCode: string; // 5 or 9 digits
+  country: string;
+  propertyType: PropertyType;
+  apn?: string; // assessor parcel number
+  latitude?: number;
+  longitude?: number;
+  gla?: number; // gross living area
+  lotSize?: number;
+  yearBuilt?: number;
+  addrHash: string; // normalized key for deduplication
+  props?: any; // jsonb for flexible storage
+  createdAt: string;
+  updatedAt: string;
+  
+  // Computed fields
+  priorWork3y?: number; // USPAP prior work count (3 years)
+  
+  // Relations
+  orders?: Order[]; // Related orders
+}
+
+export interface PropertyFilters {
+  search?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  propertyType?: PropertyType;
+  page?: number;
+  limit?: number;
+}
+
+export interface BackfillResult {
+  scanned: number;
+  propertiesCreated: number;
+  ordersLinked: number;
+  skipped: number;
+  warnings: Array<{
+    type: string;
+    message: string;
+    data?: any;
+  }>;
 }

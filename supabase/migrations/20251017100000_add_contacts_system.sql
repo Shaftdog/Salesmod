@@ -329,3 +329,4 @@ COMMENT ON COLUMN public.contacts.search IS 'Full-text search vector (auto-updat
 COMMENT ON FUNCTION public.transfer_contact_company IS 'Atomically transfers a contact to a new company while preserving history';
 COMMENT ON FUNCTION public.get_contact_with_history IS 'Retrieves contact with full company history and activity count';
 
+

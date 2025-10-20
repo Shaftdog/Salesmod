@@ -21,12 +21,14 @@ import {
   Bot,
   Database,
   Users,
+  MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/dashboard", icon: Home, label: "Dashboard" },
   { href: "/orders", icon: Package, label: "Orders" },
+  { href: "/properties", icon: MapPin, label: "Properties" },
   { href: "/clients", icon: Briefcase, label: "Clients" },
   { href: "/contacts", icon: Users, label: "Contacts" },
   { href: "/deals", icon: Target, label: "Deals" },

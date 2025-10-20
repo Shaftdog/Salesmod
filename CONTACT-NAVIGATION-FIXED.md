@@ -153,3 +153,4 @@ To enable full company history tracking functionality:
    - Transfer Company dialog will work
    - Full-text search will be enabled
 
+

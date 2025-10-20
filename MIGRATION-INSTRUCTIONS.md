@@ -179,3 +179,4 @@ If migrations fail:
 
 The combined SQL file is ready at: `RUN-THIS-IN-SUPABASE-MIGRATIONS.sql` 🚀
 
+
