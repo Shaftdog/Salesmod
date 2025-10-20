@@ -39,10 +39,13 @@ import { AddressValidator } from '@/components/shared/address-validator';
 import { AddressValidationResult, StandardizedAddress } from '@/lib/address-validation';
 import { normalizeAddressKey, isPOBox } from '@/lib/addresses';
 import { findExistingProperty } from '@/lib/properties-merge';
+import { normalizeUnit, isFeeSimplePropertyType } from '@/lib/units';
+import { useCreatePropertyUnit } from '@/hooks/use-property-units';
 
 const propertySchema = z.object({
   addressLine1: z.string().min(1, 'Street address is required'),
   addressLine2: z.string().optional(),
+  unit: z.string().optional(),
   city: z.string().min(1, 'City is required'),
   state: z.string().length(2, 'State must be 2 letters').regex(/^[A-Z]{2}$/, 'State must be uppercase'),
   postalCode: z.string().regex(/^[0-9]{5}(-[0-9]{4})?$/, 'Invalid ZIP code format'),
@@ -64,6 +67,7 @@ export function AddPropertyDialog({ trigger }: AddPropertyDialogProps) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const upsertMutation = useUpsertProperty();
+  const createUnitMutation = useCreatePropertyUnit();
   const [validationResult, setValidationResult] = useState<AddressValidationResult | null>(null);
   const [validatedAddress, setValidatedAddress] = useState<StandardizedAddress | null>(null);
   const [overrideReason, setOverrideReason] = useState<string | undefined>();
@@ -73,6 +77,7 @@ export function AddPropertyDialog({ trigger }: AddPropertyDialogProps) {
     defaultValues: {
       addressLine1: '',
       addressLine2: '',
+      unit: '',
       city: '',
       state: '',
       postalCode: '',
@@ -153,11 +158,25 @@ export function AddPropertyDialog({ trigger }: AddPropertyDialogProps) {
         },
       };
 
-      await upsertMutation.mutateAsync(propertyData);
+      const newProperty = await upsertMutation.mutateAsync(propertyData);
+      
+      // Create unit if provided and property type is fee-simple
+      if (data.unit && data.unit.trim() && newProperty.id) {
+        const unitNorm = normalizeUnit(data.unit);
+        if (unitNorm) {
+          await createUnitMutation.mutateAsync({
+            propertyId: newProperty.id,
+            unitIdentifier: data.unit.trim(),
+            unitType: data.propertyType === 'condo' ? 'condo' : undefined,
+          });
+        }
+      }
       
       toast({
         title: 'Property Created',
-        description: `${finalAddress.street}, ${finalAddress.city}, ${finalAddress.state} has been added.`,
+        description: data.unit 
+          ? `${finalAddress.street}, Unit ${data.unit}, ${finalAddress.city}, ${finalAddress.state} has been added.`
+          : `${finalAddress.street}, ${finalAddress.city}, ${finalAddress.state} has been added.`,
       });
 
       form.reset();
@@ -226,6 +245,26 @@ export function AddPropertyDialog({ trigger }: AddPropertyDialogProps) {
                 </FormItem>
               )}
             />
+
+            {/* Unit Field */}
+            {isFeeSimplePropertyType(form.watch('propertyType')) && (
+              <FormField
+                control={form.control}
+                name="unit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Unit (optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="2B, 305, etc." {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      For condos and multi-unit properties. Leave blank if this is the building-level record.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             {/* City, State, ZIP Row */}
             <div className="grid grid-cols-3 gap-4">

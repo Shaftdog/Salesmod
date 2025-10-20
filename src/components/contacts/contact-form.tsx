@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
 import type { Contact } from "@/lib/types";
+import { RoleSelect } from "@/components/shared/role-select";
 
 const contactSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -36,6 +37,7 @@ const contactSchema = z.object({
   department: z.string().optional(),
   notes: z.string().optional(),
   isPrimary: z.boolean().default(false),
+  primaryRoleCode: z.string().optional(),
 });
 
 type ContactFormData = z.infer<typeof contactSchema>;
@@ -61,6 +63,7 @@ export function ContactForm({ open, onOpenChange, onSubmit, contact, isLoading }
       department: contact.department || "",
       notes: contact.notes || "",
       isPrimary: contact.isPrimary,
+      primaryRoleCode: contact.primaryRoleCode || "",
     } : {
       firstName: "",
       lastName: "",
@@ -71,6 +74,7 @@ export function ContactForm({ open, onOpenChange, onSubmit, contact, isLoading }
       department: "",
       notes: "",
       isPrimary: false,
+      primaryRoleCode: "",
     },
   });
 
@@ -149,6 +153,23 @@ export function ContactForm({ open, onOpenChange, onSubmit, contact, isLoading }
                 )}
               />
             </div>
+            <FormField
+              control={form.control}
+              name="primaryRoleCode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Role</FormLabel>
+                  <FormControl>
+                    <RoleSelect
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Select contact role..."
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="email"

@@ -25,6 +25,8 @@ import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { VerificationBadge } from '@/components/shared/verification-badge';
 import dynamic from 'next/dynamic';
+import { PropertyUnitsList } from '@/components/properties/property-units-list';
+import { isFeeSimplePropertyType } from '@/lib/units';
 
 // Dynamic import for PropertyMapSection to improve initial page load
 const PropertyMapSection = dynamic(
@@ -272,6 +274,9 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
         <TabsList>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="details">Details</TabsTrigger>
+          {isFeeSimplePropertyType(property.property_type) && (
+            <TabsTrigger value="units">Units</TabsTrigger>
+          )}
         </TabsList>
 
         {/* Timeline Tab */}
@@ -463,6 +468,23 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
             )}
           </div>
         </TabsContent>
+
+        {/* Units Tab */}
+        {isFeeSimplePropertyType(property.property_type) && (
+          <TabsContent value="units">
+            <Card>
+              <CardHeader>
+                <CardTitle>Property Units</CardTitle>
+                <CardDescription>
+                  Manage units for this {property.property_type.replace('_', ' ')} property. Each unit maintains its own USPAP compliance tracking.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PropertyUnitsList propertyId={property.id} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

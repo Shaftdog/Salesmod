@@ -15,6 +15,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useBackfillProperties, useBackfillStatus } from '@/hooks/use-properties';
 import { AddPropertyDialog } from '@/components/properties/add-property-dialog';
 import { VerificationBadge } from '@/components/shared/verification-badge';
+import { usePropertyUnits } from '@/hooks/use-property-units';
+import { ChevronRight, ChevronDown } from 'lucide-react';
 
 export default function PropertiesPage() {
   const router = useRouter();
@@ -24,10 +26,23 @@ export default function PropertiesPage() {
     page: 1,
     limit: 50
   });
+  const [expandedProperties, setExpandedProperties] = useState<Set<string>>(new Set());
 
-  const { data, isLoading, error } = useProperties(filters);
+  const { data, isLoading, error} = useProperties(filters);
   const backfillMutation = useBackfillProperties();
   const { data: backfillStatus } = useBackfillStatus();
+  
+  const toggleExpanded = (propertyId: string) => {
+    setExpandedProperties(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(propertyId)) {
+        newSet.delete(propertyId);
+      } else {
+        newSet.add(propertyId);
+      }
+      return newSet;
+    });
+  };
 
   const handleSearch = (value: string) => {
     setFilters(prev => ({ ...prev, search: value || undefined, page: 1 }));
@@ -257,6 +272,7 @@ export default function PropertiesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12"></TableHead>
                     <TableHead>Address</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Status</TableHead>
@@ -267,49 +283,15 @@ export default function PropertiesPage() {
                 </TableHeader>
                 <TableBody>
                   {data?.properties?.map((property: any) => (
-                    <TableRow key={property.id}>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{formatAddress(property)}</div>
-                          <div className="text-sm text-gray-500">
-                            {property.city}, {property.state} {property.postal_code}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getPropertyTypeColor(property.property_type)}>
-                          {property.property_type.replace('_', ' ')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <VerificationBadge 
-                          status={property.validation_status}
-                          source={property.verification_source}
-                          size="sm"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={property.priorWork3y > 0 ? "destructive" : "secondary"}>
-                          {property.priorWork3y} orders
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {property.apn ? (
-                          <span className="text-sm font-mono">{property.apn}</span>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => router.push(`/properties/${property.id}`)}
-                        >
-                          View Details
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                    <PropertyRowWithUnits
+                      key={property.id}
+                      property={property}
+                      isExpanded={expandedProperties.has(property.id)}
+                      onToggleExpanded={() => toggleExpanded(property.id)}
+                      formatAddress={formatAddress}
+                      getPropertyTypeColor={getPropertyTypeColor}
+                      router={router}
+                    />
                   ))}
                 </TableBody>
               </Table>
@@ -358,5 +340,157 @@ export default function PropertiesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// Property row with expandable units
+function PropertyRowWithUnits({
+  property,
+  isExpanded,
+  onToggleExpanded,
+  formatAddress,
+  getPropertyTypeColor,
+  router,
+}: {
+  property: any;
+  isExpanded: boolean;
+  onToggleExpanded: () => void;
+  formatAddress: (property: any) => string;
+  getPropertyTypeColor: (type: string) => string;
+  router: any;
+}) {
+  const { data: units = [], isLoading: unitsLoading } = usePropertyUnits(
+    isExpanded ? property.id : undefined
+  );
+  
+  const hasUnits = ['condo', 'multi_family', 'townhouse'].includes(property.property_type);
+  
+  return (
+    <>
+      {/* Main property row */}
+      <TableRow>
+        <TableCell>
+          {hasUnits && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={onToggleExpanded}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+        </TableCell>
+        <TableCell>
+          <div>
+            <div className="font-medium">{formatAddress(property)}</div>
+            <div className="text-sm text-gray-500">
+              {property.city}, {property.state} {property.postal_code}
+            </div>
+          </div>
+        </TableCell>
+        <TableCell>
+          <Badge className={getPropertyTypeColor(property.property_type)}>
+            {property.property_type.replace('_', ' ')}
+          </Badge>
+        </TableCell>
+        <TableCell>
+          <VerificationBadge 
+            status={property.validation_status}
+            source={property.verification_source}
+            size="sm"
+          />
+        </TableCell>
+        <TableCell>
+          <Badge variant={property.priorWork3y > 0 ? "destructive" : "secondary"}>
+            {property.priorWork3y} orders
+          </Badge>
+        </TableCell>
+        <TableCell>
+          {property.apn ? (
+            <span className="text-sm font-mono">{property.apn}</span>
+          ) : (
+            <span className="text-gray-400">—</span>
+          )}
+        </TableCell>
+        <TableCell>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/properties/${property.id}`)}
+          >
+            View Details
+          </Button>
+        </TableCell>
+      </TableRow>
+      
+      {/* Expanded unit rows */}
+      {isExpanded && (
+        <>
+          {unitsLoading ? (
+            <TableRow>
+              <TableCell colSpan={7} className="bg-muted/30">
+                <div className="flex items-center justify-center py-4">
+                  <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                  <span className="text-sm text-muted-foreground">Loading units...</span>
+                </div>
+              </TableCell>
+            </TableRow>
+          ) : units.length > 0 ? (
+            units.map((unit: any) => (
+              <TableRow key={unit.id} className="bg-muted/30">
+                <TableCell></TableCell>
+                <TableCell className="pl-8">
+                  <div className="flex items-center gap-2">
+                    <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-sm">Unit {unit.unitIdentifier}</span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {unit.unitType && (
+                    <Badge variant="outline" className="text-xs">
+                      {unit.unitType}
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell>—</TableCell>
+                <TableCell>
+                  <Badge variant={unit.priorWork3y > 0 ? "destructive" : "secondary"} className="text-xs">
+                    {unit.priorWork3y || 0}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <span className="text-xs text-muted-foreground">
+                    {unit.orderCount || 0} orders
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push(`/properties/${property.id}?tab=units&unitId=${unit.id}`)}
+                    className="text-xs"
+                  >
+                    View
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={7} className="bg-muted/30">
+                <div className="text-center py-4">
+                  <span className="text-sm text-muted-foreground">No units found for this property</span>
+                </div>
+              </TableCell>
+            </TableRow>
+          )}
+        </>
+      )}
+    </>
   );
 }

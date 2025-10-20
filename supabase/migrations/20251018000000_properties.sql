@@ -243,3 +243,4 @@ COMMENT ON COLUMN public.properties.addr_hash IS 'Normalized address key for ded
 COMMENT ON COLUMN public.properties.search IS 'Full-text search vector for address fields';
 COMMENT ON VIEW public.property_prior_work_3y IS 'Properties with their completed orders in the last 3 years (USPAP compliance)';
 COMMENT ON FUNCTION public.property_prior_work_count IS 'Returns count of completed orders for a property in the last 3 years';
+

@@ -1,6 +1,6 @@
 // Transform database snake_case to TypeScript camelCase
 
-import type { Client, Order, User, Contact, Activity, Tag, ClientTag, Deal, Task, Case, CaseComment } from '@/lib/types'
+import type { Client, Order, User, Contact, Activity, Tag, ClientTag, Deal, Task, Case, CaseComment, PartyRole } from '@/lib/types'
 
 export function transformClient(dbClient: any): Client {
   return {
@@ -13,6 +13,7 @@ export function transformClient(dbClient: any): Client {
     billingAddress: dbClient.billing_address,
     paymentTerms: dbClient.payment_terms,
     isActive: dbClient.is_active,
+    primaryRoleCode: dbClient.primary_role_code,
     createdAt: dbClient.created_at,
     updatedAt: dbClient.updated_at,
     activeOrders: dbClient.active_orders,
@@ -20,6 +21,7 @@ export function transformClient(dbClient: any): Client {
     feeSchedule: dbClient.fee_schedule,
     preferredTurnaround: dbClient.preferred_turnaround,
     specialRequirements: dbClient.special_requirements,
+    role: dbClient.party_roles ? transformPartyRole(dbClient.party_roles) : undefined,
   }
 }
 
@@ -98,9 +100,11 @@ export function transformContact(dbContact: any): Contact {
     isPrimary: dbContact.is_primary,
     department: dbContact.department,
     notes: dbContact.notes,
+    primaryRoleCode: dbContact.primary_role_code,
     createdAt: dbContact.created_at,
     updatedAt: dbContact.updated_at,
     client: dbContact.client ? transformClient(dbContact.client) : undefined,
+    role: dbContact.party_roles ? transformPartyRole(dbContact.party_roles) : undefined,
   }
 }
 
@@ -234,6 +238,18 @@ export function transformCaseComment(dbComment: any): CaseComment {
     createdBy: dbComment.created_by,
     createdAt: dbComment.created_at,
     creator: dbComment.creator ? transformUser(dbComment.creator) : undefined,
+  }
+}
+
+export function transformPartyRole(dbRole: any): PartyRole {
+  return {
+    code: dbRole.code,
+    label: dbRole.label,
+    description: dbRole.description,
+    category: dbRole.category,
+    sortOrder: dbRole.sort_order,
+    isActive: dbRole.is_active,
+    createdAt: dbRole.created_at,
   }
 }
 

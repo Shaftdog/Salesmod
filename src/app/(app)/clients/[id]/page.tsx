@@ -22,6 +22,10 @@ import { useMemo, useState } from "react";
 import { GenerateDraftDialog } from "@/components/ai/generate-draft-dialog";
 import { DraftsList } from "@/components/ai/drafts-list";
 import { ClientIntelligencePanel } from "@/components/ai/client-intelligence-panel";
+import { RoleBadge } from "@/components/shared/role-badge";
+import { RoleSelect } from "@/components/shared/role-select";
+import { useClients } from "@/hooks/use-clients";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ClientDetailPage() {
   const params = useParams();
@@ -37,6 +41,8 @@ export default function ClientDetailPage() {
   
   const { mutateAsync: addTag } = useAddTagToClient();
   const { mutateAsync: removeTag } = useRemoveTagFromClient();
+  const { updateClient } = useClients();
+  const { toast } = useToast();
 
   const [generateDraftOpen, setGenerateDraftOpen] = useState(false);
 
@@ -50,6 +56,25 @@ export default function ClientDetailPage() {
 
   const handleRemoveTag = async (tagId: string) => {
     await removeTag({ clientId, tagId });
+  };
+
+  const handleRoleChange = async (roleCode: string) => {
+    try {
+      await updateClient({
+        id: clientId,
+        primary_role_code: roleCode || null,
+      });
+      toast({
+        title: "Role Updated",
+        description: "Client role has been updated successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update role.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (clientLoading) {
@@ -87,7 +112,13 @@ export default function ClientDetailPage() {
         
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold">{client.companyName}</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold">{client.companyName}</h1>
+              <RoleBadge 
+                code={client.primaryRoleCode} 
+                label={client.role?.label} 
+              />
+            </div>
             <p className="text-muted-foreground mt-1">{client.primaryContact}</p>
           </div>
           <Button asChild>
@@ -175,6 +206,14 @@ export default function ClientDetailPage() {
             <div>
               <p className="text-sm text-muted-foreground">Payment Terms</p>
               <p>{client.paymentTerms} days</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">Role</p>
+              <RoleSelect
+                value={client.primaryRoleCode}
+                onChange={handleRoleChange}
+                placeholder="Select company role..."
+              />
             </div>
           </div>
           
