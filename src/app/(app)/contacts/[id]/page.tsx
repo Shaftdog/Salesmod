@@ -43,7 +43,7 @@ export default function ContactDetailPage() {
 
   const { data: contact, isLoading: contactLoading } = useContactDetail(contactId);
   const { data: companyHistory, isLoading: historyLoading } = useContactHistory(contactId);
-  const { data: activities, isLoading: activitiesLoading } = useActivities({ contactId });
+  const { data: activities, isLoading: activitiesLoading } = useActivities(contact?.client_id || undefined);
 
   if (contactLoading) {
     return (
@@ -244,7 +244,7 @@ export default function ContactDetailPage() {
             </div>
           ) : (
             <ActivityTimeline
-              contactId={contactId}
+              clientId={contact?.client_id || ''}
               activities={activities || []}
               isLoading={activitiesLoading}
             />

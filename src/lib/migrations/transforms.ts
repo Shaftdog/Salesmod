@@ -8,8 +8,14 @@ import { TransformFunction } from './types';
 export function applyTransform(
   value: any,
   transform: TransformFunction,
-  params?: Record<string, any>
+  params?: Record<string, any>,
+  fullRow?: Record<string, any>
 ): any {
+  // Special handling for composite transforms that need access to multiple fields
+  if (transform === 'combineAddress') {
+    return combineAddress(params, fullRow);
+  }
+
   if (value === null || value === undefined || value === '') {
     return null;
   }
@@ -256,5 +262,65 @@ export function mapOrderType(p?: string): string {
   if (t.includes("divorce")) return "divorce";
   if (t.includes("tax")) return "tax_appeal";
   return "other";
+}
+
+/**
+ * Combine address components into a single address string
+ * Supports two patterns:
+ * 1. Multi-line: { line1: "Address", line2: "Address 2", line3: "Address 3" }
+ * 2. Components: { street: "Street", city: "City", state: "State", zip: "Zip" }
+ * where each value is the SOURCE COLUMN NAME to pull from fullRow
+ */
+export function combineAddress(
+  params?: Record<string, any>,
+  fullRow?: Record<string, any>
+): string | null {
+  if (!params || !fullRow) return null;
+
+  // PATTERN 1: Multi-line address (Address, Address 2, Address 3)
+  const line1 = params.line1 ? fullRow[params.line1] : null;
+  const line2 = params.line2 ? fullRow[params.line2] : null;
+  const line3 = params.line3 ? fullRow[params.line3] : null;
+
+  if (line1 || line2 || line3) {
+    const lines: string[] = [];
+    if (line1 && String(line1).trim()) lines.push(String(line1).trim());
+    if (line2 && String(line2).trim()) lines.push(String(line2).trim());
+    if (line3 && String(line3).trim()) lines.push(String(line3).trim());
+    return lines.length > 0 ? lines.join(', ') : null;
+  }
+
+  // PATTERN 2: Component address (Street, City, State, Zip)
+  const street = params.street ? fullRow[params.street] : null;
+  const city = params.city ? fullRow[params.city] : null;
+  const state = params.state ? fullRow[params.state] : null;
+  const zip = params.zip ? fullRow[params.zip] : null;
+
+  // Build address parts
+  const parts: string[] = [];
+  
+  // Add street address
+  if (street && String(street).trim()) {
+    parts.push(String(street).trim());
+  }
+
+  // Build city, state zip line
+  const cityStateZip: string[] = [];
+  if (city && String(city).trim()) {
+    cityStateZip.push(String(city).trim());
+  }
+  if (state && String(state).trim()) {
+    cityStateZip.push(String(state).trim());
+  }
+  if (zip && String(zip).trim()) {
+    cityStateZip.push(String(zip).trim());
+  }
+
+  if (cityStateZip.length > 0) {
+    parts.push(cityStateZip.join(' '));
+  }
+
+  // Return combined address or null if nothing
+  return parts.length > 0 ? parts.join(', ') : null;
 }
 

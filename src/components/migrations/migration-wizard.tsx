@@ -21,6 +21,7 @@ export interface WizardState {
   
   // Step 2: File Upload
   file: File | null;
+  fileData: string | null; // Store file contents to avoid re-reading File object
   previewData: PreviewData | null;
   
   // Step 3: Field Mapping
@@ -42,6 +43,7 @@ const initialState: WizardState = {
   entity: 'contacts',
   mode: 'csv',
   file: null,
+  fileData: null,
   previewData: null,
   mappings: [],
   dryRunResult: null,

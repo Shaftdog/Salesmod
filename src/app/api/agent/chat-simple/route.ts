@@ -124,7 +124,8 @@ export async function POST(request: Request) {
             if (msg.includes('call') && card.type === 'schedule_call') return true;
             
             // Match by client name
-            const clientName = card.client?.company_name?.toLowerCase();
+            const client = Array.isArray(card.client) ? card.client[0] : card.client;
+            const clientName = client?.company_name?.toLowerCase();
             if (clientName && msg.includes(clientName)) return true;
             
             // Match by title (partial)
@@ -171,7 +172,11 @@ export async function POST(request: Request) {
               }
             }
             
-            commandResult = `\n\n✅ Deleted ${deleted} of ${cardsToDelete.length} card(s):\n${cardsToDelete.slice(0, deleted).map(c => `   - ${c.title} (${c.client?.company_name || 'Unknown'})`).join('\n')}${errors.length > 0 ? `\n\n❌ ${errors.length} failed: ${errors.slice(0, 2).join(', ')}` : ''}\n\nRefresh the /agent page to see updated board.`;
+            const getClientName = (c: any) => {
+              const client = Array.isArray(c.client) ? c.client[0] : c.client;
+              return client?.company_name || 'Unknown';
+            };
+            commandResult = `\n\n✅ Deleted ${deleted} of ${cardsToDelete.length} card(s):\n${cardsToDelete.slice(0, deleted).map(c => `   - ${c.title} (${getClientName(c)})`).join('\n')}${errors.length > 0 ? `\n\n❌ ${errors.length} failed: ${errors.slice(0, 2).join(', ')}` : ''}\n\nRefresh the /agent page to see updated board.`;
           }
         } else if (command.action === 'approve') {
           // Approve card(s)
@@ -196,7 +201,11 @@ export async function POST(request: Request) {
               
               if (!error) approved++;
             }
-            commandResult = `\n\n✅ Approved ${approved} card(s):\n${cardsToApprove.map(c => `   - ${c.title} (${c.client?.company_name})`).join('\n')}\n\nClick "Start Agent Cycle" to execute them!`;
+            const getClientName = (c: any) => {
+              const client = Array.isArray(c.client) ? c.client[0] : c.client;
+              return client?.company_name || 'Unknown';
+            };
+            commandResult = `\n\n✅ Approved ${approved} card(s):\n${cardsToApprove.map(c => `   - ${c.title} (${getClientName(c)})`).join('\n')}\n\nClick "Start Agent Cycle" to execute them!`;
           }
         } else if (command.action === 'execute') {
           // Execute approved cards
@@ -254,7 +263,8 @@ ${clients?.map((c: any) => `- ${c.company_name} (${c.email || 'no email'})`).joi
 
 Current Kanban Cards (${kanbanCards?.length || 0}):
 ${kanbanCards?.map((card: any) => {
-  const client = card.client?.company_name || 'Unknown';
+  const clientData = Array.isArray(card.client) ? card.client[0] : card.client;
+  const client = clientData?.company_name || 'Unknown';
   return `- [${card.state.toUpperCase()}] ${card.type} - "${card.title}" for ${client} (${card.priority} priority)
     ID: ${card.id}
     Rationale: ${card.rationale.substring(0, 100)}...`;
@@ -300,7 +310,6 @@ You help manage client relationships and achieve business goals. Be helpful, con
       system: systemPrompt,
       messages,
       temperature: 0.7,
-      maxTokens: 1000,
     });
 
     return result.toTextStreamResponse();

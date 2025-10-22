@@ -94,11 +94,11 @@ async function validateAddressWithGeocoding(
     
     // Extract standardized components
     const standardized = {
-      street: components.find(c => c.types.includes('street_number'))?.long_name + ' ' + 
-             components.find(c => c.types.includes('route'))?.long_name || street,
-      city: components.find(c => c.types.includes('locality'))?.long_name || city,
-      state: components.find(c => c.types.includes('administrative_area_level_1'))?.short_name || state,
-      zip: components.find(c => c.types.includes('postal_code'))?.long_name || zip,
+      street: components.find((c: any) => c.types.includes('street_number'))?.long_name + ' ' +
+             components.find((c: any) => c.types.includes('route'))?.long_name || street,
+      city: components.find((c: any) => c.types.includes('locality'))?.long_name || city,
+      state: components.find((c: any) => c.types.includes('administrative_area_level_1'))?.short_name || state,
+      zip: components.find((c: any) => c.types.includes('postal_code'))?.long_name || zip,
       latitude: result.geometry.location.lat,
       longitude: result.geometry.location.lng,
     };

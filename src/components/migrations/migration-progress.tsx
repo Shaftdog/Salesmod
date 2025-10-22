@@ -37,11 +37,20 @@ export function MigrationProgress({ state, setState, onNext }: MigrationProgress
 
   const startMigration = async () => {
     try {
+      // Debug logging
+      console.log('🚀 Migration Start Debug:', {
+        fileDataLength: state.fileData?.length,
+        fileDataPreview: state.fileData?.substring(0, 200),
+        fileHash: state.previewData?.fileHash,
+        mappingsCount: state.mappings?.length,
+        entity: state.entity,
+      });
+
       const response = await fetch('/api/migrations/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fileData: await state.file!.text(),
+          fileData: state.fileData,
           fileHash: state.previewData!.fileHash,
           mappings: state.mappings,
           entity: state.entity,
@@ -50,11 +59,13 @@ export function MigrationProgress({ state, setState, onNext }: MigrationProgress
         }),
       });
 
+      const result = await response.json();
+      
       if (!response.ok) {
-        throw new Error('Failed to start migration');
+        throw new Error(result.error || 'Failed to start migration');
       }
 
-      const { jobId } = await response.json();
+      const { jobId } = result;
       setState((prev) => ({ ...prev, jobId }));
       pollStatus(jobId);
     } catch (error: any) {

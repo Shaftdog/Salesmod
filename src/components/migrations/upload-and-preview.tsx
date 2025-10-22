@@ -53,7 +53,7 @@ export function UploadAndPreview({ state, setState, onNext, onPrev }: UploadAndP
     if (!file.name.endsWith('.csv') && !file.name.endsWith('.tsv')) {
       toast({
         title: "Invalid File",
-        description: "Please upload a CSV file",
+        description: "Please upload a CSV or TSV file",
         variant: "destructive",
       });
       return;
@@ -72,8 +72,21 @@ export function UploadAndPreview({ state, setState, onNext, onPrev }: UploadAndP
     setUploading(true);
 
     try {
+      // CRITICAL FIX: Read file contents FIRST before sending to API
+      // File stream can only be read once!
+      const fileContents = await file.text();
+      
+      // Debug logging
+      console.log('📁 File Upload Debug:', {
+        fileName: file.name,
+        fileSize: file.size,
+        fileDataLength: fileContents.length,
+        fileDataPreview: fileContents.substring(0, 200),
+      });
+
+      // Now send the file data (as string) to preview API
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', new Blob([fileContents], { type: 'text/csv' }), file.name);
 
       const response = await fetch('/api/migrations/preview', {
         method: 'POST',
@@ -90,7 +103,13 @@ export function UploadAndPreview({ state, setState, onNext, onPrev }: UploadAndP
       setState((prev) => ({
         ...prev,
         file,
+        fileData: fileContents, // Use the data we already read
         previewData,
+        // Clear downstream state when uploading new file
+        mappings: [],
+        dryRunResult: null,
+        jobId: null,
+        completed: false,
       }));
 
       toast({
@@ -120,24 +139,40 @@ export function UploadAndPreview({ state, setState, onNext, onPrev }: UploadAndP
         </CardHeader>
         <CardContent>
           {!state.file ? (
-            <div
-              className={`
-                border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors
-                ${dragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'}
-              `}
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-              onClick={() => document.getElementById('file-input')?.click()}
-            >
-              <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">
-                {uploading ? 'Uploading...' : 'Drop your CSV file here'}
-              </h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                or click to browse (Maximum 50MB)
-              </p>
+            <div>
+              <div
+                className={`
+                  border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors
+                  ${dragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'}
+                  ${uploading ? 'opacity-50 cursor-not-allowed' : ''}
+                `}
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+                onClick={() => !uploading && document.getElementById('file-input')?.click()}
+              >
+                <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold mb-2">
+                  {uploading ? 'Uploading...' : 'Drop your CSV file here'}
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  or use the button below (Maximum 50MB)
+                </p>
+              </div>
+              
+              <div className="mt-4 text-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => document.getElementById('file-input')?.click()}
+                  disabled={uploading}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Choose CSV File
+                </Button>
+              </div>
+              
               <input
                 id="file-input"
                 type="file"
@@ -163,7 +198,7 @@ export function UploadAndPreview({ state, setState, onNext, onPrev }: UploadAndP
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setState((prev) => ({ ...prev, file: null, previewData: null }))}
+                  onClick={() => setState((prev) => ({ ...prev, file: null, fileData: null, previewData: null }))}
                 >
                   Remove
                 </Button>

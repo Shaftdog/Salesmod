@@ -9,7 +9,7 @@ export const HUBSPOT_CONTACTS_PRESET: MigrationPreset = {
   entity: 'contacts',
   description: 'Import contacts from HubSpot CRM',
   mappings: [
-    { sourceColumn: 'email', targetField: 'email', transform: 'lowercase', required: true },
+    { sourceColumn: 'email', targetField: 'email', transform: 'lowercase' },
     { sourceColumn: 'firstname', targetField: 'first_name', required: true },
     { sourceColumn: 'lastname', targetField: 'last_name', required: true },
     { sourceColumn: 'phone', targetField: 'phone' },
@@ -35,7 +35,7 @@ export const HUBSPOT_COMPANIES_PRESET: MigrationPreset = {
   mappings: [
     { sourceColumn: 'name', targetField: 'company_name', required: true },
     { sourceColumn: 'domain', targetField: 'domain', transform: 'lowercase' },
-    { sourceColumn: 'phone', targetField: 'phone', required: true },
+    { sourceColumn: 'phone', targetField: 'phone' },
     { sourceColumn: 'address', targetField: 'address', required: true },
     { sourceColumn: 'city', targetField: 'props.city' },
     { sourceColumn: 'state', targetField: 'props.state' },
@@ -46,6 +46,57 @@ export const HUBSPOT_COMPANIES_PRESET: MigrationPreset = {
     { sourceColumn: 'company_type', targetField: '_role' }, // Alternative role field
     { sourceColumn: 'hs_object_id', targetField: 'props.hubspot_id' },
     { sourceColumn: 'industry', targetField: 'props.industry' },
+  ],
+};
+
+export const ASANA_CONTACTS_PRESET: MigrationPreset = {
+  id: 'asana-contacts',
+  name: 'Asana Contacts (AMC)',
+  source: 'asana',
+  entity: 'clients',
+  description: 'Import AMC contacts from Asana with address component mapping',
+  mappings: [
+    { sourceColumn: 'company_name', targetField: 'company_name', required: true },
+    { sourceColumn: 'Company Name', targetField: 'company_name', required: true },
+    { sourceColumn: 'email', targetField: 'email', transform: 'lowercase' },
+    { sourceColumn: 'Email', targetField: 'email', transform: 'lowercase' },
+    { sourceColumn: 'phone', targetField: 'phone' },
+    { sourceColumn: 'Phone', targetField: 'phone' },
+    { sourceColumn: 'primary_contact', targetField: 'primary_contact' },
+    { sourceColumn: 'Primary Contact', targetField: 'primary_contact' },
+    // Multi-line address (Address, Address 2, Address 3) - will be automatically combined
+    { sourceColumn: 'Address', targetField: 'address.line1' },
+    { sourceColumn: 'address', targetField: 'address.line1' },
+    { sourceColumn: 'Address 2', targetField: 'address.line2' },
+    { sourceColumn: 'address_2', targetField: 'address.line2' },
+    { sourceColumn: 'Address 3', targetField: 'address.line3' },
+    { sourceColumn: 'address_3', targetField: 'address.line3' },
+    // Component address (Street, City, State, Zip) - alternative pattern
+    { sourceColumn: 'Street', targetField: 'address.street' },
+    { sourceColumn: 'street', targetField: 'address.street' },
+    { sourceColumn: 'City', targetField: 'address.city' },
+    { sourceColumn: 'city', targetField: 'address.city' },
+    { sourceColumn: 'State', targetField: 'address.state' },
+    { sourceColumn: 'state', targetField: 'address.state' },
+    { sourceColumn: 'Zip', targetField: 'address.zip' },
+    { sourceColumn: 'zip', targetField: 'address.zip' },
+    { sourceColumn: 'ZIP', targetField: 'address.zip' },
+    // Multi-line billing address (if present)
+    { sourceColumn: 'Billing Address', targetField: 'billing_address.line1' },
+    { sourceColumn: 'Billing Address 2', targetField: 'billing_address.line2' },
+    { sourceColumn: 'Billing Address 3', targetField: 'billing_address.line3' },
+    // Component billing address (if present)
+    { sourceColumn: 'Billing Street', targetField: 'billing_address.street' },
+    { sourceColumn: 'Billing City', targetField: 'billing_address.city' },
+    { sourceColumn: 'Billing State', targetField: 'billing_address.state' },
+    { sourceColumn: 'Billing Zip', targetField: 'billing_address.zip' },
+    // Other fields
+    { sourceColumn: 'domain', targetField: 'domain', transform: 'extract_domain' },
+    { sourceColumn: 'payment_terms', targetField: 'payment_terms', transform: 'toNumber' },
+    { sourceColumn: 'preferred_turnaround', targetField: 'preferred_turnaround', transform: 'toNumber' },
+    { sourceColumn: 'special_requirements', targetField: 'special_requirements' },
+    { sourceColumn: 'Category', targetField: '_role' }, // Use _role for automatic role mapping
+    { sourceColumn: 'category', targetField: '_role' }, // Use _role for automatic role mapping
   ],
 };
 
@@ -122,6 +173,7 @@ export const GENERIC_CSV_PRESET: MigrationPreset = {
 export const ALL_PRESETS: MigrationPreset[] = [
   HUBSPOT_CONTACTS_PRESET,
   HUBSPOT_COMPANIES_PRESET,
+  ASANA_CONTACTS_PRESET,
   ASANA_ORDERS_PRESET,
   GENERIC_CSV_PRESET,
 ];
@@ -132,6 +184,23 @@ export function getPresetById(id: string): MigrationPreset | undefined {
 
 export function detectPreset(headers: string[]): MigrationPreset | undefined {
   const lowerHeaders = headers.map(h => h.toLowerCase());
+  
+  // Detect Asana Contacts (AMC companies with address components)
+  // Pattern 1: Multi-line addresses (Address, Address 2, Address 3)
+  // Pattern 2: Component addresses (Street, City, State, Zip)
+  if (
+    (lowerHeaders.includes('company_name') || lowerHeaders.includes('company name')) &&
+    lowerHeaders.includes('phone') &&
+    lowerHeaders.includes('email') &&
+    (
+      // Multi-line pattern
+      (lowerHeaders.includes('address') && (lowerHeaders.includes('address 2') || lowerHeaders.includes('address_2'))) ||
+      // Component pattern
+      (lowerHeaders.includes('street') && lowerHeaders.includes('city'))
+    )
+  ) {
+    return ASANA_CONTACTS_PRESET;
+  }
   
   // Detect HubSpot Contacts
   if (

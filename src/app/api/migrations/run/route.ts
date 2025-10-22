@@ -58,23 +58,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate idempotency key
+    // Generate idempotency key with timestamp to ensure uniqueness per import attempt
     const mappingHash = generateHash(JSON.stringify(mappings));
-    const idempotencyKey = `${mappingHash}_${fileHash}`;
+    const timestamp = Date.now();
+    const idempotencyKey = `${user.id}_${mappingHash}_${fileHash}_${timestamp}`;
 
-    // Check for existing job with same idempotency key
-    const { data: existingJob } = await supabase
+    // Check for existing job with same file/mapping (without timestamp)
+    const baseIdempotencyKey = `${user.id}_${mappingHash}_${fileHash}`;
+    const { data: existingJobs } = await supabase
       .from('migration_jobs')
-      .select('id, status')
-      .eq('idempotency_key', idempotencyKey)
+      .select('id, status, idempotency_key')
       .eq('user_id', user.id)
-      .single();
+      .like('idempotency_key', `${baseIdempotencyKey}%`)
+      .order('created_at', { ascending: false })
+      .limit(1);
 
-    if (existingJob && existingJob.status !== 'failed') {
-      return NextResponse.json({
-        jobId: existingJob.id,
-        message: 'Job already exists or is in progress',
-      });
+    // If there's a recent job that's still processing, return it
+    if (existingJobs && existingJobs.length > 0) {
+      const recentJob = existingJobs[0];
+      if (recentJob.status === 'processing' || recentJob.status === 'pending') {
+        return NextResponse.json({
+          jobId: recentJob.id,
+          message: 'Job already in progress',
+        });
+      }
     }
 
     // Create migration job
@@ -95,15 +102,26 @@ export async function POST(request: NextRequest) {
 
     if (jobError || !job) {
       console.error('Error creating migration job:', jobError);
-      return NextResponse.json({ error: 'Failed to create migration job' }, { status: 500 });
+      return NextResponse.json({ 
+        error: jobError?.message || 'Failed to create migration job',
+        details: jobError?.details || null,
+        hint: jobError?.hint || null
+      }, { status: 500 });
     }
 
     // Start processing in background (no await)
     processMigration(job.id, fileData, mappings, entity, source, duplicateStrategy, user.id).catch(
       (error) => {
-        console.error('Migration processing error:', error);
+        console.error('❌ Migration processing error (caught in main):', error);
+        console.error('Error stack:', error.stack);
       }
     );
+    
+    console.log('✅ Migration job created and background processing started:', {
+      jobId: job.id,
+      entity,
+      fileDataLength: fileData?.length,
+    });
 
     return NextResponse.json({ jobId: job.id });
   } catch (error: any) {
@@ -132,6 +150,14 @@ async function processMigration(
   const supabase = createServiceRoleClient();
 
   try {
+    console.log('🚀 Migration Processing - Starting:', {
+      jobId,
+      fileDataLength: fileData?.length,
+      fileDataPreview: fileData?.substring(0, 200),
+      entity,
+      mappingsCount: mappings?.length,
+    });
+
     // Update job to processing
     await supabase
       .from('migration_jobs')
@@ -146,6 +172,11 @@ async function processMigration(
     });
 
     const rows = parseResult.data;
+    
+    console.log('🚀 Migration Processing - Parsed CSV:', {
+      totalRows: rows.length,
+      firstRow: rows[0],
+    });
     const totals: MigrationTotals = {
       total: rows.length,
       inserted: 0,
@@ -162,8 +193,14 @@ async function processMigration(
       }
     });
 
+    console.log('🔧 Starting row processing loop...', {
+      totalRows: rows.length,
+      mappingsCount: mappingLookup.size,
+    });
+
     // Process in batches
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      console.log(`📦 Processing batch starting at row ${i + 1}...`);
       // Check if job was cancelled before processing next batch
       const { data: jobStatus } = await supabase
         .from('migration_jobs')
@@ -191,6 +228,8 @@ async function processMigration(
         const row = batch[batchIndex];
 
         try {
+          console.log(`📝 Processing row ${rowIndex + 1}/${rows.length}:`, row);
+          
           const result = await processRow(
             supabase,
             row,
@@ -201,10 +240,19 @@ async function processMigration(
             userId
           );
 
+          console.log(`✅ Row ${rowIndex + 1} processed:`, result.type);
+
           if (result.type === 'inserted') totals.inserted++;
           else if (result.type === 'updated') totals.updated++;
           else if (result.type === 'skipped') totals.skipped++;
         } catch (error: any) {
+          console.error(`❌ Error processing row ${rowIndex + 1}:`, error);
+          console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            row: row,
+          });
+          
           totals.errors++;
 
           // Log error with context
@@ -273,7 +321,8 @@ async function processRow(
     const transformedValue = applyTransform(
       value,
       mapping.transform || 'none',
-      mapping.transformParams
+      mapping.transformParams,
+      row // Pass full row for composite transforms
     );
 
     if (targetField.startsWith('props.')) {
@@ -298,7 +347,7 @@ async function processRow(
     case 'contacts':
       return await processContact(supabase, transformedRow, duplicateStrategy, userId);
     case 'clients':
-      return await processClient(supabase, transformedRow, source, duplicateStrategy);
+      return await processClient(supabase, transformedRow, source, duplicateStrategy, userId);
     case 'orders':
       return await processOrder(supabase, transformedRow, source, duplicateStrategy, userId);
     default:
@@ -349,6 +398,25 @@ async function processContact(
     }
     
     delete row._role; // Remove special field
+  }
+  
+  // FALLBACK: Auto-map invalid role codes for contacts (same as clients)
+  if (row.primary_role_code && typeof row.primary_role_code === 'string') {
+    if (row.primary_role_code.includes(' ') || /[A-Z]/.test(row.primary_role_code)) {
+      console.log(`🔄 Auto-mapping invalid contact role: "${row.primary_role_code}"`);
+      const mapped = mapPartyRole(row.primary_role_code);
+      
+      if (!row.props) row.props = {};
+      row.props.original_role = row.primary_role_code;
+      row.primary_role_code = mapped;
+      
+      console.log(`  → Mapped to: "${mapped}"`);
+    }
+  }
+  
+  // Set to null if empty to avoid foreign key constraint errors
+  if (!row.primary_role_code || row.primary_role_code === '') {
+    row.primary_role_code = null;
   }
 
   // If no client resolved, try to get or create "Unassigned Contacts" client
@@ -414,7 +482,18 @@ async function processContact(
     row.email = String(row.email).toLowerCase();
   }
 
-  await supabase.from('contacts').insert(row);
+  const { data: insertedContact, error: insertError } = await supabase
+    .from('contacts')
+    .insert(row)
+    .select()
+    .single();
+
+  if (insertError) {
+    console.error('❌ Contact insert failed:', insertError);
+    throw new Error(`Failed to insert contact: ${insertError.message}`);
+  }
+
+  console.log('✅ Contact inserted successfully:', insertedContact?.id);
   return { type: 'inserted' };
 }
 
@@ -425,8 +504,65 @@ async function processClient(
   supabase: any,
   row: Record<string, any>,
   source: string,
-  duplicateStrategy: DuplicateStrategy
+  duplicateStrategy: DuplicateStrategy,
+  userId: string
 ): Promise<{ type: 'inserted' | 'updated' | 'skipped' }> {
+  // Handle composite address fields (Street, City, State, Zip → single address field)
+  if (row['address.street'] || row['address.city'] || row['address.state'] || row['address.zip']) {
+    const parts = [
+      row['address.street'],
+      row['address.city'],
+      row['address.state'],
+      row['address.zip']
+    ].filter(p => p && p.trim() !== '');
+    
+    row.address = parts.join(', ') || 'N/A';
+    
+    // Clean up the component fields
+    delete row['address.street'];
+    delete row['address.city'];
+    delete row['address.state'];
+    delete row['address.zip'];
+  }
+  
+  // Handle billing address components if present
+  if (row['billing_address.street'] || row['billing_address.city']) {
+    const parts = [
+      row['billing_address.street'],
+      row['billing_address.city'],
+      row['billing_address.state'],
+      row['billing_address.zip']
+    ].filter(p => p && p.trim() !== '');
+    
+    row.billing_address = parts.join(', ') || row.address || 'N/A';
+    
+    delete row['billing_address.street'];
+    delete row['billing_address.city'];
+    delete row['billing_address.state'];
+    delete row['billing_address.zip'];
+  }
+  
+  // Set required fields with defaults if not provided
+  if (!row.primary_contact || row.primary_contact.trim() === '') {
+    row.primary_contact = row.company_name || 'Unknown Contact';
+  }
+  
+  if (!row.email || row.email.trim() === '') {
+    row.email = `${(row.domain || 'noemail').toLowerCase()}@imported.local`;
+  }
+  
+  if (!row.phone || row.phone.trim() === '') {
+    row.phone = '000-000-0000';
+  }
+  
+  if (!row.address || row.address.trim() === '') {
+    row.address = 'N/A';
+  }
+  
+  if (!row.billing_address || row.billing_address.trim() === '') {
+    row.billing_address = row.address || 'N/A';
+  }
+  
   // Set source if provided
   if (source && !row.source) {
     row.props = { ...(row.props || {}), import_source: source };
@@ -454,6 +590,27 @@ async function processClient(
     }
     
     delete row._role; // Remove special field
+  }
+  
+  // FALLBACK: If primary_role_code looks like an unmapped category value (has spaces/capitals),
+  // try to map it using mapPartyRole. This handles cases where old field mappings
+  // mapped Category directly to primary_role_code before the preset was fixed.
+  if (row.primary_role_code && typeof row.primary_role_code === 'string') {
+    if (row.primary_role_code.includes(' ') || /[A-Z]/.test(row.primary_role_code)) {
+      console.log(`🔄 Auto-mapping invalid role code: "${row.primary_role_code}"`);
+      const mapped = mapPartyRole(row.primary_role_code);
+      
+      if (!row.props) row.props = {};
+      row.props.original_category = row.primary_role_code;
+      row.primary_role_code = mapped;
+      
+      console.log(`  → Mapped to: "${mapped}"`);
+    }
+  }
+  
+  // Set to null if empty to avoid foreign key constraint errors
+  if (!row.primary_role_code || row.primary_role_code === '') {
+    row.primary_role_code = null;
   }
 
   // Check for duplicate by domain using functional index
@@ -494,7 +651,18 @@ async function processClient(
     }
   }
 
-  await supabase.from('clients').insert(row);
+  const { data: insertedClient, error: insertError } = await supabase
+    .from('clients')
+    .insert(row)
+    .select()
+    .single();
+
+  if (insertError) {
+    console.error('❌ Client insert failed:', insertError);
+    throw new Error(`Failed to insert client: ${insertError.message}`);
+  }
+
+  console.log('✅ Client inserted successfully:', insertedClient?.id);
   return { type: 'inserted' };
 }
 
@@ -516,15 +684,67 @@ async function processOrder(
   // Set created_by and org_id (for tenant isolation)
   row.created_by = userId;
   row.org_id = userId; // org_id matches created_by for tenant boundary
+  
+  // Set defaults for optional fields
+  if (!row.borrower_name || row.borrower_name.trim() === '') {
+    row.borrower_name = 'Unknown Borrower';
+  }
+  
+  // Normalize and set defaults for enum fields (must be lowercase)
+  if (!row.property_type || row.property_type.trim() === '') {
+    row.property_type = 'single_family';
+  } else {
+    row.property_type = String(row.property_type).toLowerCase().trim();
+  }
+  
+  if (!row.order_type || row.order_type.trim() === '') {
+    row.order_type = 'purchase';
+  } else {
+    row.order_type = String(row.order_type).toLowerCase().trim();
+  }
+  
+  if (!row.status || row.status.trim() === '') {
+    row.status = 'new';
+  } else {
+    row.status = String(row.status).toLowerCase().trim();
+  }
+  
+  if (!row.priority || row.priority.trim() === '') {
+    row.priority = 'normal';
+  } else {
+    row.priority = String(row.priority).toLowerCase().trim();
+  }
+  
+  if (!row.fee_amount) {
+    row.fee_amount = 0;
+  }
+  
+  if (!row.ordered_date) {
+    row.ordered_date = new Date().toISOString();
+  }
+  
+  if (!row.due_date) {
+    // Default to 14 days from order date
+    const dueDate = new Date(row.ordered_date);
+    dueDate.setDate(dueDate.getDate() + 14);
+    row.due_date = dueDate.toISOString();
+  }
 
   // Two-phase property upsert: Property → Order
   let propertyId: string | null = null;
   
   // Handle address parsing and property creation
-  if (row.props?.original_address && !row.property_address) {
+  // Check both row.props.original_address AND row['props.original_address'] (field mapping format)
+  const originalAddress = row.props?.original_address || row['props.original_address'];
+  
+  if (originalAddress && !row.property_address) {
     try {
-      const addressParts = splitUSAddress(row.props.original_address);
+      console.log('🏠 Parsing address:', originalAddress);
+      
+      const addressParts = splitUSAddress(originalAddress);
       const { street, city, state, zip } = addressParts;
+      
+      console.log('🏠 Parsed address parts:', { street, city, state, zip });
       
       // Extract unit from street address
       const { street: streetNoUnit, unit, unitType } = extractUnit(street);
@@ -534,6 +754,13 @@ async function processOrder(
       row.property_city = city;
       row.property_state = state.toUpperCase();
       row.property_zip = zip;
+      
+      // Move original address to props if it was in row level
+      if (row['props.original_address']) {
+        if (!row.props) row.props = {};
+        row.props.original_address = row['props.original_address'];
+        delete row['props.original_address'];
+      }
       
       // Set default property_type if not provided
       if (!row.property_type) {
@@ -609,6 +836,21 @@ async function processOrder(
       console.warn('Address parsing failed:', error);
       // Continue with import - address parsing failure shouldn't block the row
     }
+  }
+  
+  // CRITICAL: Ensure address fields are never NULL (database constraint)
+  // Use empty string as fallback to avoid NOT NULL constraint errors
+  if (!row.property_address || row.property_address.trim() === '') {
+    row.property_address = 'Unknown Address';
+  }
+  if (!row.property_city || row.property_city.trim() === '') {
+    row.property_city = 'Unknown';
+  }
+  if (!row.property_state || row.property_state.trim() === '') {
+    row.property_state = 'XX';
+  }
+  if (!row.property_zip || row.property_zip.trim() === '') {
+    row.property_zip = '00000';
   }
   
   // Set property_id if we successfully created/linked a property
@@ -765,25 +1007,46 @@ async function processOrder(
     }
   }
 
-  // Check by order_number
+  // Check by order_number (only if external_id check didn't find a match)
   if (row.order_number) {
-    const { data: existing } = await supabase
+    const { data: existing, error: lookupError } = await supabase
       .from('orders')
       .select('id')
       .eq('order_number', row.order_number)
-      .single();
+      .maybeSingle();
 
-    if (existing) {
+    if (!lookupError && existing) {
+      console.log(`📋 Found duplicate order by order_number: ${row.order_number}`);
+      
       if (duplicateStrategy === 'skip') {
         return { type: 'skipped' };
       } else if (duplicateStrategy === 'update') {
-        await supabase.from('orders').update(row).eq('id', existing.id);
+        const { error: updateError } = await supabase
+          .from('orders')
+          .update(row)
+          .eq('id', existing.id);
+        
+        if (updateError) {
+          throw new Error(`Failed to update order: ${updateError.message}`);
+        }
         return { type: 'updated' };
       }
+      // 'create' strategy falls through to insert new order anyway
     }
   }
 
-  await supabase.from('orders').insert(row);
+  const { data: insertedOrder, error: insertError } = await supabase
+    .from('orders')
+    .insert(row)
+    .select()
+    .single();
+  
+  if (insertError) {
+    console.error('❌ Order insert failed:', insertError);
+    throw new Error(`Failed to insert order: ${insertError.message}`);
+  }
+  
+  console.log('✅ Order inserted successfully:', insertedOrder?.id);
   
   // USPAP cache: Update order with prior work count if property was linked
   if (propertyId) {
@@ -952,4 +1215,6 @@ async function resolveClientId(
 
   return null;
 }
+
+
 

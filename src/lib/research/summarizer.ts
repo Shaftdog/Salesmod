@@ -54,7 +54,6 @@ Be concise but actionable. Focus on information that helps us provide better ser
     const { text } = await generateText({
       model: anthropic('claude-3-5-sonnet-20241022'),
       prompt,
-      maxTokens: 1500,
       temperature: 0.5, // More consistent outputs
     });
 

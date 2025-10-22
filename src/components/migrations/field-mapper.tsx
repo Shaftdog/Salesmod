@@ -82,7 +82,21 @@ export function FieldMapper({ state, setState, onNext, onPrev }: FieldMapperProp
   const handleMappingChange = (sourceColumn: string, targetField: string) => {
     setState((prev) => {
       const existingIndex = prev.mappings.findIndex((m) => m.sourceColumn === sourceColumn);
-      const required = databaseFields.find((f) => f.name === targetField)?.required || false;
+      
+      // If user selected "Don't import", remove the mapping
+      if (targetField === '__skip__') {
+        if (existingIndex >= 0) {
+          const updated = [...prev.mappings];
+          updated.splice(existingIndex, 1);
+          // Check if we need to remove composite mapping
+          return updateCompositeAddressMappings({ ...prev, mappings: updated });
+        }
+        return prev;
+      }
+
+      const targetFieldDef = databaseFields.find((f) => f.name === targetField);
+      const required = targetFieldDef?.required || false;
+      const isComposite = targetFieldDef?.type === 'composite';
 
       if (existingIndex >= 0) {
         // Update existing mapping
@@ -92,23 +106,92 @@ export function FieldMapper({ state, setState, onNext, onPrev }: FieldMapperProp
           targetField,
           required,
         };
-        return { ...prev, mappings: updated };
+        return isComposite ? updateCompositeAddressMappings({ ...prev, mappings: updated }) : { ...prev, mappings: updated };
       } else {
         // Add new mapping
-        return {
-          ...prev,
-          mappings: [
-            ...prev.mappings,
-            {
-              sourceColumn,
-              targetField,
-              transform: 'none',
-              required,
-            },
-          ],
+        const newMapping = {
+          sourceColumn,
+          targetField,
+          transform: 'none' as const,
+          required,
         };
+        const updatedMappings = [...prev.mappings, newMapping];
+        return isComposite ? updateCompositeAddressMappings({ ...prev, mappings: updatedMappings }) : { ...prev, mappings: updatedMappings };
       }
     });
+  };
+
+  // Helper function to create/update composite address mappings
+  const updateCompositeAddressMappings = (state: WizardState): WizardState => {
+    const mappings = [...state.mappings];
+    
+    // Check for multi-line address components (Address, Address 2, Address 3)
+    const addressLines = {
+      line1: mappings.find(m => m.targetField === 'address.line1')?.sourceColumn,
+      line2: mappings.find(m => m.targetField === 'address.line2')?.sourceColumn,
+      line3: mappings.find(m => m.targetField === 'address.line3')?.sourceColumn,
+    };
+
+    // Check for component address (Street, City, State, Zip)
+    const addressComponents = {
+      street: mappings.find(m => m.targetField === 'address.street')?.sourceColumn,
+      city: mappings.find(m => m.targetField === 'address.city')?.sourceColumn,
+      state: mappings.find(m => m.targetField === 'address.state')?.sourceColumn,
+      zip: mappings.find(m => m.targetField === 'address.zip')?.sourceColumn,
+    };
+
+    // Check for multi-line billing address
+    const billingLines = {
+      line1: mappings.find(m => m.targetField === 'billing_address.line1')?.sourceColumn,
+      line2: mappings.find(m => m.targetField === 'billing_address.line2')?.sourceColumn,
+      line3: mappings.find(m => m.targetField === 'billing_address.line3')?.sourceColumn,
+    };
+
+    // Check for component billing address
+    const billingComponents = {
+      street: mappings.find(m => m.targetField === 'billing_address.street')?.sourceColumn,
+      city: mappings.find(m => m.targetField === 'billing_address.city')?.sourceColumn,
+      state: mappings.find(m => m.targetField === 'billing_address.state')?.sourceColumn,
+      zip: mappings.find(m => m.targetField === 'billing_address.zip')?.sourceColumn,
+    };
+
+    // Remove old composite mappings
+    const filtered = mappings.filter(m => 
+      !m.targetField.startsWith('address.') && 
+      !m.targetField.startsWith('billing_address.') &&
+      m.sourceColumn !== '__composite_address__' &&
+      m.sourceColumn !== '__composite_billing_address__'
+    );
+
+    // Add composite address mapping - prefer line pattern if present, otherwise use components
+    const hasAddressLines = Object.values(addressLines).some(v => v);
+    const hasAddressComponents = Object.values(addressComponents).some(v => v);
+    
+    if (hasAddressLines || hasAddressComponents) {
+      filtered.push({
+        sourceColumn: '__composite_address__',
+        targetField: 'address',
+        transform: 'combineAddress',
+        required: true,
+        transformParams: hasAddressLines ? addressLines : addressComponents,
+      });
+    }
+
+    // Add composite billing address mapping
+    const hasBillingLines = Object.values(billingLines).some(v => v);
+    const hasBillingComponents = Object.values(billingComponents).some(v => v);
+    
+    if (hasBillingLines || hasBillingComponents) {
+      filtered.push({
+        sourceColumn: '__composite_billing_address__',
+        targetField: 'billing_address',
+        transform: 'combineAddress',
+        required: false,
+        transformParams: hasBillingLines ? billingLines : billingComponents,
+      });
+    }
+
+    return { ...state, mappings: filtered };
   };
 
   const handleTransformChange = (sourceColumn: string, transform: TransformFunction) => {
@@ -236,14 +319,14 @@ export function FieldMapper({ state, setState, onNext, onPrev }: FieldMapperProp
 
                       <TableCell>
                         <Select
-                          value={mapping?.targetField || ''}
+                          value={mapping?.targetField || '__skip__'}
                           onValueChange={(value) => handleMappingChange(header, value)}
                         >
                           <SelectTrigger className="h-8">
                             <SelectValue placeholder="Don't import" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Don't import</SelectItem>
+                            <SelectItem value="__skip__">Don't import</SelectItem>
                             {databaseFields.map((field) => (
                               <SelectItem key={field.name} value={field.name}>
                                 {field.name} {field.required && '*'}
@@ -270,11 +353,34 @@ export function FieldMapper({ state, setState, onNext, onPrev }: FieldMapperProp
             </Table>
           </div>
 
+          {/* Composite Address Info */}
+          {state.mappings.some(m => m.transform === 'combineAddress') && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Address fields will be combined:</strong>
+                {state.mappings.filter(m => m.transform === 'combineAddress').map((mapping, idx) => {
+                  const params = mapping.transformParams as Record<string, string | undefined>;
+                  const parts = Object.entries(params || {})
+                    .filter(([_, value]) => value)
+                    .map(([key, value]) => `${value} (${key})`)
+                    .join(' + ');
+                  return (
+                    <div key={idx} className="mt-1">
+                      {parts} → <strong>{mapping.targetField}</strong>
+                    </div>
+                  );
+                })}
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Summary */}
           <div className="flex gap-4 text-sm text-muted-foreground">
-            <span>{state.mappings.filter((m) => m.targetField && !m.targetField.startsWith('props.')).length} → Database columns</span>
+            <span>{state.mappings.filter((m) => m.targetField && !m.targetField.startsWith('props.') && !m.sourceColumn.startsWith('__composite_')).length} → Database columns</span>
+            <span>{state.mappings.filter((m) => m.sourceColumn.startsWith('__composite_')).length} → Composite fields</span>
             <span>{state.mappings.filter((m) => m.targetField?.startsWith('props.')).length} → Custom fields</span>
-            <span>{(state.previewData?.headers.length || 0) - state.mappings.filter((m) => m.targetField).length} Skipped</span>
+            <span>{(state.previewData?.headers.length || 0) - state.mappings.filter((m) => m.targetField && !m.sourceColumn.startsWith('__composite_')).length} Skipped</span>
           </div>
         </CardContent>
       </Card>

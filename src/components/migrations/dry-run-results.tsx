@@ -25,33 +25,40 @@ export function DryRunResults({ state, setState, onNext, onPrev }: DryRunResults
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!state.dryRunResult) {
-      runDryRun();
-    } else {
-      setLoading(false);
-    }
+    // Always run fresh dry run when component mounts
+    // This ensures we don't use stale cached results
+    runDryRun();
   }, []);
 
   const runDryRun = async () => {
     setLoading(true);
 
     try {
+      // Debug logging
+      console.log('🔍 Dry Run Debug:', {
+        fileDataLength: state.fileData?.length,
+        fileDataPreview: state.fileData?.substring(0, 200),
+        mappingsCount: state.mappings?.length,
+        entity: state.entity,
+      });
+
       const response = await fetch('/api/migrations/dry-run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fileData: await state.file!.text(),
+          fileData: state.fileData,
           mappings: state.mappings,
           entity: state.entity,
           duplicateStrategy: state.duplicateStrategy,
         }),
       });
 
+      const result = await response.json();
+      
       if (!response.ok) {
-        throw new Error('Dry run failed');
+        throw new Error(result.error || 'Dry run failed');
       }
 
-      const result = await response.json();
       setState((prev) => ({ ...prev, dryRunResult: result }));
     } catch (error: any) {
       console.error('Dry run error:', error);
