@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { OrderStatusBadge } from "@/components/orders/status-badge";
 import { format } from "date-fns";
 import {
+  Edit,
   File,
   Loader2,
   MessageSquare,
@@ -38,8 +39,10 @@ import { OrderMap } from "@/components/orders/order-map";
 import { formatCurrency } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { PropertyChip } from "@/components/orders/property-chip";
+import { useRouter } from "next/navigation";
 
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
+  const router = useRouter();
   const [orderId, setOrderId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -60,6 +63,11 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   // Print handler
   const handlePrint = () => {
     window.print();
+  };
+
+  // Edit handler
+  const handleEdit = () => {
+    router.push(`/orders/${orderId}/edit`);
   };
 
   if (!orderId || isLoading) {
@@ -193,7 +201,10 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-2">
-                <Button onClick={() => setChangeStatusOpen(true)}>
+                <Button onClick={handleEdit} variant="default">
+                  <Edit className="mr-2 h-4 w-4" /> Edit Order
+                </Button>
+                <Button onClick={() => setChangeStatusOpen(true)} variant="secondary">
                   Change Status
                 </Button>
                 <Button
