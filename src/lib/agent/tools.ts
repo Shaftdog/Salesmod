@@ -17,7 +17,7 @@ export const agentTools = {
     parameters: z.object({
       query: z.string().min(1).describe('Search term (company name, contact name, email, etc.)'),
     }).strict(),
-    execute: async ({ query }) => {
+    execute: async ({ query }): Promise<any> => {
       const supabase = await createClient();
       
       const { data, error } = await supabase
@@ -52,7 +52,7 @@ export const agentTools = {
   getGoals: tool({
     description: 'Get active goals and their current progress. Use this when user asks about goals, targets, or performance.',
     parameters: z.object({}),
-    execute: async () => {
+    execute: async (): Promise<any> => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -131,7 +131,7 @@ export const agentTools = {
         dueDate: z.string().optional(),
       }).optional(),
     }),
-    execute: async (params) => {
+    execute: async (params): Promise<any> => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -186,7 +186,7 @@ export const agentTools = {
       query: z.string().describe('What to search for'),
       limit: z.number().optional().default(5).describe('Maximum results to return'),
     }),
-    execute: async ({ query, limit }) => {
+    execute: async ({ query, limit }): Promise<any> => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -215,7 +215,7 @@ export const agentTools = {
       clientId: z.string().describe('Client UUID'),
       limit: z.number().optional().default(10),
     }),
-    execute: async ({ clientId, limit }) => {
+    execute: async ({ clientId, limit }): Promise<any> => {
       const supabase = await createClient();
 
       const { data: activities, error } = await supabase
@@ -253,7 +253,7 @@ export const agentTools = {
     parameters: z.object({
       state: z.enum(['suggested', 'in_review', 'approved']).optional(),
     }),
-    execute: async ({ state }) => {
+    execute: async ({ state }): Promise<any> => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -302,7 +302,7 @@ export const agentTools = {
     parameters: z.object({
       limit: z.number().optional().default(5),
     }),
-    execute: async ({ limit }) => {
+    execute: async ({ limit }): Promise<any> => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -335,7 +335,7 @@ export const agentTools = {
       query: z.string().describe('Search query - what to look up on the internet'),
       maxResults: z.number().optional().default(5).describe('Maximum number of results to return'),
     }),
-    execute: async ({ query, maxResults }) => {
+    execute: async ({ query, maxResults }): Promise<any> => {
       try {
         const results = await webSearchFunction(query, maxResults);
         
