@@ -8,11 +8,11 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string; unitId: string } }
+  { params }: { params: Promise<{ id: string; unitId: string }> }
 ) {
   try {
     const supabase = await createClient();
-    const { id: propertyId, unitId } = params;
+    const { id: propertyId, unitId } = await params;
 
     // Verify unit exists and belongs to property
     const { data: unit, error: unitError } = await supabase

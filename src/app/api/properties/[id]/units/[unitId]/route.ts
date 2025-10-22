@@ -8,11 +8,11 @@ import { normalizeUnit } from '@/lib/units';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string; unitId: string } }
+  { params }: { params: Promise<{ id: string; unitId: string }> }
 ) {
   try {
     const supabase = await createClient();
-    const { id: propertyId, unitId } = params;
+    const { id: propertyId, unitId } = await params;
 
     // Fetch unit
     const { data: unit, error: unitError } = await supabase
@@ -59,11 +59,11 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string; unitId: string } }
+  { params }: { params: Promise<{ id: string; unitId: string }> }
 ) {
   try {
     const supabase = await createClient();
-    const { id: propertyId, unitId } = params;
+    const { id: propertyId, unitId } = await params;
     const body = await request.json();
 
     const { unitIdentifier, unitType, props } = body;
@@ -167,11 +167,11 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string; unitId: string } }
+  { params }: { params: Promise<{ id: string; unitId: string }> }
 ) {
   try {
     const supabase = await createClient();
-    const { id: propertyId, unitId } = params;
+    const { id: propertyId, unitId } = await params;
 
     // Check if unit has any linked orders
     const { data: orders, error: ordersError } = await supabase
