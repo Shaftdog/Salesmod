@@ -17,21 +17,30 @@ interface MigrationResultsProps {
 
 export function MigrationResults({ state, onReset }: MigrationResultsProps) {
   const [errors, setErrors] = useState<any[]>([]);
+  const [jobStatus, setJobStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (state.jobId) {
-      fetchErrors();
+      fetchJobData();
     }
   }, [state.jobId]);
 
-  const fetchErrors = async () => {
+  const fetchJobData = async () => {
     try {
-      const response = await fetch(`/api/migrations/errors?jobId=${state.jobId}`);
-      const data = await response.json();
-      setErrors(data.errors || []);
+      // Fetch both status and errors
+      const [statusResponse, errorsResponse] = await Promise.all([
+        fetch(`/api/migrations/status?jobId=${state.jobId}`),
+        fetch(`/api/migrations/errors?jobId=${state.jobId}`)
+      ]);
+
+      const statusData = await statusResponse.json();
+      const errorsData = await errorsResponse.json();
+
+      setJobStatus(statusData);
+      setErrors(errorsData.errors || []);
     } catch (error) {
-      console.error('Error fetching errors:', error);
+      console.error('Error fetching job data:', error);
     } finally {
       setLoading(false);
     }
@@ -54,13 +63,13 @@ export function MigrationResults({ state, onReset }: MigrationResultsProps) {
     }
   };
 
-  // Mock totals - in real implementation, fetch from status API
-  const totals = {
-    total: 100,
-    inserted: 85,
-    updated: 10,
-    skipped: 2,
-    errors: errors.length,
+  // Get actual totals from job status
+  const totals = jobStatus?.totals || {
+    total: 0,
+    inserted: 0,
+    updated: 0,
+    skipped: 0,
+    errors: 0,
   };
 
   const hasErrors = errors.length > 0;

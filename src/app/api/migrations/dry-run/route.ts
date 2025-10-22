@@ -42,9 +42,30 @@ export async function POST(request: NextRequest) {
       duplicateStrategy: DuplicateStrategy;
     };
 
-    if (!fileData || !mappings || !entity) {
-      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+    // Validate required parameters
+    if (!fileData) {
+      return NextResponse.json({ error: 'File data is required' }, { status: 400 });
     }
+    
+    if (!mappings || !Array.isArray(mappings) || mappings.length === 0) {
+      return NextResponse.json({ error: 'Field mappings are required' }, { status: 400 });
+    }
+    
+    if (!entity) {
+      return NextResponse.json({ error: 'Entity type is required' }, { status: 400 });
+    }
+    
+    if (!['contacts', 'clients', 'orders'].includes(entity)) {
+      return NextResponse.json({ error: `Invalid entity type: ${entity}. Must be contacts, clients, or orders` }, { status: 400 });
+    }
+
+    // Debug logging
+    console.log('🔍 Dry Run API - Received data:', {
+      fileDataLength: fileData?.length,
+      fileDataPreview: fileData?.substring(0, 200),
+      mappingsCount: mappings?.length,
+      entity,
+    });
 
     // Parse CSV data
     const parseResult = Papa.parse<Record<string, any>>(fileData, {
@@ -53,7 +74,23 @@ export async function POST(request: NextRequest) {
       transformHeader: (header: string) => header.trim(),
     });
 
+    if (parseResult.errors && parseResult.errors.length > 0) {
+      const parseErrors = parseResult.errors.map(e => e.message).join('; ');
+      return NextResponse.json({ error: `CSV parsing failed: ${parseErrors}` }, { status: 400 });
+    }
+
     const rows = parseResult.data;
+    
+    console.log('🔍 Dry Run API - Parsed CSV:', {
+      totalRows: rows.length,
+      firstRow: rows[0],
+      headers: parseResult.meta?.fields,
+    });
+    
+    if (!rows || rows.length === 0) {
+      return NextResponse.json({ error: 'CSV file is empty or contains no valid data' }, { status: 400 });
+    }
+    
     const errors: ValidationError[] = [];
     const duplicates: DuplicateMatch[] = [];
 
@@ -84,7 +121,8 @@ export async function POST(request: NextRequest) {
           const transformedValue = applyTransform(
             value,
             mapping.transform || 'none',
-            mapping.transformParams
+            mapping.transformParams,
+            row // Pass full row for composite transforms
           );
 
           if (targetField.startsWith('props.')) {
@@ -237,25 +275,25 @@ function validateFieldType(fieldName: string, value: any, entity: string): strin
     }
   }
 
-  // Entity-specific validations
+  // Entity-specific validations (only validate if value is provided)
   if (entity === 'orders') {
     const validStatuses = ['new', 'assigned', 'scheduled', 'in_progress', 'in_review', 'revisions', 'completed', 'delivered', 'cancelled'];
-    if (fieldName === 'status' && !validStatuses.includes(String(value).toLowerCase())) {
+    if (fieldName === 'status' && value && String(value).trim() !== '' && !validStatuses.includes(String(value).toLowerCase())) {
       return `Invalid status. Must be one of: ${validStatuses.join(', ')}`;
     }
 
     const validPriorities = ['rush', 'high', 'normal', 'low'];
-    if (fieldName === 'priority' && !validPriorities.includes(String(value).toLowerCase())) {
+    if (fieldName === 'priority' && value && String(value).trim() !== '' && !validPriorities.includes(String(value).toLowerCase())) {
       return `Invalid priority. Must be one of: ${validPriorities.join(', ')}`;
     }
 
     const validOrderTypes = ['purchase', 'refinance', 'home_equity', 'estate', 'divorce', 'tax_appeal', 'other'];
-    if (fieldName === 'order_type' && !validOrderTypes.includes(String(value).toLowerCase())) {
+    if (fieldName === 'order_type' && value && String(value).trim() !== '' && !validOrderTypes.includes(String(value).toLowerCase())) {
       return `Invalid order type. Must be one of: ${validOrderTypes.join(', ')}`;
     }
 
     const validPropertyTypes = ['single_family', 'condo', 'multi_family', 'commercial', 'land', 'manufactured'];
-    if (fieldName === 'property_type' && !validPropertyTypes.includes(String(value).toLowerCase())) {
+    if (fieldName === 'property_type' && value && String(value).trim() !== '' && !validPropertyTypes.includes(String(value).toLowerCase())) {
       return `Invalid property type. Must be one of: ${validPropertyTypes.join(', ')}`;
     }
   }

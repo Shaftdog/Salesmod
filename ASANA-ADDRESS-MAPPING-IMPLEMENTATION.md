@@ -1,152 +1,241 @@
-# ✅ Asana Orders Address Mapping Implementation Complete
+# Address Component Mapping - Implementation Complete ✅
 
-## 🎯 Goal Achieved
-Successfully implemented server-side address splitting and enum mapping for importing Asana "Orders.xlsx" without pre-cleaning the CSV data.
+## Overview
 
-## 📦 What Was Implemented
+The migration system now supports **composite field mapping**, which allows multiple CSV columns (Street, City, State, Zip) to be automatically combined into a single database address field.
 
-### 1. New Transform Functions (`src/lib/migrations/transforms.ts`)
+## The Problem
 
-#### `splitUSAddress(input: string)`
-- Parses US addresses like "123 Main St, Tampa FL 33602" into components
-- Handles multiple formats: with/without commas before state
-- Supports ZIP+4 format (extracts 5-digit ZIP)
-- Graceful fallback for malformed addresses
-- Returns: `{ street, city, state, zip }`
+Your CSV has address data split into separate columns:
+- `Street` → "1200 Main St Ste 400"
+- `City` → "Irvine"
+- `State` → "CA"
+- `Zip` → "92614"
 
-#### `mapOrderStatus(s?: string)`
-- Maps various status formats to standardized values:
-  - "Delivered" → "delivered"
-  - "In Production" → "in_progress" 
-  - "Scheduled" → "scheduled"
-  - "Under Review" → "in_review"
-  - "Revisions Needed" → "revisions"
-  - "Cancelled" → "cancelled"
-  - "Complete" → "completed"
-  - "Assigned" → "assigned"
-  - Unknown → "new"
+But the database `clients` table only has single text fields:
+- `address` TEXT NOT NULL
+- `billing_address` TEXT NOT NULL
 
-#### `mapOrderType(p?: string)`
-- Maps purpose/type fields to standardized values:
-  - "Purchase" → "purchase"
-  - "Refinance" → "refinance"
-  - "Home Equity" → "home_equity"
-  - "Estate" → "estate"
-  - "Divorce" → "divorce"
-  - "Tax Appeal" → "tax_appeal"
-  - Unknown → "other"
+The old system only supported **1:1 mapping** (one CSV column → one database field), making it impossible to properly map split addresses.
 
-### 2. Updated Type Definitions (`src/lib/migrations/types.ts`)
-- Added new transforms to `TransformFunction` type:
-  - `splitUSAddress`
-  - `mapOrderStatus` 
-  - `mapOrderType`
+## The Solution
 
-### 3. Enhanced Asana Orders Preset (`src/lib/migrations/presets.ts`)
-- Updated field mappings to match Asana export columns
-- Maps `Task ID` → `external_id`
-- Maps `Appraised Property Address` → `props.original_address` (preserved)
-- Maps status and type fields with new transforms
-- Maps financial fields: `Appraisal Fee`, `Fixed Cost`, `Inspection Fee`, `Amount`
-- Maps lender/loan information: `Lender Client`, `Loan Officer`, `Processor`
-- Maps property contact info: `Contact For Entry`, `Contact Primary Phone`
-- Stores additional Asana fields in `props.*`
+### 1. **Composite Field Type**
 
-### 4. Migration Processing Updates
+Added new field type `composite` to the field mapping system. When you map to fields like:
+- `address.street`
+- `address.city`
+- `address.state`
+- `address.zip`
 
-#### Run Route (`src/app/api/migrations/run/route.ts`)
-- Added address parsing logic to `processOrder()` function
-- Parses `props.original_address` into separate fields
-- Sets default `property_type = 'single_family'` if not provided
-- Graceful error handling - continues import even if address parsing fails
+The system automatically:
+1. Detects these are address components
+2. Creates a composite mapping
+3. Combines them into the `address` field
 
-#### Dry-Run Route (`src/app/api/migrations/dry-run/route.ts`)
-- Added address parsing validation
-- Logs warnings for incomplete address parsing (missing state/zip)
-- Logs errors for failed address parsing
-- Helps identify problematic addresses before import
+### 2. **combineAddress Transform Function**
 
-## 🎯 Key Features
+New transform function that intelligently combines address parts:
 
-### ✅ Address Parsing
-- **Primary Pattern**: `"123 Main St, Tampa FL 33602"` or `"123 Main St, Tampa, FL 33602"`
-- **Fallback Logic**: Handles edge cases and malformed addresses
-- **Error Handling**: Logs parsing issues without blocking import
-- **Original Preservation**: Stores original address in `props.original_address`
+```typescript
+combineAddress({ 
+  street: 'Street',  // CSV column name
+  city: 'City',      // CSV column name
+  state: 'State',    // CSV column name
+  zip: 'Zip'         // CSV column name
+}, row)
+```
 
-### ✅ Status & Type Mapping
-- **Intelligent Mapping**: Maps various Asana status/type formats to standardized values
-- **Case Insensitive**: Handles different capitalization
-- **Default Fallbacks**: Provides sensible defaults for unknown values
+**Output format:** `"1200 Main St Ste 400, Irvine CA 92614"`
 
-### ✅ Error Reporting
-- **Parse Issues**: Logs address parsing failures to migration errors
-- **Incomplete Parsing**: Warns about missing state/zip codes
-- **Graceful Degradation**: Continues import even with parsing issues
+### 3. **Automatic Detection & Preset**
 
-### ✅ Field Mapping
-- **Comprehensive Coverage**: Maps all major Asana fields
-- **Props Storage**: Unmapped fields stored in `props.*` JSONB
-- **Financial Fields**: Handles fees, costs, and amounts
-- **Contact Info**: Maps property contacts and lender information
+Created `ASANA_CONTACTS_PRESET` that automatically:
+- Detects CSV files with `company_name`, `phone`, `email`, `street`, `city` columns
+- Pre-maps all address components correctly
+- Shows a clear indicator in the UI that fields will be combined
 
-## 🧪 Test Cases Covered
+## How It Works
 
-### Address Parsing
-- ✅ `"13716 Fox Glove St, Winter Garden FL 34787"` → street, city, state, zip
-- ✅ `"123 Main St, Tampa, FL 33602"` → handles comma before state
-- ✅ `"44 River Rd, Boise ID"` → handles missing ZIP (logs warning)
-- ✅ Empty/null inputs → graceful handling
-- ✅ Malformed addresses → fallback parsing
+### Step 1: Upload CSV
+When you upload a CSV with split address fields, the system detects the pattern and suggests the Asana Contacts preset.
 
-### Status Mapping
-- ✅ "Delivered" → "delivered"
-- ✅ "In Production" → "in_progress"
-- ✅ "Unknown Status" → "new"
+### Step 2: Field Mapping
+The field mapper now shows:
 
-### Type Mapping
-- ✅ "Purchase" → "purchase"
-- ✅ "Refinance" → "refinance"
-- ✅ "Unknown Type" → "other"
+**Available Database Fields:**
+- `address` (text, required) - Company address (full)
+- `address.street` (composite) - Street address (will be combined)
+- `address.city` (composite) - City (will be combined)
+- `address.state` (composite) - State (will be combined)
+- `address.zip` (composite) - ZIP code (will be combined)
 
-## 🚀 Ready for Production
+### Step 3: Visual Feedback
+When composite fields are mapped, you'll see an alert:
 
-### Acceptance Criteria Met
-- ✅ **Dry-run** shows address parse warnings for problematic addresses
-- ✅ **Run** completes with rows inserted/updated
-- ✅ **Error CSV** includes rows with address parsing issues
-- ✅ **Imported orders** have correct external_id, source, dates, status/type, fees
-- ✅ **Original address** preserved in props.original_address
+> **Address fields will be combined:**
+> 
+> Street (street) + City (city) + State (state) + Zip (zip) → **address**
 
-### Branch & Commit
-- **Branch**: `feat/migrations-asana-address-mapping`
-- **Commit**: `feat(migrations): Asana Orders preset + address split and status/type mappers`
+### Step 4: Processing
+During migration, the system:
+1. Reads all four CSV columns
+2. Combines them: `"{street}, {city} {state} {zip}"`
+3. Stores the result in the single `address` database field
 
-## 📋 Next Steps
+## Example Mapping
 
-1. **Test with Real Data**: Use actual Asana export to verify parsing accuracy
-2. **Monitor Error Rates**: Track address parsing success rates
-3. **Fine-tune Patterns**: Adjust regex patterns based on real data patterns
-4. **Performance Testing**: Verify batch processing performance with large files
+**Your CSV:**
+```csv
+company_name,email,phone,Street,City,State,Zip,primary_contact
+"AMC Contact","test@example.com","(949) 555-1010","1200 Main St Ste 400","Irvine","CA","92614","John Doe"
+```
 
-## 🔧 Technical Details
+**After Processing:**
+```javascript
+{
+  company_name: "AMC Contact",
+  email: "test@example.com",
+  phone: "(949) 555-1010",
+  address: "1200 Main St Ste 400, Irvine CA 92614",  // ← Combined!
+  primary_contact: "John Doe"
+}
+```
 
-### Database Schema
-- Uses existing `props` JSONB column for flexible field storage
-- Leverages existing `external_id`, `source` columns for migration tracking
-- No schema changes required
+## Billing Address Support
 
-### Performance
-- Address parsing is lightweight (regex + string manipulation)
-- Batch processing remains at 500 rows per batch
-- No impact on existing migration performance
+The same system works for billing addresses:
+- `billing_address.street`
+- `billing_address.city`
+- `billing_address.state`
+- `billing_address.zip`
 
-### Error Handling
-- Address parsing failures don't block row import
-- Parse issues logged to `migration_errors` table
-- Original data preserved for manual review
+→ Combined into `billing_address` field
 
----
+## Code Changes
 
-**Implementation Complete** ✅  
-Ready for testing with real Asana data exports.
+### Files Modified
+
+1. **`src/lib/migrations/types.ts`**
+   - Added `combineAddress` to `TransformFunction` type
+   - Enhanced `FieldMapping` interface documentation
+
+2. **`src/lib/migrations/transforms.ts`**
+   - Implemented `combineAddress()` function
+   - Updated `applyTransform()` to accept full row for composite transforms
+
+3. **`src/app/api/migrations/targets/route.ts`**
+   - Added composite field definitions for `clients` entity
+   - `address.street`, `address.city`, `address.state`, `address.zip`
+   - `billing_address.*` components
+
+4. **`src/components/migrations/field-mapper.tsx`**
+   - Added `updateCompositeAddressMappings()` helper
+   - Automatically creates composite mappings when components are detected
+   - Shows visual indicator when addresses will be combined
+   - Updated summary stats to show composite fields
+
+5. **`src/app/api/migrations/run/route.ts`**
+   - Updated `applyTransform()` calls to pass full row
+
+6. **`src/app/api/migrations/dry-run/route.ts`**
+   - Updated `applyTransform()` calls to pass full row
+
+7. **`src/lib/migrations/presets.ts`**
+   - Created `ASANA_CONTACTS_PRESET` with address component mappings
+   - Updated `detectPreset()` to recognize split address pattern
+
+## Usage Guide
+
+### For Your Current Import
+
+1. **Upload your CSV** with `Street`, `City`, `State`, `Zip` columns
+2. **System auto-detects** "Asana Contacts (AMC)" preset
+3. **Field mapper shows:**
+   - Street → `address.street` (composite)
+   - City → `address.city` (composite)
+   - State → `address.state` (composite)
+   - Zip → `address.zip` (composite)
+4. **Alert shows:** "Address fields will be combined: Street + City + State + Zip → address"
+5. **Proceed with import** - addresses will be automatically combined
+
+### Manual Mapping
+
+If the preset isn't detected, you can manually:
+
+1. Map `Street` column to `address.street`
+2. Map `City` column to `address.city`
+3. Map `State` column to `address.state`
+4. Map `Zip` column to `address.zip`
+
+The system will automatically create the composite mapping.
+
+### Alternative: Full Address Column
+
+If your CSV has a **single full address column**, you can still map directly:
+- `Address` CSV column → `address` database field (no transformation needed)
+
+## Benefits
+
+✅ **Flexible Input** - Handles both split and combined address formats
+✅ **Automatic Detection** - Preset auto-applies for common patterns
+✅ **Clear Feedback** - Visual indicators show what will happen
+✅ **Consistent Output** - Standardized address format in database
+✅ **Extensible** - Same pattern works for other composite fields
+
+## Testing
+
+To test the feature:
+
+1. Upload the AMC Contact CSV with split address columns
+2. Verify the "Asana Contacts (AMC)" preset is detected
+3. Check that address components are mapped correctly
+4. Look for the "Address fields will be combined" alert
+5. Run a dry-run to validate the combined addresses
+6. Execute the import and verify addresses in the database
+
+## Future Enhancements
+
+Potential improvements:
+- Address validation/standardization API integration
+- Support for international address formats
+- Address parsing (if single field needs to be split)
+- Custom composite field builder in UI
+
+## Technical Notes
+
+### Why This Approach?
+
+- **Non-breaking** - Existing single-column mappings still work
+- **Backward compatible** - Old presets continue to function
+- **Database agnostic** - Works with any composite field, not just addresses
+- **Transform-based** - Uses existing transform infrastructure
+- **UI-friendly** - Clear visual feedback and error handling
+
+### Transform Execution
+
+Composite transforms are special:
+- Execute before null checks
+- Require full row access
+- Can reference any source column
+- Output goes to target field like normal transforms
+
+### Composite Field Convention
+
+Naming pattern: `{parentField}.{component}`
+- `address.street`
+- `address.city`
+- `billing_address.state`
+
+Internal mapping uses: `__composite_{parentField}__` as sourceColumn
+
+## Summary
+
+Your CSV with split address columns will now **automatically combine** into the single database `address` field during import. The system handles this intelligently with:
+
+1. ✅ Auto-detection
+2. ✅ Visual feedback
+3. ✅ Proper formatting
+4. ✅ Validation support
+
+**No manual intervention needed** - just upload and import! 🎉
