@@ -72,8 +72,8 @@ export function PropertyChip({ order, variant = 'chip', showPriorWork = true }: 
                     <Building className="h-3 w-3 mr-1" />
                     {order.property.propertyType.replace('_', ' ')}
                   </Badge>
-                  <VerificationBadge 
-                    status={order.property.validationStatus}
+                  <VerificationBadge
+                    status={order.property.validationStatus as 'verified' | 'partial' | 'unverified' | 'pending' | null}
                     source={order.property.verificationSource}
                     size="sm"
                   />
