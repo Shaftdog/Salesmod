@@ -69,8 +69,7 @@ export async function POST(request: NextRequest) {
               email: data.to,
               reason: 'bounce',
               details: `Bounce type: ${data.bounce_type || 'unknown'}`,
-            })
-            .onConflict('org_id,contact_id');
+            }, { onConflict: 'org_id,contact_id' });
         }
         break;
 
@@ -85,8 +84,7 @@ export async function POST(request: NextRequest) {
               email: data.to,
               reason: 'complaint',
               details: 'User marked as spam',
-            })
-            .onConflict('org_id,contact_id');
+            }, { onConflict: 'org_id,contact_id' });
         }
         break;
 
