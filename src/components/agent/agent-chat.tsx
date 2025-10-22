@@ -30,11 +30,14 @@ export function AgentChat() {
   // Load chat history on mount
   useEffect(() => {
     if (chatHistory && chatHistory.length > 0) {
-      setMessages(chatHistory.map(msg => ({
-        id: msg.id,
-        role: msg.role,
-        content: msg.content,
-      })));
+      // Filter out system messages and ensure only user/assistant roles
+      setMessages(chatHistory
+        .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+        .map(msg => ({
+          id: msg.id,
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+        })));
     }
   }, [chatHistory]);
 

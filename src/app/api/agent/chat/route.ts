@@ -91,7 +91,6 @@ Remember: You're helping achieve business goals. Be strategic and data-driven.`;
       messages,
       tools: agentTools,
       temperature: 0.7,
-      maxTokens: 2000,
     });
 
     // Save conversation to memory asynchronously (don't await)

@@ -157,7 +157,8 @@ export function inferUnitType(identifier?: string, propertyType?: PropertyType):
   if (!identifier) {
     // Infer from property type
     if (propertyType === 'condo') return 'condo';
-    if (propertyType === 'townhouse') return 'townhouse';
+    // Note: 'townhouse' is not a valid PropertyType in our system
+    // Townhouses are typically classified as 'single_family' or 'multi_family'
     if (propertyType === 'multi_family') return 'apartment';
     return null;
   }

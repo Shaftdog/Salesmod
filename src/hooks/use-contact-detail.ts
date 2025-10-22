@@ -13,6 +13,7 @@ export interface ContactWithCompany {
   notes: string | null;
   is_primary: boolean;
   client_id: string | null;
+  primary_role_code?: string | null;
   props: Record<string, any> | null;
   created_at: string;
   updated_at: string;
@@ -22,6 +23,12 @@ export interface ContactWithCompany {
     email: string;
     phone: string;
     domain?: string | null;
+  } | null;
+  role?: {
+    code: string;
+    label: string;
+    description?: string;
+    category?: string;
   } | null;
   activityCount: number;
 }

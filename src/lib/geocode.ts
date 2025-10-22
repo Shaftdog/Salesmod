@@ -19,7 +19,7 @@ const geocodeCache: GeocodeCache = {};
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 export async function geocodeProperty(propertyId: string): Promise<GeocodeResult | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   try {
     console.log('Fetching property details for:', propertyId);
@@ -119,7 +119,7 @@ export async function geocodeProperty(propertyId: string): Promise<GeocodeResult
 }
 
 export async function getPropertyCoordinates(propertyId: string): Promise<{ latitude: number; longitude: number } | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   try {
     const { data: property, error } = await supabase

@@ -286,7 +286,7 @@ export default function ContactsPage() {
                   className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary pl-4"
                 >
                   <Building2 className="h-3 w-3" />
-                  {contact.client.company_name}
+                  {contact.client.companyName}
                 </Link>
               )}
             </div>

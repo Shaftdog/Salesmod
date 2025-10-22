@@ -416,13 +416,15 @@ export interface Property {
   lotSize?: number;
   yearBuilt?: number;
   addrHash: string; // normalized key for deduplication
+  validationStatus?: string; // Address validation status
+  verificationSource?: string; // Source of address verification (e.g., 'google_geocode', 'usps')
   props?: any; // jsonb for flexible storage
   createdAt: string;
   updatedAt: string;
-  
+
   // Computed fields
   priorWork3y?: number; // USPAP prior work count (3 years)
-  
+
   // Relations
   orders?: Order[]; // Related orders
   units?: PropertyUnit[]; // Related units (for fee-simple properties)

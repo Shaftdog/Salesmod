@@ -18,6 +18,7 @@ export interface AgentContext {
     rfmScore: number; // Recency, Frequency, Monetary
     engagementScore: number;
     lastContactDays: number;
+    priorityScore: number; // Composite score for ranking
   }>;
   signals: {
     emailOpens: number;

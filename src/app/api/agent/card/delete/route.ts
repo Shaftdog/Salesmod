@@ -52,13 +52,17 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Delete] ✓ Successfully deleted: ${card.title}`);
 
+    // Extract client name (handle both array and object response from Supabase)
+    const clientData: any = card.client;
+    const clientName = (Array.isArray(clientData) ? clientData[0]?.company_name : clientData?.company_name) || undefined;
+
     return NextResponse.json({
       success: true,
       deleted: {
         id: card.id,
         title: card.title,
         type: card.type,
-        client: card.client?.company_name,
+        client: clientName,
       },
     });
   } catch (error: any) {

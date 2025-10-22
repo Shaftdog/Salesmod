@@ -23,6 +23,7 @@ import { Building2, ArrowRight } from "lucide-react";
 import { useClients } from "@/hooks/use-clients";
 import { useTransferContact } from "@/hooks/use-transfer-contact";
 import type { ContactWithCompany } from "@/hooks/use-contact-detail";
+import type { Client } from "@/lib/types";
 
 interface TransferCompanyDialogProps {
   open: boolean;
@@ -38,7 +39,7 @@ export function TransferCompanyDialog({
   const [newCompanyId, setNewCompanyId] = useState<string>("");
   const [reason, setReason] = useState("");
 
-  const { data: clients, isLoading: clientsLoading } = useClients();
+  const { clients, isLoading: clientsLoading } = useClients();
   const { mutateAsync: transferContact, isPending } = useTransferContact();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,7 +73,7 @@ export function TransferCompanyDialog({
   };
 
   // Filter out current company from selection
-  const availableClients = clients?.filter(c => c.id !== contact.client_id) || [];
+  const availableClients = clients?.filter((c: Client) => c.id !== contact.client_id) || [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -120,7 +121,7 @@ export function TransferCompanyDialog({
                       No other companies available
                     </SelectItem>
                   ) : (
-                    availableClients.map((client) => (
+                    availableClients.map((client: Client) => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.companyName}
                       </SelectItem>
