@@ -8,16 +8,16 @@ import { searchWeb as webSearchFunction } from '../research/web-search';
 /**
  * Agent tools for conversational interaction
  */
-export const agentTools = {
+export const agentTools: any = {
   /**
    * Search for clients
    */
-  searchClients: tool({
+  searchClients: (tool as any)({
     description: 'Search for clients by name, email, or other criteria. Use this when user asks about specific clients or wants to find clients.',
     parameters: z.object({
       query: z.string().min(1).describe('Search term (company name, contact name, email, etc.)'),
     }).strict(),
-    execute: async ({ query }) => {
+    execute: async ({ query }: { query: string }) => {
       const supabase = await createClient();
       
       const { data, error } = await supabase
@@ -49,7 +49,7 @@ export const agentTools = {
   /**
    * Get current goals and progress
    */
-  getGoals: tool({
+  getGoals: (tool as any)({
     description: 'Get active goals and their current progress. Use this when user asks about goals, targets, or performance.',
     parameters: z.object({}),
     execute: async () => {
@@ -83,11 +83,12 @@ export const agentTools = {
           periodEnd: goal.period_end,
           description: goal.description,
           isActive: goal.is_active,
+          createdBy: goal.created_by,
           createdAt: goal.created_at,
           updatedAt: goal.updated_at,
         };
 
-        const progress = calculateGoalProgress(goalObj, orders || [], deals, clients);
+        const progress = calculateGoalProgress(goalObj, orders || [], deals || undefined, clients || undefined);
         
         return {
           ...goalObj,
@@ -113,7 +114,7 @@ export const agentTools = {
   /**
    * Create an action card
    */
-  createCard: tool({
+  createCard: (tool as any)({
     description: 'Create a new action card on the Kanban board. Use this when user requests to create a task, draft an email, or propose an action. For calls/meetings, create a task instead.',
     parameters: z.object({
       type: z.enum(['send_email', 'create_task', 'create_deal', 'follow_up', 'research']),
@@ -131,7 +132,7 @@ export const agentTools = {
         dueDate: z.string().optional(),
       }).optional(),
     }),
-    execute: async (params) => {
+    execute: async (params: any) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -180,13 +181,13 @@ export const agentTools = {
   /**
    * Search knowledge base (RAG)
    */
-  searchKnowledge: tool({
+  searchKnowledge: (tool as any)({
     description: 'Search the knowledge base for relevant information about clients, activities, notes, or past interactions. Use this to find specific information.',
     parameters: z.object({
       query: z.string().describe('What to search for'),
       limit: z.number().optional().default(5).describe('Maximum results to return'),
     }),
-    execute: async ({ query, limit }) => {
+    execute: async ({ query, limit }: { query: string; limit?: number }) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -209,13 +210,13 @@ export const agentTools = {
   /**
    * Get recent activity for a client
    */
-  getClientActivity: tool({
+  getClientActivity: (tool as any)({
     description: 'Get recent activity and interaction history for a specific client.',
     parameters: z.object({
       clientId: z.string().describe('Client UUID'),
       limit: z.number().optional().default(10),
     }),
-    execute: async ({ clientId, limit }) => {
+    execute: async ({ clientId, limit = 10 }: { clientId: string; limit?: number }) => {
       const supabase = await createClient();
 
       const { data: activities, error } = await supabase
@@ -248,12 +249,12 @@ export const agentTools = {
   /**
    * Get pending action cards
    */
-  getPendingCards: tool({
+  getPendingCards: (tool as any)({
     description: 'Get pending action cards that need review or approval. Use when user asks "what\'s pending?" or "what needs my attention?"',
     parameters: z.object({
       state: z.enum(['suggested', 'in_review', 'approved']).optional(),
     }),
-    execute: async ({ state }) => {
+    execute: async ({ state }: { state?: 'suggested' | 'in_review' | 'approved' }) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -297,15 +298,15 @@ export const agentTools = {
   /**
    * Get agent run history
    */
-  getRunHistory: tool({
+  getRunHistory: (tool as any)({
     description: 'Get recent agent run history and performance metrics.',
     parameters: z.object({
       limit: z.number().optional().default(5),
     }),
-    execute: async ({ limit }) => {
+    execute: async ({ limit = 5 }: { limit?: number }) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return { error: 'Not authenticated' };
 
       const { data, error } = await supabase
@@ -329,13 +330,13 @@ export const agentTools = {
   /**
    * Search the web
    */
-  searchWeb: tool({
+  searchWeb: (tool as any)({
     description: 'Search the internet for information about companies, people, news, or any topic. Use this when the user asks you to search for something or when you need external information not available in the database.',
     parameters: z.object({
       query: z.string().describe('Search query - what to look up on the internet'),
       maxResults: z.number().optional().default(5).describe('Maximum number of results to return'),
     }),
-    execute: async ({ query, maxResults }) => {
+    execute: async ({ query, maxResults }: { query: string; maxResults?: number }) => {
       try {
         const results = await webSearchFunction(query, maxResults);
         

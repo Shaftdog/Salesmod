@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     }
 
     const template = getTemplate(entity);
-    const csv = Papa.unparse(template.data);
+    const csv = Papa.unparse(template.data as any);
 
     return new NextResponse(csv, {
       headers: {

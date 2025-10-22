@@ -8,8 +8,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { MapPin } from "lucide-react";
+import { Suspense } from "react";
 
-export default function NewOrderPage() {
+function NewOrderContent() {
     const { appraisers, isLoading: appraisersLoading } = useAppraisers();
     const { clients, isLoading: clientsLoading } = useClients();
     const searchParams = useSearchParams();
@@ -72,5 +73,29 @@ export default function NewOrderPage() {
                 </CardContent>
             </Card>
         </div>
+    );
+}
+
+export default function NewOrderPage() {
+    return (
+        <Suspense fallback={
+            <div className="container mx-auto py-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Create New Order</CardTitle>
+                        <CardDescription>Fill in the order details below</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-4">
+                            <Skeleton className="h-10 w-full" />
+                            <Skeleton className="h-10 w-full" />
+                            <Skeleton className="h-10 w-full" />
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        }>
+            <NewOrderContent />
+        </Suspense>
     );
 }

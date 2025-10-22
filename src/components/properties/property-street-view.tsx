@@ -41,10 +41,10 @@ export function PropertyStreetView({ latitude, longitude, address }: PropertyStr
         { location: position, radius: 50 },
         (data, status) => {
           setIsLoading(false);
-          if (status === google.maps.StreetViewStatus.OK && data) {
+          if (status === google.maps.StreetViewStatus.OK && data && data.location) {
             setIsAvailable(true);
             // Initialize Street View panorama
-            initializeStreetView(data.location);
+            initializeStreetView(data.location.latLng!);
           } else {
             setIsAvailable(false);
             setError('No Street View imagery available for this location');
