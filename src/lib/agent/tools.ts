@@ -76,6 +76,7 @@ export const agentTools = {
       const goalsWithProgress = (goals || []).map((goal: any) => {
         const goalObj = {
           id: goal.id,
+          createdBy: goal.created_by || user.id,
           metricType: goal.metric_type,
           targetValue: parseFloat(goal.target_value),
           periodType: goal.period_type,
