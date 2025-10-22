@@ -120,10 +120,10 @@ export function AddPropertyDialog({ trigger }: AddPropertyDialogProps) {
         city: data.city,
         state: data.state.toUpperCase(),
         zip: data.postalCode,
-        zip4: validatedAddress?.zip4,
-        county: validatedAddress?.county,
-        latitude: validatedAddress?.latitude,
-        longitude: validatedAddress?.longitude,
+        zip4: undefined,
+        county: undefined,
+        latitude: undefined,
+        longitude: undefined,
       };
 
       const propertyData = {
