@@ -58,20 +58,20 @@ export async function executeComputerUseTask(
         max_tokens: 4096,
         tools: [
           {
-            type: 'computer_20241022' as any,
+            type: 'computer_20241022',
             name: 'computer',
             display_width_px: 1024,
             display_height_px: 768,
             display_number: 1,
-          },
+          } as any,
           {
-            type: 'text_editor_20241022' as any,
+            type: 'text_editor_20241022',
             name: 'str_replace_editor',
-          },
+          } as any,
           {
-            type: 'bash_20241022' as any,
+            type: 'bash_20241022',
             name: 'bash',
-          },
+          } as any,
         ],
         messages,
       });
