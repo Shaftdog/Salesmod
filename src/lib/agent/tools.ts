@@ -17,7 +17,7 @@ export const agentTools = {
     parameters: z.object({
       query: z.string().min(1).describe('Search term (company name, contact name, email, etc.)'),
     }).strict(),
-    execute: async ({ query }): Promise<any> => {
+    execute: async ({ query }) => {
       const supabase = await createClient();
       
       const { data, error } = await supabase
@@ -44,7 +44,7 @@ export const agentTools = {
         count: data?.length || 0,
       };
     },
-  }),
+  } as any),
 
   /**
    * Get current goals and progress
@@ -52,7 +52,7 @@ export const agentTools = {
   getGoals: tool({
     description: 'Get active goals and their current progress. Use this when user asks about goals, targets, or performance.',
     parameters: z.object({}),
-    execute: async (): Promise<any> => {
+    execute: async () => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -108,7 +108,7 @@ export const agentTools = {
         },
       };
     },
-  }),
+  } as any),
 
   /**
    * Create an action card
@@ -131,7 +131,7 @@ export const agentTools = {
         dueDate: z.string().optional(),
       }).optional(),
     }),
-    execute: async (params): Promise<any> => {
+    execute: async (params) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -175,7 +175,7 @@ export const agentTools = {
         },
       };
     },
-  }),
+  } as any),
 
   /**
    * Search knowledge base (RAG)
@@ -186,7 +186,7 @@ export const agentTools = {
       query: z.string().describe('What to search for'),
       limit: z.number().optional().default(5).describe('Maximum results to return'),
     }),
-    execute: async ({ query, limit }): Promise<any> => {
+    execute: async ({ query, limit }) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -204,7 +204,7 @@ export const agentTools = {
         count: results.length,
       };
     },
-  }),
+  } as any),
 
   /**
    * Get recent activity for a client
@@ -215,7 +215,7 @@ export const agentTools = {
       clientId: z.string().describe('Client UUID'),
       limit: z.number().optional().default(10),
     }),
-    execute: async ({ clientId, limit }): Promise<any> => {
+    execute: async ({ clientId, limit }) => {
       const supabase = await createClient();
 
       const { data: activities, error } = await supabase
@@ -243,7 +243,7 @@ export const agentTools = {
         count: activities?.length || 0,
       };
     },
-  }),
+  } as any),
 
   /**
    * Get pending action cards
@@ -253,7 +253,7 @@ export const agentTools = {
     parameters: z.object({
       state: z.enum(['suggested', 'in_review', 'approved']).optional(),
     }),
-    execute: async ({ state }): Promise<any> => {
+    execute: async ({ state }) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -292,7 +292,7 @@ export const agentTools = {
         count: data?.length || 0,
       };
     },
-  }),
+  } as any),
 
   /**
    * Get agent run history
@@ -302,7 +302,7 @@ export const agentTools = {
     parameters: z.object({
       limit: z.number().optional().default(5),
     }),
-    execute: async ({ limit }): Promise<any> => {
+    execute: async ({ limit }) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -324,7 +324,7 @@ export const agentTools = {
         count: data?.length || 0,
       };
     },
-  }),
+  } as any),
 
   /**
    * Search the web
@@ -335,7 +335,7 @@ export const agentTools = {
       query: z.string().describe('Search query - what to look up on the internet'),
       maxResults: z.number().optional().default(5).describe('Maximum number of results to return'),
     }),
-    execute: async ({ query, maxResults }): Promise<any> => {
+    execute: async ({ query, maxResults }) => {
       try {
         const results = await webSearchFunction(query, maxResults);
         
@@ -366,6 +366,6 @@ export const agentTools = {
         };
       }
     },
-  }),
+  } as any),
 };
 
