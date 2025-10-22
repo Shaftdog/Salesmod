@@ -109,8 +109,8 @@ export function PropertyChip({ order, variant = 'chip', showPriorWork = true }: 
         >
           {formatAddress(order.property)}
         </Link>
-        <VerificationBadge 
-          status={order.property.validationStatus}
+        <VerificationBadge
+          status={order.property.validationStatus as 'verified' | 'partial' | 'unverified' | 'pending' | null}
           source={order.property.verificationSource}
           size="sm"
         />
