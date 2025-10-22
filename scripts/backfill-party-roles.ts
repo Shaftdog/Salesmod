@@ -180,7 +180,8 @@ async function backfillRoles() {
 
   if (roleStats) {
     const distribution = roleStats.reduce((acc, row) => {
-      const label = row.party_roles?.label || row.primary_role_code;
+      const partyRoles = Array.isArray(row.party_roles) ? row.party_roles[0] : row.party_roles;
+      const label = partyRoles?.label || row.primary_role_code;
       acc[label] = (acc[label] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
