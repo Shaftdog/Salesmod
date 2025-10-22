@@ -43,8 +43,8 @@ export function PropertyStreetView({ latitude, longitude, address }: PropertyStr
           setIsLoading(false);
           if (status === google.maps.StreetViewStatus.OK && data && data.location) {
             setIsAvailable(true);
-            // Initialize Street View panorama
-            initializeStreetView(data.location);
+            // Initialize Street View panorama using the original position
+            initializeStreetView(position);
           } else {
             setIsAvailable(false);
             setError('No Street View imagery available for this location');
@@ -53,7 +53,7 @@ export function PropertyStreetView({ latitude, longitude, address }: PropertyStr
       );
     };
 
-    const initializeStreetView = (location: google.maps.LatLng) => {
+    const initializeStreetView = (location: google.maps.LatLngLiteral | google.maps.LatLng) => {
       if (!streetViewRef.current || !window.google?.maps) return;
 
       try {
