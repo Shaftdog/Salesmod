@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
         raw_data: JSON.stringify(e.raw_data),
       }));
 
-      const csv = Papa.unparse(csvData);
+      const csv = Papa.unparse(csvData as any);
 
       return new NextResponse(csv, {
         headers: {
