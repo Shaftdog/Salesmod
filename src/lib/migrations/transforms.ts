@@ -277,7 +277,7 @@ export function combineAddress(
 ): string | null {
   if (!params || !fullRow) return null;
 
-  // Check what pattern is being used
+  // Get all possible field values
   const line1 = params.line1 ? fullRow[params.line1] : null;
   const line2 = params.line2 ? fullRow[params.line2] : null;
   const line3 = params.line3 ? fullRow[params.line3] : null;
@@ -286,51 +286,34 @@ export function combineAddress(
   const state = params.state ? fullRow[params.state] : null;
   const zip = params.zip ? fullRow[params.zip] : null;
 
-  // MIXED PATTERN: If line1 is present with city/state/zip, treat line1 as street
-  if ((line1 || line2 || line3) && (city || state || zip)) {
-    const parts: string[] = [];
-    if (line1 && String(line1).trim()) parts.push(String(line1).trim());
-    if (line2 && String(line2).trim()) parts.push(String(line2).trim());
-    if (line3 && String(line3).trim()) parts.push(String(line3).trim());
-    if (city && String(city).trim()) parts.push(String(city).trim());
-    if (state && String(state).trim()) parts.push(String(state).trim());
-    if (zip && String(zip).trim()) parts.push(String(zip).trim());
-    return parts.length > 0 ? parts.join(', ') : null;
-  }
-
-  // PATTERN 1: Pure multi-line address (Address, Address 2, Address 3 only)
-  if ((line1 || line2 || line3) && !city && !state && !zip && !street) {
-    const lines: string[] = [];
-    if (line1 && String(line1).trim()) lines.push(String(line1).trim());
-    if (line2 && String(line2).trim()) lines.push(String(line2).trim());
-    if (line3 && String(line3).trim()) lines.push(String(line3).trim());
-    return lines.length > 0 ? lines.join(', ') : null;
-  }
-
-  // PATTERN 2: Component address (Street, City, State, Zip)
-
-  // Build address parts
+  // Build complete address from ALL available parts
+  // This handles ANY combination: street/line1/line2/line3 + city/state/zip
   const parts: string[] = [];
   
-  // Add street address
+  // Add street or line1 (primary address line)
   if (street && String(street).trim()) {
     parts.push(String(street).trim());
+  } else if (line1 && String(line1).trim()) {
+    parts.push(String(line1).trim());
   }
-
-  // Build city, state zip line
-  const cityStateZip: string[] = [];
+  
+  // Add line2 and line3 (secondary address lines)
+  if (line2 && String(line2).trim()) {
+    parts.push(String(line2).trim());
+  }
+  if (line3 && String(line3).trim()) {
+    parts.push(String(line3).trim());
+  }
+  
+  // Add city, state, zip
   if (city && String(city).trim()) {
-    cityStateZip.push(String(city).trim());
+    parts.push(String(city).trim());
   }
   if (state && String(state).trim()) {
-    cityStateZip.push(String(state).trim());
+    parts.push(String(state).trim());
   }
   if (zip && String(zip).trim()) {
-    cityStateZip.push(String(zip).trim());
-  }
-
-  if (cityStateZip.length > 0) {
-    parts.push(cityStateZip.join(' '));
+    parts.push(String(zip).trim());
   }
 
   // Return combined address or null if nothing
