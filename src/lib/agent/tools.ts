@@ -88,7 +88,7 @@ export const agentTools = {
           updatedAt: goal.updated_at,
         };
 
-        const progress = calculateGoalProgress(goalObj, orders || [], deals, clients);
+        const progress = calculateGoalProgress(goalObj, orders || [], deals || [], clients || []);
         
         return {
           ...goalObj,
