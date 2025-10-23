@@ -60,30 +60,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate idempotency key WITHOUT timestamp for duplicate prevention
+    // Generate idempotency key (simple version without base_idempotency_key for now)
     const mappingHash = generateHash(JSON.stringify(mappings));
-    const baseIdempotencyKey = `${user.id}_${mappingHash}_${fileHash}`;
-
-    // Check for existing job with same base idempotency key
-    const { data: existingJob } = await supabase
-      .from('migration_jobs')
-      .select('id, status, base_idempotency_key')
-      .eq('base_idempotency_key', baseIdempotencyKey)
-      .maybeSingle();
-
-    // If there's an existing job that's still processing, return it
-    if (existingJob && (existingJob.status === 'processing' || existingJob.status === 'pending')) {
-      return NextResponse.json({
-        jobId: existingJob.id,
-        message: 'Job already in progress',
-      });
-    }
-
-    // Create unique idempotency key with timestamp for this specific job
     const timestamp = Date.now();
-    const uniqueIdempotencyKey = `${baseIdempotencyKey}_${timestamp}`;
+    const idempotencyKey = `${user.id}_${mappingHash}_${fileHash}_${timestamp}`;
 
-    // Create migration job with both keys
+    // Create migration job
     const { data: job, error: jobError } = await supabase
       .from('migration_jobs')
       .insert({
@@ -93,8 +75,7 @@ export async function POST(request: NextRequest) {
         mode: 'csv',
         status: 'pending',
         mapping: mappings,
-        idempotency_key: uniqueIdempotencyKey,
-        base_idempotency_key: baseIdempotencyKey,
+        idempotency_key: idempotencyKey,
         totals: { total: 0, inserted: 0, updated: 0, skipped: 0, errors: 0 },
       })
       .select()
