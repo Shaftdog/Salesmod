@@ -1224,10 +1224,11 @@ async function upsertPropertyForOrder(
             };
           }
           
-          // Track validation results
-          if (validationResult.isValid) {
+          // Track validation results based on confidence score
+          // HIGH (0.8+) = verified, MEDIUM (0.5-0.8) = partial, LOW (<0.5) = failed
+          if (validationResult.confidence >= 0.8) {
             metrics.address_validation.verified++;
-          } else if (validationResult.isPartial) {
+          } else if (validationResult.confidence >= 0.5) {
             metrics.address_validation.partial++;
           } else {
             metrics.address_validation.failed++;
