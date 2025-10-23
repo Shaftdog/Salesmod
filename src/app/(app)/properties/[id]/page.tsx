@@ -164,7 +164,7 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
     );
   }
 
-  if (isLoading) {
+  if (isLoading || !data) {
     return (
       <div className="container mx-auto p-6">
         <div className="flex justify-center items-center h-32">
