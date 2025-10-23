@@ -64,6 +64,12 @@ const formSchema = z.object({
   dueDate: z.date({ required_error: "Due date is required" }),
   feeAmount: z.string().min(1, "Fee is required"),
   assignedTo: z.string().optional(),
+  
+  // Important Dates
+  orderedDate: z.date().optional(),
+  assignedDate: z.date().optional(),
+  completedDate: z.date().optional(),
+  deliveredDate: z.date().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -104,6 +110,10 @@ export function OrderEditForm({ order, appraisers, clients: initialClients }: Or
       feeAmount: order.feeAmount?.toString() || "",
       assignedTo: order.assignedTo || "unassigned",
       dueDate: order.dueDate ? parseISO(order.dueDate) : new Date(),
+      orderedDate: order.orderedDate ? parseISO(order.orderedDate) : undefined,
+      assignedDate: order.assignedDate ? parseISO(order.assignedDate) : undefined,
+      completedDate: order.completedDate ? parseISO(order.completedDate) : undefined,
+      deliveredDate: order.deliveredDate ? parseISO(order.deliveredDate) : undefined,
     },
   });
 
@@ -170,6 +180,10 @@ export function OrderEditForm({ order, appraisers, clients: initialClients }: Or
         processor_name: data.processorName,
         access_instructions: data.accessInstructions,
         special_instructions: data.specialInstructions,
+        ordered_date: data.orderedDate ? formatISO(data.orderedDate) : undefined,
+        assigned_date: data.assignedDate ? formatISO(data.assignedDate) : undefined,
+        completed_date: data.completedDate ? formatISO(data.completedDate) : undefined,
+        delivered_date: data.deliveredDate ? formatISO(data.deliveredDate) : undefined,
       } as any);
       
       // Redirect back to order detail page
@@ -506,6 +520,151 @@ const OrderDetailsFields = ({ appraisers }: { appraisers: User[] }) => {
                     <FormMessage />
                 </FormItem>
             )} />
+
+            <div className="pt-4 border-t">
+                <h4 className="text-sm font-medium mb-4">Important Dates</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField control={control} name="orderedDate" render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                            <FormLabel>Ordered Date <span className="text-muted-foreground">(optional)</span></FormLabel>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                <FormControl>
+                                    <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                        "w-full pl-3 text-left font-normal",
+                                        !field.value && "text-muted-foreground"
+                                    )}
+                                    >
+                                    {field.value ? (
+                                        format(field.value, "PPP")
+                                    ) : (
+                                        <span>Pick a date</span>
+                                    )}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                    mode="single"
+                                    selected={field.value}
+                                    onSelect={field.onChange}
+                                    initialFocus
+                                />
+                                </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                        </FormItem>
+                    )} />
+
+                    <FormField control={control} name="assignedDate" render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                            <FormLabel>Assigned Date <span className="text-muted-foreground">(optional)</span></FormLabel>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                <FormControl>
+                                    <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                        "w-full pl-3 text-left font-normal",
+                                        !field.value && "text-muted-foreground"
+                                    )}
+                                    >
+                                    {field.value ? (
+                                        format(field.value, "PPP")
+                                    ) : (
+                                        <span>Pick a date</span>
+                                    )}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                    mode="single"
+                                    selected={field.value}
+                                    onSelect={field.onChange}
+                                    initialFocus
+                                />
+                                </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                        </FormItem>
+                    )} />
+
+                    <FormField control={control} name="completedDate" render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                            <FormLabel>Completed Date <span className="text-muted-foreground">(optional)</span></FormLabel>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                <FormControl>
+                                    <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                        "w-full pl-3 text-left font-normal",
+                                        !field.value && "text-muted-foreground"
+                                    )}
+                                    >
+                                    {field.value ? (
+                                        format(field.value, "PPP")
+                                    ) : (
+                                        <span>Pick a date</span>
+                                    )}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                    mode="single"
+                                    selected={field.value}
+                                    onSelect={field.onChange}
+                                    initialFocus
+                                />
+                                </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                        </FormItem>
+                    )} />
+
+                    <FormField control={control} name="deliveredDate" render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                            <FormLabel>Delivered Date <span className="text-muted-foreground">(optional)</span></FormLabel>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                <FormControl>
+                                    <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                        "w-full pl-3 text-left font-normal",
+                                        !field.value && "text-muted-foreground"
+                                    )}
+                                    >
+                                    {field.value ? (
+                                        format(field.value, "PPP")
+                                    ) : (
+                                        <span>Pick a date</span>
+                                    )}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                    mode="single"
+                                    selected={field.value}
+                                    onSelect={field.onChange}
+                                    initialFocus
+                                />
+                                </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                        </FormItem>
+                    )} />
+                </div>
+            </div>
         </div>
     )
 }

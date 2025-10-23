@@ -160,8 +160,45 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                                 </p>
                             </div>
                         </div>
-                        <div className="min-h-[300px]">
-                            <OrderMap address={fullAddress} />
+                        <div className="space-y-4">
+                            <div className="min-h-[300px]">
+                                <OrderMap address={fullAddress} />
+                            </div>
+                            <div className="space-y-4">
+                                <h3 className="font-semibold">Important Dates</h3>
+                                <div className="grid grid-cols-1 gap-3">
+                                    <div>
+                                        <p className="text-sm font-medium">Ordered</p>
+                                        <p className="text-sm text-muted-foreground">
+                                            {format(new Date(order.orderedDate), "MMM dd, yyyy")}
+                                        </p>
+                                    </div>
+                                    {order.assignedDate && (
+                                        <div>
+                                            <p className="text-sm font-medium">Assigned</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                {format(new Date(order.assignedDate), "MMM dd, yyyy")}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {order.completedDate && (
+                                        <div>
+                                            <p className="text-sm font-medium">Completed</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                {format(new Date(order.completedDate), "MMM dd, yyyy")}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {order.deliveredDate && (
+                                        <div>
+                                            <p className="text-sm font-medium">Delivered</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                {format(new Date(order.deliveredDate), "MMM dd, yyyy")}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
