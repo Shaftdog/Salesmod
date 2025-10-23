@@ -558,6 +558,22 @@ async function processClient(
   duplicateStrategy: DuplicateStrategy,
   userId: string
 ): Promise<{ type: 'inserted' | 'updated' | 'skipped' }> {
+  // Handle multi-line address fields (Address, Address 2, Address 3 → single address field)
+  if (row['address.line1'] || row['address.line2'] || row['address.line3']) {
+    const parts = [
+      row['address.line1'],
+      row['address.line2'],
+      row['address.line3']
+    ].filter(p => p && p.trim() !== '');
+    
+    row.address = parts.join(', ') || 'N/A';
+    
+    // Clean up the component fields
+    delete row['address.line1'];
+    delete row['address.line2'];
+    delete row['address.line3'];
+  }
+  
   // Handle composite address fields (Street, City, State, Zip → single address field)
   if (row['address.street'] || row['address.city'] || row['address.state'] || row['address.zip']) {
     const parts = [
@@ -574,6 +590,22 @@ async function processClient(
     delete row['address.city'];
     delete row['address.state'];
     delete row['address.zip'];
+  }
+  
+  // Handle multi-line billing address fields (Billing Address, Billing Address 2, Billing Address 3)
+  if (row['billing_address.line1'] || row['billing_address.line2'] || row['billing_address.line3']) {
+    const parts = [
+      row['billing_address.line1'],
+      row['billing_address.line2'],
+      row['billing_address.line3']
+    ].filter(p => p && p.trim() !== '');
+    
+    row.billing_address = parts.join(', ') || row.address || 'N/A';
+    
+    // Clean up the component fields
+    delete row['billing_address.line1'];
+    delete row['billing_address.line2'];
+    delete row['billing_address.line3'];
   }
   
   // Handle billing address components if present
