@@ -155,10 +155,9 @@ export function FieldMapper({ state, setState, onNext, onPrev }: FieldMapperProp
       zip: mappings.find(m => m.targetField === 'billing_address.zip')?.sourceColumn,
     };
 
-    // Remove old composite mappings
+    // Keep all mappings including composite fields (don't remove them)
+    // Remove only old __composite__ special mappings
     const filtered = mappings.filter(m => 
-      !m.targetField.startsWith('address.') && 
-      !m.targetField.startsWith('billing_address.') &&
       m.sourceColumn !== '__composite_address__' &&
       m.sourceColumn !== '__composite_billing_address__'
     );
