@@ -277,12 +277,29 @@ export function combineAddress(
 ): string | null {
   if (!params || !fullRow) return null;
 
-  // PATTERN 1: Multi-line address (Address, Address 2, Address 3)
+  // Check what pattern is being used
   const line1 = params.line1 ? fullRow[params.line1] : null;
   const line2 = params.line2 ? fullRow[params.line2] : null;
   const line3 = params.line3 ? fullRow[params.line3] : null;
+  const street = params.street ? fullRow[params.street] : null;
+  const city = params.city ? fullRow[params.city] : null;
+  const state = params.state ? fullRow[params.state] : null;
+  const zip = params.zip ? fullRow[params.zip] : null;
 
-  if (line1 || line2 || line3) {
+  // MIXED PATTERN: If line1 is present with city/state/zip, treat line1 as street
+  if ((line1 || line2 || line3) && (city || state || zip)) {
+    const parts: string[] = [];
+    if (line1 && String(line1).trim()) parts.push(String(line1).trim());
+    if (line2 && String(line2).trim()) parts.push(String(line2).trim());
+    if (line3 && String(line3).trim()) parts.push(String(line3).trim());
+    if (city && String(city).trim()) parts.push(String(city).trim());
+    if (state && String(state).trim()) parts.push(String(state).trim());
+    if (zip && String(zip).trim()) parts.push(String(zip).trim());
+    return parts.length > 0 ? parts.join(', ') : null;
+  }
+
+  // PATTERN 1: Pure multi-line address (Address, Address 2, Address 3 only)
+  if ((line1 || line2 || line3) && !city && !state && !zip && !street) {
     const lines: string[] = [];
     if (line1 && String(line1).trim()) lines.push(String(line1).trim());
     if (line2 && String(line2).trim()) lines.push(String(line2).trim());
@@ -291,10 +308,6 @@ export function combineAddress(
   }
 
   // PATTERN 2: Component address (Street, City, State, Zip)
-  const street = params.street ? fullRow[params.street] : null;
-  const city = params.city ? fullRow[params.city] : null;
-  const state = params.state ? fullRow[params.state] : null;
-  const zip = params.zip ? fullRow[params.zip] : null;
 
   // Build address parts
   const parts: string[] = [];
