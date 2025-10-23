@@ -57,10 +57,17 @@ const uniqueIdempotencyKey = `${baseIdempotencyKey}_${timestamp}`;
 ALTER TABLE public.migration_jobs 
 ADD COLUMN IF NOT EXISTS base_idempotency_key TEXT;
 
--- Add unique constraint to prevent race conditions
-ALTER TABLE public.migration_jobs 
-ADD CONSTRAINT unique_base_idempotency_key 
-UNIQUE (user_id, base_idempotency_key);
+-- Clean up existing duplicates by marking them as cancelled
+-- Keeps only the first job for each base_idempotency_key
+WITH duplicates AS (...)
+UPDATE public.migration_jobs
+SET status = 'cancelled'
+WHERE is duplicate;
+
+-- Add unique index to prevent race conditions (excludes cancelled jobs)
+CREATE UNIQUE INDEX unique_base_idempotency_key_active
+ON public.migration_jobs(user_id, base_idempotency_key)
+WHERE status != 'cancelled';
 ```
 
 ## How It Works Now
