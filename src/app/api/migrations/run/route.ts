@@ -60,33 +60,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate idempotency key with timestamp to ensure uniqueness per import attempt
+    // Generate idempotency key WITHOUT timestamp for duplicate prevention
     const mappingHash = generateHash(JSON.stringify(mappings));
-    const timestamp = Date.now();
-    const idempotencyKey = `${user.id}_${mappingHash}_${fileHash}_${timestamp}`;
-
-    // Check for existing job with same file/mapping (without timestamp)
     const baseIdempotencyKey = `${user.id}_${mappingHash}_${fileHash}`;
-    const { data: existingJobs } = await supabase
-      .from('migration_jobs')
-      .select('id, status, idempotency_key')
-      .eq('user_id', user.id)
-      .like('idempotency_key', `${baseIdempotencyKey}%`)
-      .order('created_at', { ascending: false })
-      .limit(1);
 
-    // If there's a recent job that's still processing, return it
-    if (existingJobs && existingJobs.length > 0) {
-      const recentJob = existingJobs[0];
-      if (recentJob.status === 'processing' || recentJob.status === 'pending') {
-        return NextResponse.json({
-          jobId: recentJob.id,
-          message: 'Job already in progress',
-        });
-      }
+    // Check for existing job with same base idempotency key
+    const { data: existingJob } = await supabase
+      .from('migration_jobs')
+      .select('id, status, base_idempotency_key')
+      .eq('base_idempotency_key', baseIdempotencyKey)
+      .maybeSingle();
+
+    // If there's an existing job that's still processing, return it
+    if (existingJob && (existingJob.status === 'processing' || existingJob.status === 'pending')) {
+      return NextResponse.json({
+        jobId: existingJob.id,
+        message: 'Job already in progress',
+      });
     }
 
-    // Create migration job
+    // Create unique idempotency key with timestamp for this specific job
+    const timestamp = Date.now();
+    const uniqueIdempotencyKey = `${baseIdempotencyKey}_${timestamp}`;
+
+    // Create migration job with both keys
     const { data: job, error: jobError } = await supabase
       .from('migration_jobs')
       .insert({
@@ -96,7 +93,8 @@ export async function POST(request: NextRequest) {
         mode: 'csv',
         status: 'pending',
         mapping: mappings,
-        idempotency_key: idempotencyKey,
+        idempotency_key: uniqueIdempotencyKey,
+        base_idempotency_key: baseIdempotencyKey,
         totals: { total: 0, inserted: 0, updated: 0, skipped: 0, errors: 0 },
       })
       .select()
