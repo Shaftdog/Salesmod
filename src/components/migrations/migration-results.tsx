@@ -35,6 +35,19 @@ export function MigrationResults({ state, onReset }: MigrationResultsProps) {
         fetch(`/api/migrations/errors?jobId=${state.jobId}`)
       ]);
 
+      // Handle 404 - job not found (likely completed and cleaned up)
+      if (statusResponse.status === 404) {
+        console.log('Job not found (404) - assuming completed');
+        setJobStatus({ 
+          status: 'completed', 
+          totals: { total: 0, inserted: 0, updated: 0, skipped: 0, errors: 0 }, 
+          progress: 100 
+        });
+        setErrors([]);
+        setLoading(false);
+        return;
+      }
+
       const statusData = await statusResponse.json();
       const errorsData = await errorsResponse.json();
 

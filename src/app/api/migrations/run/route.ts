@@ -788,6 +788,12 @@ async function processOrder(
   // Two-phase property upsert: Property → Order
   let propertyId: string | null = null;
   
+  // Preserve any city/state/zip that came from direct CSV mappings
+  const csvMappedCity = row.property_city?.trim();
+  const csvMappedState = row.property_state?.trim();
+  const csvMappedZip = row.property_zip?.trim();
+  const csvMappedAddress = row.property_address?.trim();
+  
   // Handle address parsing and property creation (only if auto-linking is enabled)
   if (autoLinkProperties) {
     // Check both row.props.original_address AND row['props.original_address'] (field mapping format)
@@ -805,11 +811,11 @@ async function processOrder(
       // Extract unit from street address
       const { street: streetNoUnit, unit, unitType } = extractUnit(street);
       
-      // Set order snapshot address (building-level, no unit)
-      row.property_address = streetNoUnit;
-      row.property_city = city;
-      row.property_state = state.toUpperCase();
-      row.property_zip = zip;
+      // Set order snapshot address - prefer CSV-mapped values over parsed values
+      row.property_address = csvMappedAddress || streetNoUnit;
+      row.property_city = csvMappedCity || city;
+      row.property_state = (csvMappedState || state).toUpperCase();
+      row.property_zip = csvMappedZip || zip;
       
       // Move original address to props if it was in row level
       if (row['props.original_address']) {
@@ -900,6 +906,40 @@ async function processOrder(
       console.warn('Address parsing failed:', error);
       // Continue with import - address parsing failure shouldn't block the row
     }
+    }
+  }
+  
+  // NEW: Handle case where CSV provides address components directly (no original_address)
+  // If we have CSV-mapped address components but didn't parse from original_address, use them
+  if (!row.property_address && csvMappedAddress) {
+    row.property_address = csvMappedAddress;
+  }
+  if (!row.property_city && csvMappedCity) {
+    row.property_city = csvMappedCity;
+  }
+  if (!row.property_state && csvMappedState) {
+    row.property_state = csvMappedState.toUpperCase();
+  }
+  if (!row.property_zip && csvMappedZip) {
+    row.property_zip = csvMappedZip;
+  }
+  
+  // Try to link property if we have all required address components from CSV
+  if (autoLinkProperties && !propertyId && csvMappedAddress && csvMappedCity && csvMappedState && csvMappedZip) {
+    metrics.properties.link_attempted++;
+    propertyId = await upsertPropertyForOrder(supabase, userId, {
+      street: csvMappedAddress,
+      city: csvMappedCity,
+      state: csvMappedState.toUpperCase(),
+      zip: csvMappedZip,
+      type: row.property_type || 'single_family'
+    }, metrics);
+    
+    if (propertyId) {
+      metrics.properties.linked++;
+      metrics.properties.upserts++;
+    } else {
+      metrics.properties.unlinked++;
     }
   }
   

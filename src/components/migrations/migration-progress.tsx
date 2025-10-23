@@ -19,6 +19,7 @@ export function MigrationProgress({ state, setState, onNext }: MigrationProgress
   const [status, setStatus] = useState<any>(null);
   const [polling, setPolling] = useState(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -28,9 +29,21 @@ export function MigrationProgress({ state, setState, onNext }: MigrationProgress
       pollStatus();
     }
 
+    // Set a timeout to stop polling after 10 minutes to prevent infinite loops
+    timeoutRef.current = setTimeout(() => {
+      console.log('Migration polling timeout - stopping');
+      setPolling(false);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    }, 10 * 60 * 1000); // 10 minutes
+
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
       }
     };
   }, []);
@@ -86,6 +99,23 @@ export function MigrationProgress({ state, setState, onNext }: MigrationProgress
     const poll = async () => {
       try {
         const response = await fetch(`/api/migrations/status?jobId=${id}`);
+        
+        // Handle 404 - job not found (likely completed and cleaned up)
+        if (response.status === 404) {
+          console.log('Job not found (404) - assuming completed');
+          setPolling(false);
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+          }
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+          }
+          setStatus({ status: 'completed', totals: { total: 0, inserted: 0, updated: 0, skipped: 0, errors: 0 }, progress: 100 });
+          setState((prev) => ({ ...prev, completed: true }));
+          setTimeout(() => onNext(), 1000);
+          return;
+        }
+
         const statusData = await response.json();
         setStatus(statusData);
 
@@ -93,6 +123,9 @@ export function MigrationProgress({ state, setState, onNext }: MigrationProgress
           setPolling(false);
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
+          }
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
           }
 
           if (statusData.status === 'completed') {
@@ -102,6 +135,14 @@ export function MigrationProgress({ state, setState, onNext }: MigrationProgress
         }
       } catch (error) {
         console.error('Status polling error:', error);
+        // Stop polling on network errors to prevent infinite loops
+        setPolling(false);
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+        }
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
       }
     };
 
