@@ -72,7 +72,7 @@ export async function executeComputerUseTask(
             type: 'bash_20241022',
             name: 'bash',
           } as any,
-        ],
+        ] as any,
         messages,
       });
 
