@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
       entity,
       source,
       duplicateStrategy = 'update',
+      options = { autoLinkProperties: true },
     } = body as {
       fileData: string;
       fileHash: string;
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest) {
       entity: 'contacts' | 'clients' | 'orders';
       source: string;
       duplicateStrategy: DuplicateStrategy;
+      options?: { autoLinkProperties?: boolean };
     };
 
     if (!fileData || !mappings || !entity) {
@@ -110,7 +112,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Start processing in background (no await)
-    processMigration(job.id, fileData, mappings, entity, source, duplicateStrategy, user.id).catch(
+    processMigration(job.id, fileData, mappings, entity, source, duplicateStrategy, user.id, options).catch(
       (error) => {
         console.error('❌ Migration processing error (caught in main):', error);
         console.error('Error stack:', error.stack);
@@ -144,19 +146,51 @@ async function processMigration(
   entity: 'contacts' | 'clients' | 'orders',
   source: string,
   duplicateStrategy: DuplicateStrategy,
-  userId: string
+  userId: string,
+  options: { autoLinkProperties?: boolean } = { autoLinkProperties: true }
 ) {
   // Use service role client to bypass RLS for bulk imports
   const supabase = createServiceRoleClient();
 
   try {
+    const startTime = Date.now();
+    const autoLinkProperties = options.autoLinkProperties ?? true;
+    
     console.log('🚀 Migration Processing - Starting:', {
       jobId,
       fileDataLength: fileData?.length,
       fileDataPreview: fileData?.substring(0, 200),
       entity,
       mappingsCount: mappings?.length,
+      autoLinkProperties,
     });
+
+    // Initialize metrics
+    const metrics = {
+      job_id: jobId,
+      source,
+      totals: {
+        read: 0,
+        created: 0,
+        updated: 0,
+        deduped: 0,
+        skipped_no_external_id: 0,
+      },
+      address_validation: {
+        verified: 0,
+        partial: 0,
+        failed: 0,
+        unavailable: 0,
+      },
+      properties: {
+        upserts: 0,
+        link_attempted: 0,
+        linked: 0,
+        unlinked: 0,
+      },
+      link_rate: 0,
+      duration_ms: 0,
+    };
 
     // Update job to processing
     await supabase
@@ -177,6 +211,8 @@ async function processMigration(
       totalRows: rows.length,
       firstRow: rows[0],
     });
+    
+    // Initialize totals and metrics
     const totals: MigrationTotals = {
       total: rows.length,
       inserted: 0,
@@ -184,6 +220,8 @@ async function processMigration(
       skipped: 0,
       errors: 0,
     };
+    
+    metrics.totals.read = rows.length;
 
     // Build mapping lookup
     const mappingLookup = new Map<string, FieldMapping>();
@@ -237,7 +275,9 @@ async function processMigration(
             entity,
             source,
             duplicateStrategy,
-            userId
+            userId,
+            autoLinkProperties,
+            metrics
           );
 
           console.log(`✅ Row ${rowIndex + 1} processed:`, result.type);
@@ -274,6 +314,16 @@ async function processMigration(
         .eq('id', jobId);
     }
 
+    // Calculate final metrics
+    metrics.totals.created = totals.inserted;
+    metrics.totals.updated = totals.updated;
+    metrics.totals.deduped = totals.skipped;
+    metrics.totals.skipped_no_external_id = totals.skipped;
+    metrics.link_rate = metrics.properties.link_attempted > 0 
+      ? metrics.properties.linked / metrics.properties.link_attempted 
+      : 0;
+    metrics.duration_ms = Date.now() - startTime;
+
     // Mark job as completed
     await supabase
       .from('migration_jobs')
@@ -281,6 +331,7 @@ async function processMigration(
         status: 'completed',
         finished_at: new Date().toISOString(),
         totals,
+        metrics,
       })
       .eq('id', jobId);
   } catch (error: any) {
@@ -308,7 +359,9 @@ async function processRow(
   entity: 'contacts' | 'clients' | 'orders',
   source: string,
   duplicateStrategy: DuplicateStrategy,
-  userId: string
+  userId: string,
+  autoLinkProperties: boolean,
+  metrics: any
 ): Promise<{ type: 'inserted' | 'updated' | 'skipped' }> {
   const transformedRow: Record<string, any> = {};
   const propsData: Record<string, any> = {};
@@ -349,7 +402,7 @@ async function processRow(
     case 'clients':
       return await processClient(supabase, transformedRow, source, duplicateStrategy, userId);
     case 'orders':
-      return await processOrder(supabase, transformedRow, source, duplicateStrategy, userId);
+      return await processOrder(supabase, transformedRow, source, duplicateStrategy, userId, autoLinkProperties, metrics);
     default:
       throw new Error(`Unsupported entity: ${entity}`);
   }
@@ -674,7 +727,9 @@ async function processOrder(
   row: Record<string, any>,
   source: string,
   duplicateStrategy: DuplicateStrategy,
-  userId: string
+  userId: string,
+  autoLinkProperties: boolean,
+  metrics: any
 ): Promise<{ type: 'inserted' | 'updated' | 'skipped' }> {
   // Set source
   if (source) {
@@ -733,11 +788,12 @@ async function processOrder(
   // Two-phase property upsert: Property → Order
   let propertyId: string | null = null;
   
-  // Handle address parsing and property creation
-  // Check both row.props.original_address AND row['props.original_address'] (field mapping format)
-  const originalAddress = row.props?.original_address || row['props.original_address'];
-  
-  if (originalAddress && !row.property_address) {
+  // Handle address parsing and property creation (only if auto-linking is enabled)
+  if (autoLinkProperties) {
+    // Check both row.props.original_address AND row['props.original_address'] (field mapping format)
+    const originalAddress = row.props?.original_address || row['props.original_address'];
+    
+    if (originalAddress && !row.property_address) {
     try {
       console.log('🏠 Parsing address:', originalAddress);
       
@@ -775,13 +831,21 @@ async function processOrder(
       
       // Upsert property (building-level, no unit in identity)
       if (streetNoUnit && city && state && zip) {
+        metrics.properties.link_attempted++;
         propertyId = await upsertPropertyForOrder(supabase, userId, {
           street: streetNoUnit,
           city,
           state: state.toUpperCase(),
           zip,
           type: row.property_type
-        });
+        }, metrics);
+        
+        if (propertyId) {
+          metrics.properties.linked++;
+          metrics.properties.upserts++;
+        } else {
+          metrics.properties.unlinked++;
+        }
       }
       
       // Create property_unit if unit extracted and should be created
@@ -835,6 +899,7 @@ async function processOrder(
     } catch (error) {
       console.warn('Address parsing failed:', error);
       // Continue with import - address parsing failure shouldn't block the row
+    }
     }
   }
   
@@ -1090,7 +1155,8 @@ async function upsertPropertyForOrder(
     state: string;
     zip: string;
     type?: string;
-  }
+  },
+  metrics: any
 ): Promise<string | null> {
   try {
     // Validate address if we have all required fields
@@ -1119,9 +1185,19 @@ async function upsertPropertyForOrder(
               type: addr.type
             };
           }
+          
+          // Track validation results
+          if (validationResult.isValid) {
+            metrics.address_validation.verified++;
+          } else if (validationResult.isPartial) {
+            metrics.address_validation.partial++;
+          } else {
+            metrics.address_validation.failed++;
+          }
         }
       } catch (validationError) {
         console.warn('Address validation failed during import:', validationError);
+        metrics.address_validation.unavailable++;
         // Continue with original address if validation fails
       }
     }

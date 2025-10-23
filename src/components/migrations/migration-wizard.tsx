@@ -31,6 +31,11 @@ export interface WizardState {
   dryRunResult: DryRunResult | null;
   duplicateStrategy: DuplicateStrategy;
   
+  // Step 4.5: Options
+  options: {
+    autoLinkProperties: boolean;
+  };
+  
   // Step 5: Execution
   jobId: string | null;
   
@@ -48,6 +53,9 @@ const initialState: WizardState = {
   mappings: [],
   dryRunResult: null,
   duplicateStrategy: 'update',
+  options: {
+    autoLinkProperties: true, // default ON
+  },
   jobId: null,
   completed: false,
 };

@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -176,6 +177,37 @@ export function DryRunResults({ state, setState, onNext, onPrev }: DryRunResults
               </div>
             </RadioGroup>
           </div>
+
+          {/* Auto-link Properties Toggle - only for Orders */}
+          {state.entity === 'orders' && (
+            <div className="space-y-3 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-base font-semibold">Auto-link Properties</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Validate addresses and create/attach properties during Orders import
+                  </p>
+                </div>
+                <Switch
+                  checked={state.options?.autoLinkProperties ?? true}
+                  onCheckedChange={(checked) => {
+                    setState((prev) => ({
+                      ...prev,
+                      options: { ...prev.options, autoLinkProperties: checked }
+                    }));
+                  }}
+                />
+              </div>
+              {!state.options?.autoLinkProperties && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Property linking disabled. You can run backfill later to link orders to properties.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
 
           {/* Validation Errors */}
           {hasErrors && (

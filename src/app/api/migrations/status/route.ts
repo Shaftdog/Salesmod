@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     const { data: job, error } = await supabase
       .from('migration_jobs')
-      .select('id, status, totals, started_at, finished_at, error_message')
+      .select('id, status, totals, metrics, started_at, finished_at, error_message')
       .eq('id', jobId)
       .eq('user_id', user.id)
       .single();
@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       status: job.status,
       totals,
+      metrics: job.metrics,
       progress,
       started_at: job.started_at,
       finished_at: job.finished_at,

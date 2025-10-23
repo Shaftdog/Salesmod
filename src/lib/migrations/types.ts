@@ -105,3 +105,36 @@ export interface UploadedFile {
   data: string; // base64 or text content
 }
 
+export type ImportMetrics = {
+  job_id: string;
+  source: string;
+  totals: {
+    read: number;
+    created: number;
+    updated: number;
+    deduped: number;
+    skipped_no_external_id: number;
+  };
+  address_validation: {
+    verified: number;
+    partial: number;
+    failed: number;
+    unavailable: number;
+  };
+  properties: {
+    upserts: number;
+    link_attempted: number;
+    linked: number;
+    unlinked: number;
+  };
+  link_rate: number; // 0..1
+  duration_ms: number;
+};
+
+export interface ImportRunResponse {
+  ok: boolean;
+  jobId: string;
+  metrics?: ImportMetrics;
+  actions?: { suggest_backfill?: boolean };
+}
+

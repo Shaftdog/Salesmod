@@ -56,6 +56,7 @@ export function MigrationProgress({ state, setState, onNext }: MigrationProgress
           entity: state.entity,
           source: state.source,
           duplicateStrategy: state.duplicateStrategy,
+          options: state.options,
         }),
       });
 

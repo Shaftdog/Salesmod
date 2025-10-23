@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CheckCircle2, AlertCircle, Download, RotateCcw, ExternalLink } from "lucide-react";
 import { WizardState } from "./migration-wizard";
+import ImportRunMetrics from "./import-run-metrics";
 import Link from "next/link";
 
 interface MigrationResultsProps {
@@ -90,6 +91,21 @@ export function MigrationResults({ state, onReset }: MigrationResultsProps) {
 
   return (
     <div className="space-y-6">
+      {/* Metrics Banner - only for orders with completed imports */}
+      {state.entity === 'orders' && jobStatus?.status === 'completed' && jobStatus?.metrics && (
+        <ImportRunMetrics
+          metrics={jobStatus.metrics}
+          suggestBackfill={jobStatus.metrics.link_rate < 0.90}
+          onRunBackfill={async () => {
+            await fetch("/api/admin/properties/backfill", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ dryRun: false })
+            });
+          }}
+        />
+      )}
+
       {/* Status Banner */}
       <Card className={isSuccess ? 'border-green-500 bg-green-50' : 'border-yellow-500 bg-yellow-50'}>
         <CardContent className="py-6">
