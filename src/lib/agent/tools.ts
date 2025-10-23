@@ -84,7 +84,6 @@ export const agentTools: any = {
           periodEnd: goal.period_end,
           description: goal.description,
           isActive: goal.is_active,
-          createdBy: goal.created_by,
           createdAt: goal.created_at,
           updatedAt: goal.updated_at,
         };
