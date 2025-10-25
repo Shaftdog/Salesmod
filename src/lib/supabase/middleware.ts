@@ -58,13 +58,28 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   // Protect routes that require authentication
-  const protectedRoutes = ['/dashboard', '/orders', '/clients', '/deals', '/tasks', '/settings', '/migrations'];
-  const isProtectedRoute = protectedRoutes.some(route => 
+  const protectedRoutes = ['/dashboard', '/orders', '/clients', '/deals', '/tasks', '/settings', '/migrations', '/admin'];
+  const isProtectedRoute = protectedRoutes.some(route =>
     request.nextUrl.pathname.startsWith(route)
   );
 
   if (!user && isProtectedRoute) {
     return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // Protect admin routes - require admin role
+  if (user && request.nextUrl.pathname.startsWith('/admin')) {
+    // Get user's role from profiles table
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    // Redirect to dashboard if user is not an admin
+    if (!profile || profile.role !== 'admin') {
+      return NextResponse.redirect(new URL('/dashboard?error=unauthorized', request.url))
+    }
   }
 
   // Redirect to dashboard if logged in and trying to access login
