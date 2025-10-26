@@ -1,0 +1,60 @@
+🔌 Connecting to database...
+✅ Connected!
+
+============================================================
+SMART REASSIGNMENT OF 458 UNASSIGNED ORDERS
+============================================================
+
+📋 Reading original CSV data...
+✅ Loaded 1319 orders from CSV
+
+📋 Building Task ID → Client Name mapping...
+✅ Mapped 1319 task IDs
+
+📋 Fetching unassigned orders from database...
+✅ Found 458 unassigned orders
+
+📋 Matching orders to clients...
+
+Matched orders by client:
+============================================================
+  i Fund Cities LLC                            : 222 orders
+  Lima One Capital                             : 68 orders
+  Plains Commerce Bank                         : 23 orders
+  Bluebird Valuation                           : 3 orders
+
+Total matched: 316 / 458
+Remaining unmatched: 142
+
+📋 Executing reassignments...
+
+✅ i Fund Cities LLC                        - 222 orders reassigned
+✅ Lima One Capital                         - 68 orders reassigned
+✅ Plains Commerce Bank                     - 23 orders reassigned
+✅ Bluebird Valuation                       - 3 orders reassigned
+
+============================================================
+📊 FINAL RESULTS
+============================================================
+
+Total reassigned: 316 orders
+Remaining unassigned: 142 orders
+Success rate: 69.0%
+
+Top 10 Clients After Reassignment:
+   1. VISION                                   - 328 orders
+   2. i Fund Cities LLC                        - 229 orders
+   3. Consolidated Analytics                   - 74 orders
+   4. Lima One Capital                         - 68 orders
+   5. Great SouthBay Appraisal Management Comp - 55 orders
+   6. Bluebird Valuation                       - 34 orders
+   7. MTS GROUP LLC                            - 33 orders
+   8. Amo Services                             - 29 orders
+   9. Home Base Appraisal Management           - 28 orders
+  10. Class Valuation                          - 26 orders
+
+============================================================
+✅ SMART REASSIGNMENT COMPLETE!
+============================================================
+
+🔌 Connection closed.

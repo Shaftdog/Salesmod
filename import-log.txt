@@ -1,0 +1,56 @@
+🔌 Connecting to Supabase (Session Pooler)...
+✅ Connected successfully!
+
+📊 Checking current database state...
+   Current orders: 22
+   Current clients: 414
+
+🚀 Starting batch import...
+
+==================================================
+
+📦 Batch 1/5: import-historical-batch-1-safe.sql
+   Executing 300 INSERT statements...
+   ✅ Batch 1 complete! (0.9s)
+   Progress: 300/1,319 orders imported
+
+📦 Batch 2/5: import-historical-batch-2-safe.sql
+   Executing 300 INSERT statements...
+   ✅ Batch 2 complete! (0.7s)
+   Progress: 600/1,319 orders imported
+
+📦 Batch 3/5: import-historical-batch-3-safe.sql
+   Executing 300 INSERT statements...
+   ✅ Batch 3 complete! (0.7s)
+   Progress: 900/1,319 orders imported
+
+📦 Batch 4/5: import-historical-batch-4-safe.sql
+   Executing 300 INSERT statements...
+   ❌ Batch 4 failed: new row for relation "orders" violates check constraint "orders_sales_campaign_check"
+
+⚠️  Batch 4 failed. Stopping import.
+   Error: new row for relation "orders" violates check constraint "orders_sales_campaign_check"
+
+==================================================
+
+🔍 Verifying import...
+
+✅ IMPORT COMPLETE!
+===================
+Total orders in database: 922
+Newly imported this session: 900
+
+Status distribution:
+  completed      : 916 orders
+  new            : 3 orders
+  assigned       : 2 orders
+  in_progress    : 1 orders
+
+🎉 All historical orders successfully imported!
+
+Next steps:
+1. Create properties for all orders
+2. Link orders to properties
+3. Verify complete system
+
+🔌 Database connection closed.

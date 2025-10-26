@@ -1,0 +1,145 @@
+{
+  "stats": {
+    "totalOrders": 1319,
+    "hasAppraisedPropertyAddress": 1302,
+    "hasNameAddress": 1318,
+    "hasClientName": 1298,
+    "hasAMCClient": 1301,
+    "hasLenderClient": 137,
+    "hasCompletedDate": 1317,
+    "uniqueClients": {},
+    "dateRange": {
+      "min": "2023-05-02",
+      "max": "2025-09-25"
+    }
+  },
+  "topClients": [
+    [
+      "[Unknown]",
+      458
+    ],
+    [
+      "VISION",
+      328
+    ],
+    [
+      "Consolidated Analytics",
+      74
+    ],
+    [
+      "Great SouthBay Appraisal Management Company",
+      55
+    ],
+    [
+      "MTS GROUP LLC",
+      33
+    ],
+    [
+      "Bluebird Valuation",
+      31
+    ],
+    [
+      "Amo Services",
+      29
+    ],
+    [
+      "Home Base Appraisal Management",
+      28
+    ],
+    [
+      "Class Valuation",
+      26
+    ],
+    [
+      "AppraiserVendor.com, LLC",
+      24
+    ],
+    [
+      "E STREET APPRAISAL MANAGEMENT LLC (EVO)",
+      24
+    ],
+    [
+      "Appraisal Nation",
+      19
+    ],
+    [
+      "Tamarisk",
+      19
+    ],
+    [
+      "Allstate Appraisal",
+      18
+    ],
+    [
+      "Nationwide Appraisal Network",
+      17
+    ],
+    [
+      "LRES Corporation",
+      15
+    ],
+    [
+      "Core Valuation Management",
+      15
+    ],
+    [
+      "NVS",
+      12
+    ],
+    [
+      "MountainSeed Appraisal Management",
+      9
+    ],
+    [
+      "Flagstar Bank",
+      8
+    ]
+  ],
+  "sampleOrders": [
+    {
+      "taskId": "1211470462214548",
+      "name": "2 ORANGE AVE WINTER GARDEN FL 34787",
+      "appraisedAddress": "2 ORANGE AVE WINTER GARDENFL34787",
+      "client": "Allstate Appraisal",
+      "fee": "500.00",
+      "createdAt": "2025-09-25",
+      "completedAt": "2025-10-03"
+    },
+    {
+      "taskId": "1211468628232794",
+      "name": "717 S Atlantic Ave Cocoa Beach FL 32931",
+      "appraisedAddress": "717 S Atlantic Ave Cocoa Beach FL 32931",
+      "client": "None",
+      "fee": "700.00",
+      "createdAt": "2025-09-25",
+      "completedAt": "2025-10-07"
+    },
+    {
+      "taskId": "1211462731288105",
+      "name": "3625 Boca Ciega Dr APT-111 Naples, FL 34112",
+      "appraisedAddress": "3625 Boca Ciega Dr APT-111 Naples, FL 34112",
+      "client": "None",
+      "fee": "650.00",
+      "createdAt": "2025-09-24",
+      "completedAt": "2025-10-07"
+    },
+    {
+      "taskId": "1211368451047049",
+      "name": "4523 ROSSMORE DR, Orlando, FL, 32810",
+      "appraisedAddress": "4523 ROSSMORE DR, Orlando, FL, 32810",
+      "client": "Consolidated Analytics",
+      "fee": "450.00",
+      "createdAt": "2025-09-15",
+      "completedAt": "2025-09-24"
+    },
+    {
+      "taskId": "1211366047207501",
+      "name": "270 Mockingbird Ln, Casselberry, FL 32707",
+      "appraisedAddress": "270 Mockingbird Ln, Casselberry, FL 32707",
+      "client": "None",
+      "fee": "600.00",
+      "createdAt": "2025-09-15",
+      "completedAt": "2025-09-22"
+    }
+  ]
+}

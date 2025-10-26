@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  computer-use:
+    image: ghcr.io/anthropics/anthropic-quickstarts:computer-use-demo-latest
+    container_name: computer-use-demo
+    ports:
+      - "5900:5900"  # VNC
+      - "8501:8501"  # Streamlit (if needed)
+      - "6080:6080"  # noVNC web interface
+      - "8080:8080"  # HTTP API
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - WIDTH=1024
+      - HEIGHT=768
+    volumes:
+      - computer-use-data:/home/computeruse
+    restart: unless-stopped
+
+volumes:
+  computer-use-data:

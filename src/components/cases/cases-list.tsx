@@ -36,6 +36,12 @@ export function CasesList({ clientId, orderId }: CasesListProps) {
   const createCase = useCreateCase();
   const updateCase = useUpdateCase();
 
+  // Debug logging
+  console.log('[CasesList] clients count:', clients.length);
+  console.log('[CasesList] orders count:', orders.length);
+  console.log('[CasesList] clients sample:', clients[0]);
+  console.log('[CasesList] orders sample:', orders[0]);
+
   const handleSubmit = async (data: any) => {
     if (!currentUser) return;
     

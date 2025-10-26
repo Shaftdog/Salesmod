@@ -68,7 +68,7 @@ export function AgentChat() {
     saveChatMessage.mutate({ role: 'user', content: userMessage.content });
 
     try {
-      const response = await fetch('/api/agent/chat-simple', { // Using simple for now - tools version has schema issues
+      const response = await fetch('/api/agent/chat-simple', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

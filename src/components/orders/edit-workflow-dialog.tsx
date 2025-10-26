@@ -166,7 +166,7 @@ export function EditWorkflowDialog({ order, open, onOpenChange }: EditWorkflowDi
 
               <div className="space-y-2">
                 <Label htmlFor="siteInfluence">Site Influence</Label>
-                <Select value={siteInfluence} onValueChange={setSiteInfluence}>
+                <Select value={siteInfluence} onValueChange={(value) => setSiteInfluence(value as any)}>
                   <SelectTrigger id="siteInfluence">
                     <SelectValue placeholder="Select site influence" />
                   </SelectTrigger>
@@ -182,7 +182,7 @@ export function EditWorkflowDialog({ order, open, onOpenChange }: EditWorkflowDi
 
               <div className="space-y-2">
                 <Label htmlFor="zoningType">Zoning Type</Label>
-                <Select value={zoningType} onValueChange={setZoningType}>
+                <Select value={zoningType} onValueChange={(value) => setZoningType(value as any)}>
                   <SelectTrigger id="zoningType">
                     <SelectValue placeholder="Select zoning" />
                   </SelectTrigger>
@@ -212,7 +212,7 @@ export function EditWorkflowDialog({ order, open, onOpenChange }: EditWorkflowDi
                 </div>
                 
                 {isMultiunit && (
-                  <Select value={multiunitType} onValueChange={setMultiunitType}>
+                  <Select value={multiunitType} onValueChange={(value) => setMultiunitType(value as any)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select multiunit type" />
                     </SelectTrigger>
@@ -240,7 +240,7 @@ export function EditWorkflowDialog({ order, open, onOpenChange }: EditWorkflowDi
                 </div>
                 
                 {isNewConstruction && (
-                  <Select value={newConstructionType} onValueChange={setNewConstructionType}>
+                  <Select value={newConstructionType} onValueChange={(value) => setNewConstructionType(value as any)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select construction type" />
                     </SelectTrigger>

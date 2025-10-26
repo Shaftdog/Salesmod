@@ -80,6 +80,9 @@ function buildPlanningPrompt(context: AgentContext): string {
   const {
     goals,
     clients,
+    properties,
+    cases,
+    allOrders,
     signals,
     memories,
     currentTime,
@@ -118,9 +121,41 @@ Recent Activity (Last 7 Days):
 `;
 
   // Format relevant memories
-  const memoriesText = memories.slice(0, 10).map(m => 
+  const memoriesText = memories.slice(0, 10).map(m =>
     `- ${m.key}: ${JSON.stringify(m.content).substring(0, 100)}...`
   ).join('\n');
+
+  // Format properties summary
+  const propertiesSummary = `
+Total Properties: ${properties.length}
+Property Types: ${Array.from(new Set(properties.map((p: any) => p.property_type))).join(', ')}
+Top Locations: ${Array.from(new Set(properties.slice(0, 50).map((p: any) => p.city))).slice(0, 10).join(', ')}
+`;
+
+  // Format cases summary
+  const openCases = cases.filter((c: any) => ['new', 'open', 'in_progress'].includes(c.status));
+  const highPriorityCases = cases.filter((c: any) => ['high', 'urgent', 'critical'].includes(c.priority));
+  const casesSummary = `
+Total Cases: ${cases.length}
+Open Cases: ${openCases.length}
+High Priority Cases: ${highPriorityCases.length}
+Case Types: ${Array.from(new Set(cases.map((c: any) => c.case_type))).join(', ')}
+${highPriorityCases.length > 0 ? `\n⚠️ High Priority Cases:\n${highPriorityCases.slice(0, 5).map((c: any) => `  - ${c.subject} (${c.priority}) - ${c.status}`).join('\n')}` : ''}
+`;
+
+  // Format order history summary
+  const recentOrders = allOrders.slice(0, 100); // Last 100 orders
+  const ordersByStatus = {
+    completed: allOrders.filter(o => o.status === 'completed').length,
+    new: allOrders.filter(o => o.status === 'new').length,
+    in_progress: allOrders.filter(o => ['in_progress', 'assigned', 'scheduled'].includes(o.status || '')).length,
+    in_review: allOrders.filter(o => ['in_review', 'revisions'].includes(o.status || '')).length,
+  };
+  const ordersSummary = `
+Total Orders (Recent 3000): ${allOrders.length}
+Status Breakdown: Completed: ${ordersByStatus.completed}, In Progress: ${ordersByStatus.in_progress}, In Review: ${ordersByStatus.in_review}, New: ${ordersByStatus.new}
+Recent Activity: ${recentOrders.length} orders in latest batch
+`;
 
   return `You are an AI Account Manager for a property appraisal management company. Your job is to proactively manage client relationships, drive revenue, and help achieve organizational goals.
 
@@ -132,6 +167,15 @@ ${goalsText}
 
 ## Top Priority Clients (ranked by urgency and opportunity)
 ${clientsText}
+
+## Property Portfolio Overview
+${propertiesSummary}
+
+## Support Cases Overview
+${casesSummary}
+
+## Order History Overview
+${ordersSummary}
 
 ## Recent Engagement Signals
 ${signalsText}
@@ -148,6 +192,8 @@ Analyze the current situation and propose 3-7 high-impact actions to achieve the
 4. **Nurture Pipeline**: Follow up on deals in progress, propose new opportunities
 5. **Smart Timing**: Avoid clients contacted in the last 3-5 days
 6. **Personalization**: Use client context to craft relevant, specific messages
+7. **Case Management**: Address high-priority or urgent support cases that need attention
+8. **Service Recovery**: Follow up with clients who have open complaints or quality concerns
 
 ## Action Types Available
 - **send_email**: Reach out via email (follow-ups, check-ins, proposals)

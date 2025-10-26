@@ -4,6 +4,13 @@ import { createClient } from '@/lib/supabase/server';
 import { searchRAG } from './rag';
 import { calculateGoalProgress } from '@/hooks/use-goals';
 import { searchWeb as webSearchFunction } from '../research/web-search';
+import {
+  executeComputerUseTask,
+  researchCompetitorPricing,
+  deepCompanyResearch,
+  isComputerUseAvailable,
+  getComputerUseStatus
+} from './computer-use';
 
 /**
  * Agent tools for conversational interaction
@@ -16,7 +23,7 @@ export const agentTools: any = {
     description: 'Search for clients by name, email, or other criteria. Use this when user asks about specific clients or wants to find clients.',
     parameters: z.object({
       query: z.string().min(1).describe('Search term (company name, contact name, email, etc.)'),
-    }).strict(),
+    }),
     execute: async ({ query }: { query: string }) => {
       const supabase = await createClient();
       
@@ -50,11 +57,11 @@ export const agentTools: any = {
    * Search for contacts
    */
   searchContacts: (tool as any)({
-    description: 'Search for individual contacts by name, email, role, or other criteria. Use this when user asks about specific people or wants to find contacts.',
+    description: 'Search for individual contacts by name, email, title, or other criteria. Use this when user asks about specific people or wants to find contacts.',
     parameters: z.object({
-      query: z.string().min(1).describe('Search term (first name, last name, email, role, etc.)'),
+      query: z.string().min(1).describe('Search term (first name, last name, email, title, etc.)'),
       clientId: z.string().optional().describe('Optional: filter by specific client UUID'),
-    }).strict(),
+    }),
     execute: async ({ query, clientId }: { query: string; clientId?: string }) => {
       const supabase = await createClient();
 
@@ -66,7 +73,7 @@ export const agentTools: any = {
           last_name,
           email,
           phone,
-          role,
+          title,
           is_primary,
           client_id,
           client:clients(
@@ -75,7 +82,7 @@ export const agentTools: any = {
           ),
           created_at
         `)
-        .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%,role.ilike.%${query}%`)
+        .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%,title.ilike.%${query}%`)
         .limit(10);
 
       if (clientId) {
@@ -96,7 +103,7 @@ export const agentTools: any = {
           lastName: contact.last_name,
           email: contact.email,
           phone: contact.phone,
-          role: contact.role,
+          title: contact.title,
           isPrimary: contact.is_primary,
           client: contact.client ? {
             id: contact.client.id,
@@ -402,7 +409,7 @@ export const agentTools: any = {
     execute: async ({ query, maxResults }: { query: string; maxResults?: number }) => {
       try {
         const results = await webSearchFunction(query, maxResults);
-        
+
         if (results.length === 0) {
           return {
             message: 'No search results found. Tavily API key may not be configured.',
@@ -429,6 +436,137 @@ export const agentTools: any = {
           count: 0,
         };
       }
+    },
+  } as any),
+
+  /**
+   * Computer Use - Visual research task
+   */
+  computerUseTask: (tool as any)({
+    description: 'Execute a computer use task for visual research. Use this for: browsing websites visually, extracting data from web pages, competitive research, or any task requiring actual web browsing. This is more expensive and slower than APIs, so only use when necessary.',
+    parameters: z.object({
+      instruction: z.string().describe('Detailed instruction for what to do (e.g., "Go to competitor.com and extract all pricing information")'),
+      maxSteps: z.number().optional().default(15).describe('Maximum steps to execute (default: 15)'),
+    }),
+    execute: async ({ instruction, maxSteps }: { instruction: string; maxSteps?: number }) => {
+      // Check if computer use is available
+      const status = getComputerUseStatus();
+      if (!status.available) {
+        return {
+          error: `Computer Use is not available: ${status.reason}`,
+          message: 'Computer Use requires additional infrastructure setup.',
+          requirements: status.requirements,
+          available: false,
+        };
+      }
+
+      try {
+        const result = await executeComputerUseTask({
+          instruction,
+          maxSteps,
+        });
+
+        return {
+          success: result.success,
+          output: result.finalOutput,
+          steps: result.steps,
+          screenshots: result.screenshots?.length || 0,
+          error: result.error,
+        };
+      } catch (error: any) {
+        return {
+          success: false,
+          error: error.message,
+          message: 'Computer Use task failed',
+        };
+      }
+    },
+  } as any),
+
+  /**
+   * Research competitor pricing
+   */
+  researchCompetitorPricing: (tool as any)({
+    description: 'Research competitor pricing by visiting their website and extracting pricing information. Returns structured pricing data.',
+    parameters: z.object({
+      competitorUrl: z.string().describe('URL of the competitor website'),
+    }),
+    execute: async ({ competitorUrl }: { competitorUrl: string }) => {
+      const status = getComputerUseStatus();
+      if (!status.available) {
+        return {
+          error: `Computer Use is not available: ${status.reason}`,
+          available: false,
+        };
+      }
+
+      try {
+        const result = await researchCompetitorPricing(competitorUrl);
+        return result;
+      } catch (error: any) {
+        return {
+          success: false,
+          error: error.message,
+          pricing: [],
+          analysis: 'Failed to research competitor pricing',
+        };
+      }
+    },
+  } as any),
+
+  /**
+   * Deep company research
+   */
+  deepCompanyResearch: (tool as any)({
+    description: 'Perform deep research on a company by browsing their website and gathering information. Returns a comprehensive report.',
+    parameters: z.object({
+      companyName: z.string().describe('Name of the company to research'),
+      companyWebsite: z.string().optional().describe('Company website URL (optional, will search if not provided)'),
+    }),
+    execute: async ({ companyName, companyWebsite }: { companyName: string; companyWebsite?: string }) => {
+      const status = getComputerUseStatus();
+      if (!status.available) {
+        return {
+          error: `Computer Use is not available: ${status.reason}`,
+          available: false,
+          report: null,
+        };
+      }
+
+      try {
+        const report = await deepCompanyResearch(companyName, companyWebsite);
+        return {
+          success: true,
+          company: companyName,
+          report,
+        };
+      } catch (error: any) {
+        return {
+          success: false,
+          error: error.message,
+          company: companyName,
+          report: null,
+        };
+      }
+    },
+  } as any),
+
+  /**
+   * Check Computer Use availability
+   */
+  checkComputerUseStatus: (tool as any)({
+    description: 'Check if Computer Use capabilities are available and properly configured.',
+    parameters: z.object({}),
+    execute: async () => {
+      const status = getComputerUseStatus();
+      return {
+        available: status.available,
+        reason: status.reason,
+        requirements: status.requirements,
+        message: status.available
+          ? 'Computer Use is available and ready to use'
+          : `Computer Use is not available: ${status.reason}`,
+      };
     },
   } as any),
 };

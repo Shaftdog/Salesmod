@@ -52,16 +52,19 @@ type CaseFormProps = {
   isLoading?: boolean;
 };
 
-export function CaseForm({ 
-  open, 
-  onOpenChange, 
-  onSubmit, 
-  clients = [], 
+export function CaseForm({
+  open,
+  onOpenChange,
+  onSubmit,
+  clients = [],
   contacts = [],
   orders = [],
-  case: caseData, 
-  isLoading 
+  case: caseData,
+  isLoading
 }: CaseFormProps) {
+  console.log('[CaseForm] Received clients:', clients.length, clients.slice(0, 2));
+  console.log('[CaseForm] Received orders:', orders.length, orders.slice(0, 2));
+
   const form = useForm<CaseFormData>({
     resolver: zodResolver(caseSchema),
     defaultValues: caseData ? {

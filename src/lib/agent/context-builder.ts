@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { Client, Order, Deal, Goal, Activity, Contact } from '@/lib/types';
+import { Client, Order, Deal, Goal, Activity, Contact, Case } from '@/lib/types';
 import { calculateGoalProgress } from '@/hooks/use-goals';
 
 export interface AgentContext {
@@ -20,6 +20,9 @@ export interface AgentContext {
     lastContactDays: number;
     priorityScore: number; // Composite score for ranking
   }>;
+  properties: Array<any>; // All properties with addresses, types, etc.
+  cases: Array<any>; // All support/service cases
+  allOrders: Order[]; // Complete order history (up to 3000)
   signals: {
     emailOpens: number;
     emailClicks: number;
@@ -67,11 +70,12 @@ export async function buildContext(orgId: string): Promise<AgentContext> {
 
   if (clientsError) throw clientsError;
 
-  // Fetch orders for goal calculations
+  // Fetch orders for goal calculations (up to 3000 most recent)
   const { data: ordersData, error: ordersError } = await supabase
     .from('orders')
     .select('*')
-    .gte('ordered_date', thirtyDaysAgo.toISOString());
+    .order('ordered_date', { ascending: false })
+    .limit(3000);
 
   if (ordersError) throw ordersError;
 
@@ -91,6 +95,37 @@ export async function buildContext(orgId: string): Promise<AgentContext> {
     .gte('created_at', thirtyDaysAgo.toISOString());
 
   if (dealsError) throw dealsError;
+
+  // Fetch properties (with pagination for large datasets)
+  let allProperties: any[] = [];
+  let page = 0;
+  const pageSize = 1000;
+
+  while (true) {
+    const { data: propertiesPage, error: propertiesError } = await supabase
+      .from('properties')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+
+    if (propertiesError) throw propertiesError;
+
+    if (!propertiesPage || propertiesPage.length === 0) break;
+
+    allProperties = allProperties.concat(propertiesPage);
+
+    if (propertiesPage.length < pageSize) break; // Last page
+    page++;
+  }
+
+  // Fetch cases (up to 1000 most recent)
+  const { data: casesData, error: casesError } = await supabase
+    .from('cases')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(1000);
+
+  if (casesError) throw casesError;
 
   // Fetch agent memories
   const { data: memoriesData, error: memoriesError } = await supabase
@@ -193,6 +228,9 @@ export async function buildContext(orgId: string): Promise<AgentContext> {
   return {
     goals,
     clients: rankClients(clients, goals),
+    properties: allProperties || [],
+    cases: casesData || [],
+    allOrders: (ordersData || []).map(transformOrder),
     signals,
     memories,
     orgId,

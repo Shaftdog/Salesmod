@@ -1,6 +1,6 @@
 import { streamText } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { searchWeb } from '@/lib/research/web-search';
 import { parseCommand, isCommand } from '@/lib/chat/command-parser';
 
@@ -36,6 +36,214 @@ export async function POST(request: Request) {
       .from('clients')
       .select('id, company_name, primary_contact, email')
       .eq('is_active', true);
+
+    // Get contacts for context (using service role to bypass RLS)
+    const serviceClient = createServiceRoleClient();
+
+    // Get all contacts with assigned clients
+    const { data: contacts, error: contactsError } = await serviceClient
+      .from('contacts')
+      .select(`
+        id,
+        first_name,
+        last_name,
+        email,
+        phone,
+        title,
+        is_primary,
+        client_id,
+        client:clients!contacts_client_id_fkey(id, company_name)
+      `)
+      .not('client_id', 'is', null)  // Only get contacts with assigned clients
+      .order('client_id', { ascending: true })
+      .order('is_primary', { ascending: false })
+      .order('last_name', { ascending: true })
+      .limit(1000);  // Increase to ensure we get all contacts
+
+    if (contactsError) {
+      console.error('[Chat] Error fetching contacts:', contactsError);
+    } else {
+      console.log(`[Chat] Loaded ${contacts?.length || 0} contacts`);
+      if (contacts && contacts.length > 0) {
+        console.log('[Chat] Sample contact:', JSON.stringify(contacts[0], null, 2));
+
+        // Check for iFund Cities contacts specifically
+        const ifundContacts = contacts.filter((c: any) =>
+          c.client?.company_name?.toLowerCase().includes('fund')
+        );
+        console.log(`[Chat] iFund Cities contacts found: ${ifundContacts.length}`);
+        if (ifundContacts.length > 0) {
+          console.log('[Chat] iFund sample:', ifundContacts[0]?.first_name, ifundContacts[0]?.last_name);
+        }
+      }
+    }
+
+    // Get all properties for context (Supabase default max is 1000, so we need to handle pagination)
+    let allProperties: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+
+    while (true) {
+      const { data: propertiesPage, error: propertiesError } = await serviceClient
+        .from('properties')
+        .select(`
+          id,
+          address_line1,
+          address_line2,
+          city,
+          state,
+          postal_code,
+          property_type,
+          org_id,
+          county
+        `)
+        .order('created_at', { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (propertiesError) {
+        console.error('[Chat] Error fetching properties:', propertiesError);
+        break;
+      }
+
+      if (!propertiesPage || propertiesPage.length === 0) break;
+
+      allProperties = allProperties.concat(propertiesPage);
+
+      if (propertiesPage.length < pageSize) break; // Last page
+      page++;
+    }
+
+    const properties = allProperties;
+    const propertiesError = null;
+
+    // Add client names to properties using org_id
+    if (properties && properties.length > 0) {
+      const orgIds = [...new Set(properties.map(p => p.org_id).filter(Boolean))];
+      const { data: propertyClients } = await serviceClient
+        .from('clients')
+        .select('id, company_name')
+        .in('id', orgIds);
+
+      const clientMap = new Map(propertyClients?.map(c => [c.id, c.company_name]));
+
+      properties.forEach((p: any) => {
+        p.client = { company_name: clientMap.get(p.org_id) || 'Unknown Client' };
+      });
+    }
+
+    if (propertiesError) {
+      console.error('[Chat] Error fetching properties:', propertiesError);
+    } else {
+      console.log(`[Chat] Loaded ${properties?.length || 0} properties`);
+    }
+
+    // Get orders for context (up to 3000 most recent)
+    const { data: orders, error: ordersError } = await serviceClient
+      .from('orders')
+      .select(`
+        id,
+        order_number,
+        status,
+        ordered_date,
+        due_date,
+        completed_date,
+        fee_amount,
+        total_amount,
+        property_address,
+        property_city,
+        property_state,
+        property_zip,
+        property_type,
+        client_id,
+        order_type,
+        scope_of_work,
+        borrower_name
+      `)
+      .order('ordered_date', { ascending: false })
+      .limit(3000);
+
+    // Add client names to orders
+    if (orders && orders.length > 0) {
+      const clientIds = [...new Set(orders.map(o => o.client_id).filter(Boolean))];
+      const { data: orderClients } = await serviceClient
+        .from('clients')
+        .select('id, company_name')
+        .in('id', clientIds);
+
+      const clientMap = new Map(orderClients?.map(c => [c.id, c.company_name]));
+
+      orders.forEach((o: any) => {
+        o.client = { company_name: clientMap.get(o.client_id) || 'Unknown Client' };
+      });
+    }
+
+    if (ordersError) {
+      console.error('[Chat] Error fetching orders:', ordersError);
+    } else {
+      console.log(`[Chat] Loaded ${orders?.length || 0} orders`);
+    }
+
+    // Get cases for context
+    const { data: cases, error: casesError } = await serviceClient
+      .from('cases')
+      .select(`
+        id,
+        case_number,
+        subject,
+        description,
+        case_type,
+        status,
+        priority,
+        client_id,
+        contact_id,
+        order_id,
+        assigned_to,
+        resolution,
+        resolved_at,
+        closed_at,
+        created_at,
+        updated_at
+      `)
+      .order('created_at', { ascending: false })
+      .limit(1000);
+
+    // Add related data to cases
+    if (cases && cases.length > 0) {
+      const clientIds = [...new Set(cases.map(c => c.client_id).filter(Boolean))];
+      const contactIds = [...new Set(cases.map(c => c.contact_id).filter(Boolean))];
+      const orderIds = [...new Set(cases.map(c => c.order_id).filter(Boolean))];
+
+      const { data: caseClients } = await serviceClient
+        .from('clients')
+        .select('id, company_name')
+        .in('id', clientIds);
+
+      const { data: caseContacts } = await serviceClient
+        .from('contacts')
+        .select('id, first_name, last_name')
+        .in('id', contactIds);
+
+      const { data: caseOrders } = await serviceClient
+        .from('orders')
+        .select('id, order_number')
+        .in('id', orderIds);
+
+      const clientMap = new Map(caseClients?.map(c => [c.id, c.company_name]));
+      const contactMap = new Map(caseContacts?.map(c => [c.id, `${c.first_name} ${c.last_name}`]));
+      const orderMap = new Map(caseOrders?.map(o => [o.id, o.order_number]));
+
+      cases.forEach((c: any) => {
+        c.client = { company_name: clientMap.get(c.client_id) || null };
+        c.contact = { name: contactMap.get(c.contact_id) || null };
+        c.order = { order_number: orderMap.get(c.order_id) || null };
+      });
+    }
+
+    if (casesError) {
+      console.error('[Chat] Error fetching cases:', casesError);
+    } else {
+      console.log(`[Chat] Loaded ${cases?.length || 0} cases`);
+    }
 
     // Get current Kanban cards
     const { data: kanbanCards } = await supabase
@@ -254,12 +462,48 @@ Current context:
 - User: ${user.email}
 - Active goals: ${goals?.length || 0}
 - Active clients: ${clients?.length || 0}
+- Total contacts: ${contacts?.length || 0}
+- Total properties: ${properties?.length || 0}
+- Total orders: ${orders?.length || 0}
+- Total cases: ${cases?.length || 0}
 
 Goals:
 ${goals?.map((g: any) => `- ${g.metric_type}: Target ${g.target_value}, Period: ${g.period_type}`).join('\n') || 'No active goals'}
 
 Clients:
 ${clients?.map((c: any) => `- ${c.company_name} (${c.email || 'no email'})`).join('\n') || 'No active clients'}
+
+Contacts (${contacts?.length || 0} total):
+${contacts?.map((c: any) => {
+  const clientName = c.client?.company_name || 'Unknown Client';
+  return `- ${c.first_name} ${c.last_name} (${c.email || 'no email'}) - ${c.title || 'No title'} at ${clientName}${c.phone ? ` | ${c.phone}` : ''}`;
+}).join('\n') || 'No contacts'}
+
+Properties (${properties?.length || 0} total):
+${properties?.map((p: any) => {
+  const clientName = p.client?.company_name || 'Unknown Client';
+  const address = [p.address_line1, p.address_line2].filter(Boolean).join(' ');
+  return `- ${address}, ${p.city}, ${p.state} ${p.postal_code || ''} (${p.property_type || 'Unknown type'}) - Client: ${clientName}`;
+}).join('\n') || 'No properties'}
+
+Orders (${orders?.length || 0} total):
+${orders?.map((o: any) => {
+  const clientName = o.client?.company_name || 'Unknown Client';
+  const propertyAddr = o.property_address ? `${o.property_address}, ${o.property_city}, ${o.property_state}` : 'No property';
+  const orderDate = o.ordered_date ? new Date(o.ordered_date).toLocaleDateString() : 'No date';
+  const dueDate = o.due_date ? new Date(o.due_date).toLocaleDateString() : 'No due date';
+  return `- Order #${o.order_number} - ${clientName} - ${propertyAddr} - Status: ${o.status} - Ordered: ${orderDate} - Due: ${dueDate} - Fee: $${o.fee_amount || 0} - Type: ${o.order_type || 'N/A'}`;
+}).join('\n') || 'No orders'}
+
+Cases (${cases?.length || 0} total):
+${cases?.map((c: any) => {
+  const clientName = c.client?.company_name || 'No client';
+  const contactName = c.contact?.name || 'No contact';
+  const orderNumber = c.order?.order_number || 'No order';
+  const createdDate = c.created_at ? new Date(c.created_at).toLocaleDateString() : 'No date';
+  const resolvedDate = c.resolved_at ? new Date(c.resolved_at).toLocaleDateString() : 'Not resolved';
+  return `- Case #${c.case_number} - ${c.subject} - Type: ${c.case_type} - Status: ${c.status} - Priority: ${c.priority} - Client: ${clientName} - Contact: ${contactName} - Order: ${orderNumber} - Created: ${createdDate} - Resolved: ${resolvedDate}`;
+}).join('\n') || 'No cases'}
 
 Current Kanban Cards (${kanbanCards?.length || 0}):
 ${kanbanCards?.map((card: any) => {
@@ -280,6 +524,15 @@ Capabilities:
 
 What you CAN do:
 - Answer questions about goals, clients, and business
+- **SEE all contacts** - You have access to all ${contacts?.length || 0} contacts listed above with their names, emails, phone numbers, and titles
+- **Search contacts** - Filter contacts by name, email, company, or title using the data above
+- **SEE all properties** - You have access to ${properties?.length || 0} properties listed above with addresses, cities, states, and property types
+- **Search properties** - Filter properties by address, city, state, property type, or client using the data above
+- **SEE all orders** - You have access to ${orders?.length || 0} orders listed above with order numbers, dates, statuses, clients, and properties
+- **Search orders** - Filter orders by client, status, date, property, or order number using the data above
+- **SEE all cases** - You have access to ${cases?.length || 0} cases listed above with case numbers, subjects, types, statuses, priorities, clients, contacts, and orders
+- **Search cases** - Filter cases by client, status, priority, type, contact, or related order using the data above
+- **Calculate metrics** - Count orders by client, status, date range, etc.
 - Search the internet for information (Tavily)
 - Provide strategic advice and recommendations
 - Reference past conversations and data
@@ -290,6 +543,33 @@ What you CAN do:
 - **Approve cards** - Move to approved state
 - **Execute cards** - Run approved actions
 - **Reference existing cards** - When users ask "what's pending?" or "what cards do we have?"
+
+When users ask about contacts:
+- You HAVE access to contact information - it's listed above in the "Contacts" section
+- Show them the relevant contacts from the list above
+- Include their name, email, phone, title, and which client they work for
+- Be helpful and reference the actual contact data you can see
+
+When users ask about properties:
+- You HAVE access to property information - it's listed above in the "Properties" section
+- Show them the relevant properties from the list above
+- Include the address, city, state, property type, and which client owns it
+- Be helpful and reference the actual property data you can see
+
+When users ask about orders:
+- You HAVE access to order information - it's listed above in the "Orders" section
+- Show them the relevant orders from the list above
+- Include order number, client, property address, status, dates, and fees
+- You can count orders by client, calculate totals, analyze status distribution, etc.
+- Be helpful and reference the actual order data you can see
+
+When users ask about cases:
+- You HAVE access to case information - it's listed above in the "Cases" section
+- Show them the relevant cases from the list above
+- Include case number, subject, type, status, priority, client, contact, and related order
+- You can count cases by client, status, priority, type, etc.
+- You can analyze case resolution times, identify trends, track support issues
+- Be helpful and reference the actual case data you can see
 
 How to use commands:
 - "Create an email card for Acme about Q4 package"

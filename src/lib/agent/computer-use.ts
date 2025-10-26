@@ -97,15 +97,41 @@ export async function executeComputerUseTask(
       const toolResults: any[] = [];
       for (const block of response.content) {
         if (block.type === 'tool_use') {
-          console.log(`[Computer Use] Tool called: ${block.name}`);
-          
-          // In production, you'd execute these tool calls
-          // For now, this is a template showing the structure
-          toolResults.push({
-            type: 'tool_result',
-            tool_use_id: block.id,
-            content: 'Tool execution would happen here in production',
-          });
+          console.log(`[Computer Use] Tool called: ${block.name}`, block.input);
+
+          try {
+            // Execute the tool based on its name
+            let result: any;
+
+            if (block.name === 'computer') {
+              result = await executeComputerTool(block.input);
+            } else if (block.name === 'str_replace_editor') {
+              result = await executeTextEditorTool(block.input);
+            } else if (block.name === 'bash') {
+              result = await executeBashTool(block.input);
+            } else {
+              result = { error: `Unknown tool: ${block.name}` };
+            }
+
+            // Handle base64 screenshot data
+            if (result.base64_image) {
+              screenshots.push(result.base64_image);
+            }
+
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: typeof result === 'string' ? result : JSON.stringify(result),
+            });
+          } catch (error: any) {
+            console.error(`[Computer Use] Tool execution error:`, error);
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: `Error: ${error.message}`,
+              is_error: true,
+            });
+          }
         }
       }
 
@@ -216,5 +242,156 @@ export async function deepCompanyResearch(
   });
 
   return result.finalOutput;
+}
+
+/**
+ * Execute computer tool (screen interaction)
+ */
+async function executeComputerTool(input: any): Promise<any> {
+  const { action } = input;
+
+  // Check if computer use infrastructure is available
+  if (!process.env.COMPUTER_USE_ENABLED) {
+    throw new Error(
+      'Computer Use requires a dedicated infrastructure with display server. ' +
+      'Set COMPUTER_USE_ENABLED=true and ensure X11/VNC is running.'
+    );
+  }
+
+  // In a production setup, this would interface with the actual computer use infrastructure
+  // This typically runs in a Docker container with X11/VNC
+
+  // For now, return a helpful message about what would happen
+  switch (action) {
+    case 'screenshot':
+      return {
+        type: 'screenshot',
+        base64_image: null, // Would contain actual screenshot
+        message: 'Screenshot would be captured from display',
+      };
+
+    case 'mouse_move':
+    case 'left_click':
+    case 'right_click':
+    case 'double_click':
+      return {
+        type: action,
+        message: `Would execute ${action} at coordinates (${input.coordinate?.[0]}, ${input.coordinate?.[1]})`,
+      };
+
+    case 'type':
+      return {
+        type: 'type',
+        message: `Would type: "${input.text}"`,
+      };
+
+    case 'key':
+      return {
+        type: 'key',
+        message: `Would press key: ${input.text}`,
+      };
+
+    default:
+      return {
+        type: 'unknown',
+        message: `Unknown computer action: ${action}`,
+      };
+  }
+}
+
+/**
+ * Execute text editor tool
+ */
+async function executeTextEditorTool(input: any): Promise<string> {
+  const { command, path, file_text, old_str, new_str, insert_line, view_range } = input;
+
+  if (!process.env.COMPUTER_USE_ENABLED) {
+    throw new Error('Text editor requires Computer Use infrastructure');
+  }
+
+  // In production, this would actually edit files in the container
+  switch (command) {
+    case 'view':
+      return `Would view file: ${path}${view_range ? ` (lines ${view_range[0]}-${view_range[1]})` : ''}`;
+
+    case 'create':
+      return `Would create file: ${path} with ${file_text?.length || 0} characters`;
+
+    case 'str_replace':
+      return `Would replace "${old_str}" with "${new_str}" in ${path}`;
+
+    case 'insert':
+      return `Would insert text at line ${insert_line} in ${path}`;
+
+    default:
+      return `Unknown editor command: ${command}`;
+  }
+}
+
+/**
+ * Execute bash tool
+ */
+async function executeBashTool(input: any): Promise<string> {
+  const { command, restart } = input;
+
+  if (!process.env.COMPUTER_USE_ENABLED) {
+    throw new Error('Bash execution requires Computer Use infrastructure');
+  }
+
+  if (restart) {
+    return 'Would restart bash session';
+  }
+
+  // In production, this would execute actual bash commands in the container
+  // SECURITY NOTE: This should run in an isolated container, not the main server
+  return `Would execute bash command: ${command}`;
+}
+
+/**
+ * Check if Computer Use is properly configured
+ */
+export function isComputerUseAvailable(): boolean {
+  return Boolean(
+    process.env.COMPUTER_USE_ENABLED === 'true' &&
+    process.env.ANTHROPIC_API_KEY
+  );
+}
+
+/**
+ * Get Computer Use configuration status
+ */
+export function getComputerUseStatus(): {
+  available: boolean;
+  reason?: string;
+  requirements: string[];
+} {
+  const requirements = [
+    'ANTHROPIC_API_KEY environment variable',
+    'COMPUTER_USE_ENABLED=true environment variable',
+    'Docker container with X11/VNC display server',
+    'Browser (Chrome/Firefox) in container',
+    'Screen resolution configured (recommended: 1024x768)',
+  ];
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return {
+      available: false,
+      reason: 'Missing ANTHROPIC_API_KEY',
+      requirements,
+    };
+  }
+
+  if (process.env.COMPUTER_USE_ENABLED !== 'true') {
+    return {
+      available: false,
+      reason: 'COMPUTER_USE_ENABLED is not set to true',
+      requirements,
+    };
+  }
+
+  return {
+    available: true,
+    requirements,
+  };
 }
 

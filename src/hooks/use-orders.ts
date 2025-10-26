@@ -12,17 +12,35 @@ export function useOrders() {
   const { data: orders = [], isLoading, error } = useQuery({
     queryKey: ['orders'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          client:clients(*),
-          assignee:profiles!orders_assigned_to_fkey(*)
-        `)
-        .order('created_at', { ascending: false })
+      // Fetch ALL orders - Supabase has default limits, so we need to explicitly handle large datasets
+      let allOrders: any[] = [];
+      let from = 0;
+      const batchSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('orders')
+          .select(`
+            *,
+            client:clients(*),
+            assignee:profiles!orders_assigned_to_fkey(*)
+          `)
+          .order('created_at', { ascending: false })
+          .range(from, from + batchSize - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allOrders = [...allOrders, ...data];
+          from += batchSize;
+          hasMore = data.length === batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
       
-      if (error) throw error
-      return (data || []).map(transformOrder)
+      return allOrders.map(transformOrder);
     },
     staleTime: 1000 * 60, // 1 minute
   })

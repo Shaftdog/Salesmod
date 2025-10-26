@@ -45,10 +45,32 @@ export default function ClientDetailPage() {
   const { toast } = useToast();
 
   const [generateDraftOpen, setGenerateDraftOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("contacts");
+  const [showOnlyActive, setShowOnlyActive] = useState(false);
 
   const clientOrders = useMemo(() => {
     return orders.filter(order => order.clientId === clientId);
   }, [orders, clientId]);
+
+  const activeOrders = useMemo(() => {
+    return clientOrders.filter(order => 
+      !['completed', 'delivered', 'cancelled'].includes(order.status)
+    );
+  }, [clientOrders]);
+
+  const activeOrdersCount = useMemo(() => {
+    return activeOrders.length;
+  }, [activeOrders]);
+
+  const totalRevenue = useMemo(() => {
+    return clientOrders
+      .filter(order => ['completed', 'delivered'].includes(order.status))
+      .reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+  }, [clientOrders]);
+
+  const displayedOrders = useMemo(() => {
+    return showOnlyActive ? activeOrders : clientOrders;
+  }, [showOnlyActive, activeOrders, clientOrders]);
 
   const handleAddTag = async (tagId: string) => {
     await addTag({ clientId, tagId });
@@ -131,12 +153,18 @@ export default function ClientDetailPage() {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        <Card 
+          className="cursor-pointer hover:bg-accent transition-colors"
+          onClick={() => {
+            setShowOnlyActive(true);
+            setActiveTab("orders");
+          }}
+        >
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Active Orders</p>
-                <p className="text-2xl font-bold">{client.activeOrders || 0}</p>
+                <p className="text-2xl font-bold">{activeOrdersCount}</p>
               </div>
               <Briefcase className="h-8 w-8 text-muted-foreground" />
             </div>
@@ -148,7 +176,7 @@ export default function ClientDetailPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Revenue</p>
-                <p className="text-2xl font-bold">{formatCurrency(client.totalRevenue || 0)}</p>
+                <p className="text-2xl font-bold">{formatCurrency(totalRevenue)}</p>
               </div>
               <DollarSign className="h-8 w-8 text-muted-foreground" />
             </div>
@@ -231,7 +259,7 @@ export default function ClientDetailPage() {
       </Card>
 
       {/* Tabs */}
-      <Tabs defaultValue="contacts" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="contacts">
             Contacts ({contacts.length})
@@ -242,7 +270,14 @@ export default function ClientDetailPage() {
           <TabsTrigger value="deals">
             Deals ({deals.length})
           </TabsTrigger>
-          <TabsTrigger value="orders">
+          <TabsTrigger 
+            value="orders"
+            onClick={() => {
+              if (activeTab === "orders") {
+                setShowOnlyActive(false);
+              }
+            }}
+          >
             Orders ({clientOrders.length})
           </TabsTrigger>
           <TabsTrigger value="ai-assistant">
@@ -291,7 +326,24 @@ export default function ClientDetailPage() {
         </TabsContent>
 
         <TabsContent value="orders" className="space-y-4">
-          <OrdersList orders={clientOrders} />
+          {showOnlyActive && (
+            <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Briefcase className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                  Showing {activeOrdersCount} active order{activeOrdersCount !== 1 ? 's' : ''} only
+                </p>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setShowOnlyActive(false)}
+              >
+                Show All Orders ({clientOrders.length})
+              </Button>
+            </div>
+          )}
+          <OrdersList orders={displayedOrders} />
         </TabsContent>
 
         <TabsContent value="ai-assistant" className="space-y-4">
