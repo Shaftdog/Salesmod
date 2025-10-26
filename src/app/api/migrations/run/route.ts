@@ -6,7 +6,7 @@ import {
   DuplicateStrategy,
   MigrationTotals,
 } from '@/lib/migrations/types';
-import { applyTransform, generateHash, normalizeCompanyName, transformExtractDomain, splitUSAddress } from '@/lib/migrations/transforms';
+import { applyTransform, generateHash, normalizeCompanyName, transformExtractDomain, splitUSAddress, detectClientType } from '@/lib/migrations/transforms';
 import { normalizeAddressKey, extractUnit } from '@/lib/addresses';
 import { normalizeUnit, shouldCreateUnit } from '@/lib/units';
 import { validateAddressWithGoogle } from '@/lib/address-validation';
@@ -539,34 +539,42 @@ async function processClient(
   duplicateStrategy: DuplicateStrategy,
   userId: string
 ): Promise<{ type: 'inserted' | 'updated' | 'skipped' }> {
-  // Handle multi-line address fields (Address, Address 2, Address 3 → single address field)
-  if (row['address.line1'] || row['address.line2'] || row['address.line3']) {
-    const parts = [
-      row['address.line1'],
-      row['address.line2'],
-      row['address.line3']
-    ].filter(p => p && p.trim() !== '');
+  // Handle address fields - combine ALL components into single address field
+  // Supports both patterns:
+  // 1. Multi-line: Address, Address2, Address3, City, State, Zip
+  // 2. Street-based: Street, City, State, Zip
+  const hasLineAddress = row['address.line1'] || row['address.line2'] || row['address.line3'];
+  const hasStreetAddress = row['address.street'];
+  const hasCityStateZip = row['address.city'] || row['address.state'] || row['address.zip'];
+  
+  if (hasLineAddress || hasStreetAddress || hasCityStateZip) {
+    const addressParts: string[] = [];
     
-    row.address = parts.join(', ') || 'N/A';
+    // Add street first if present (e.g., "201 East McBee Avenue")
+    if (row['address.street']) {
+      addressParts.push(row['address.street']);
+    }
+    
+    // Add line1 if present AND different from street
+    if (row['address.line1'] && row['address.line1'] !== row['address.street']) {
+      addressParts.push(row['address.line1']);
+    }
+    
+    // Add line2 and line3 if present (e.g., suite numbers, building names)
+    if (row['address.line2']) addressParts.push(row['address.line2']);
+    if (row['address.line3']) addressParts.push(row['address.line3']);
+    
+    // Add city, state, zip (always add these if present)
+    if (row['address.city']) addressParts.push(row['address.city']);
+    if (row['address.state']) addressParts.push(row['address.state']);
+    if (row['address.zip']) addressParts.push(row['address.zip']);
+    
+    row.address = addressParts.join(', ') || 'N/A';
     
     // Clean up the component fields
     delete row['address.line1'];
     delete row['address.line2'];
     delete row['address.line3'];
-  }
-  
-  // Handle composite address fields (Street, City, State, Zip → single address field)
-  if (row['address.street'] || row['address.city'] || row['address.state'] || row['address.zip']) {
-    const parts = [
-      row['address.street'],
-      row['address.city'],
-      row['address.state'],
-      row['address.zip']
-    ].filter(p => p && p.trim() !== '');
-    
-    row.address = parts.join(', ') || 'N/A';
-    
-    // Clean up the component fields
     delete row['address.street'];
     delete row['address.city'];
     delete row['address.state'];
@@ -715,6 +723,12 @@ async function processClient(
     }
   }
 
+  // Auto-detect client type (individual vs company) if not already set
+  if (!row.client_type && row.company_name) {
+    row.client_type = detectClientType(row.company_name);
+    console.log(`🔍 Auto-detected client type for "${row.company_name}": ${row.client_type}`);
+  }
+
   const { data: insertedClient, error: insertError } = await supabase
     .from('clients')
     .insert(row)
@@ -726,7 +740,7 @@ async function processClient(
     throw new Error(`Failed to insert client: ${insertError.message}`);
   }
 
-  console.log('✅ Client inserted successfully:', insertedClient?.id);
+  console.log(`✅ Client inserted successfully: ${insertedClient?.id} (${row.client_type})`);
   return { type: 'inserted' };
 }
 
@@ -975,12 +989,14 @@ async function processOrder(
   }
 
   // Derived status logic for Asana imports (no explicit STATUS column)
-  if (source === 'asana' && !row.status) {
+  // Override default 'new' status based on dates
+  if (source === 'asana') {
     const now = new Date();
     const completedAt = row.completed_date ? new Date(row.completed_date) : null;
     const inspectionDate = row.props?.inspection_date ? new Date(row.props.inspection_date) : null;
     const dueDate = row.due_date ? new Date(row.due_date) : null;
     
+    // Derive status from dates (most specific to least specific)
     if (completedAt) {
       row.status = 'completed';
     } else if (inspectionDate && inspectionDate < now) {
@@ -989,9 +1005,10 @@ async function processOrder(
       row.status = 'scheduled';
     } else if (dueDate) {
       row.status = 'assigned';
-    } else {
+    } else if (!row.status || row.status === 'new') {
       row.status = 'new';
     }
+    // Keep existing status if already set to something other than 'new'
   }
 
   // Generate order_number if not provided
@@ -1041,7 +1058,44 @@ async function processOrder(
       }
     }
 
-    // Still no client? Try to get or create "Unassigned Orders" client
+    // Still no client? Try to auto-create from available client name
+    if (!row.client_id) {
+      // Check if we have any client name to work with from special fields
+      const potentialClientName = row._client_name || row._amc_client || row._lender_client;
+      
+      if (potentialClientName && potentialClientName !== 'None' && potentialClientName !== 'AMC') {
+        // Auto-detect if it's an individual or company
+        const clientType = detectClientType(potentialClientName);
+        
+        // Try to create the client
+        const { data: autoCreatedClient, error: autoCreateError } = await supabase
+          .from('clients')
+          .insert({
+            company_name: potentialClientName.trim(),
+            primary_contact: potentialClientName.trim(),
+            email: `${potentialClientName.toLowerCase().replace(/\s+/g, '')}@imported.local`,
+            phone: '000-000-0000',
+            address: 'TBD - Update from client records',
+            billing_address: 'TBD - Update from client records',
+            client_type: clientType,
+          })
+          .select('id')
+          .maybeSingle();
+        
+        if (!autoCreateError && autoCreatedClient) {
+          row.client_id = autoCreatedClient.id;
+          
+          // Log auto-creation for review
+          if (!row.props) row.props = {};
+          row.props.client_auto_created = true;
+          row.props.client_type_detected = clientType;
+          
+          console.log(`✅ Auto-created ${clientType} client: ${potentialClientName}`);
+        }
+      }
+    }
+    
+    // Last resort: Fall back to "Unassigned Orders" client
     if (!row.client_id) {
       const { data: unassignedClient } = await supabase
         .from('clients')
@@ -1062,6 +1116,7 @@ async function processOrder(
             phone: '000-000-0000',
             address: 'N/A',
             billing_address: 'N/A',
+            client_type: 'company',
           })
           .select('id')
           .single();

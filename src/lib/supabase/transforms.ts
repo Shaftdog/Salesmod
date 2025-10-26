@@ -69,6 +69,27 @@ export function transformOrder(dbOrder: any): Order {
     createdAt: dbOrder.created_at,
     updatedAt: dbOrder.updated_at,
     metadata: dbOrder.metadata,
+    
+    // Appraisal Workflow Fields (added 2025-10-24)
+    scopeOfWork: dbOrder.scope_of_work,
+    intendedUse: dbOrder.intended_use,
+    reportFormType: dbOrder.report_form_type,
+    additionalForms: dbOrder.additional_forms,
+    billingMethod: dbOrder.billing_method,
+    salesCampaign: dbOrder.sales_campaign,
+    serviceRegion: dbOrder.service_region,
+    siteInfluence: dbOrder.site_influence,
+    isMultiunit: dbOrder.is_multiunit,
+    multiunitType: dbOrder.multiunit_type,
+    isNewConstruction: dbOrder.is_new_construction,
+    newConstructionType: dbOrder.new_construction_type,
+    zoningType: dbOrder.zoning_type,
+    inspectionDate: dbOrder.inspection_date,
+    
+    // Props and relations
+    propertyId: dbOrder.property_id,
+    propertyUnitId: dbOrder.property_unit_id,
+    props: dbOrder.props,
     client: dbOrder.client ? transformClient(dbOrder.client) : undefined,
     assignee: dbOrder.assignee ? transformUser(dbOrder.assignee) : undefined,
   }

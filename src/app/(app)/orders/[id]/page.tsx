@@ -9,6 +9,7 @@ import { AssignAppraiserDialog } from "@/components/orders/assign-appraiser-dial
 import { ScheduleInspectionDialog } from "@/components/orders/schedule-inspection-dialog";
 import { AddNoteDialog } from "@/components/orders/add-note-dialog";
 import { UploadDocumentDialog } from "@/components/orders/upload-document-dialog";
+import { EditWorkflowDialog } from "@/components/orders/edit-workflow-dialog";
 import {
   Card,
   CardContent,
@@ -59,6 +60,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   const [scheduleInspectionOpen, setScheduleInspectionOpen] = useState(false);
   const [addNoteOpen, setAddNoteOpen] = useState(false);
   const [uploadDocumentOpen, setUploadDocumentOpen] = useState(false);
+  const [editWorkflowOpen, setEditWorkflowOpen] = useState(false);
 
   // Print handler
   const handlePrint = () => {
@@ -231,6 +233,115 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
             </Tabs>
           </CardContent>
         </Card>
+
+        {/* Appraisal Workflow Details Card */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-start justify-between">
+              <div>
+                <CardTitle>Appraisal Workflow Details</CardTitle>
+                <CardDescription>Scope, forms, and assignment configuration</CardDescription>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setEditWorkflowOpen(true)}
+              >
+                <Edit className="mr-2 h-4 w-4" />
+                Edit
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left Column - Core Appraisal Fields */}
+              <div className="space-y-4">
+                {order.scopeOfWork && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Scope of Work</h4>
+                    <p className="text-sm font-semibold capitalize mt-1">
+                      {order.scopeOfWork.replace(/_/g, ' ')}
+                    </p>
+                  </div>
+                )}
+                {order.intendedUse && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Intended Use</h4>
+                    <p className="text-sm font-semibold mt-1">{order.intendedUse}</p>
+                  </div>
+                )}
+                {order.reportFormType && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Report Form Type</h4>
+                    <p className="text-sm font-semibold mt-1">{order.reportFormType}</p>
+                  </div>
+                )}
+                {order.additionalForms && order.additionalForms.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Additional Forms</h4>
+                    <p className="text-sm font-semibold mt-1">{order.additionalForms.join(', ')}</p>
+                  </div>
+                )}
+                {order.billingMethod && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Billing Method</h4>
+                    <p className="text-sm font-semibold capitalize mt-1">{order.billingMethod}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column - Region & Property Details */}
+              <div className="space-y-4">
+                {order.serviceRegion && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Service Region</h4>
+                    <p className="text-sm font-semibold mt-1">{order.serviceRegion}</p>
+                  </div>
+                )}
+                {order.salesCampaign && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Sales Campaign</h4>
+                    <p className="text-sm font-semibold capitalize mt-1">
+                      {order.salesCampaign.replace(/_/g, ' ')}
+                    </p>
+                  </div>
+                )}
+                {order.siteInfluence && order.siteInfluence !== 'none' && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Site Influence</h4>
+                    <p className="text-sm font-semibold capitalize mt-1">
+                      {order.siteInfluence.replace(/_/g, ' ')}
+                    </p>
+                  </div>
+                )}
+                {order.zoningType && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Zoning Type</h4>
+                    <p className="text-sm font-semibold capitalize mt-1">
+                      {order.zoningType.replace(/_/g, ' ')}
+                    </p>
+                  </div>
+                )}
+                {order.isMultiunit && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Property Type</h4>
+                    <p className="text-sm font-semibold mt-1">
+                      Multiunit {order.multiunitType && `(${order.multiunitType.replace(/_/g, ' ')})`}
+                    </p>
+                  </div>
+                )}
+                {order.isNewConstruction && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Construction</h4>
+                    <p className="text-sm font-semibold mt-1">
+                      New Construction {order.newConstructionType && `(${order.newConstructionType.replace(/_/g, ' ')})`}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
       <div className="grid auto-rows-max items-start gap-4 md:gap-8 lg:col-span-2">
         <Card>
@@ -304,6 +415,11 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
           order={order}
           open={uploadDocumentOpen}
           onOpenChange={setUploadDocumentOpen}
+        />
+        <EditWorkflowDialog
+          order={order}
+          open={editWorkflowOpen}
+          onOpenChange={setEditWorkflowOpen}
         />
       </>
     )}

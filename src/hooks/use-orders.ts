@@ -190,6 +190,22 @@ export function useUpdateOrder() {
       if (updates.propertyState) dbUpdates.property_state = updates.propertyState
       if (updates.propertyZip) dbUpdates.property_zip = updates.propertyZip
       if (updates.propertyType) dbUpdates.property_type = updates.propertyType
+      
+      // Appraisal Workflow Fields
+      if (updates.scopeOfWork !== undefined) dbUpdates.scope_of_work = updates.scopeOfWork
+      if (updates.intendedUse !== undefined) dbUpdates.intended_use = updates.intendedUse
+      if (updates.reportFormType !== undefined) dbUpdates.report_form_type = updates.reportFormType
+      if (updates.additionalForms !== undefined) dbUpdates.additional_forms = updates.additionalForms
+      if (updates.billingMethod !== undefined) dbUpdates.billing_method = updates.billingMethod
+      if (updates.salesCampaign !== undefined) dbUpdates.sales_campaign = updates.salesCampaign
+      if (updates.serviceRegion !== undefined) dbUpdates.service_region = updates.serviceRegion
+      if (updates.siteInfluence !== undefined) dbUpdates.site_influence = updates.siteInfluence
+      if (updates.isMultiunit !== undefined) dbUpdates.is_multiunit = updates.isMultiunit
+      if (updates.multiunitType !== undefined) dbUpdates.multiunit_type = updates.multiunitType
+      if (updates.isNewConstruction !== undefined) dbUpdates.is_new_construction = updates.isNewConstruction
+      if (updates.newConstructionType !== undefined) dbUpdates.new_construction_type = updates.newConstructionType
+      if (updates.zoningType !== undefined) dbUpdates.zoning_type = updates.zoningType
+      if (updates.inspectionDate !== undefined) dbUpdates.inspection_date = updates.inspectionDate
 
       const { data, error } = await supabase
         .from('orders')

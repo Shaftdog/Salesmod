@@ -47,6 +47,69 @@ export const agentTools: any = {
   } as any),
 
   /**
+   * Search for contacts
+   */
+  searchContacts: (tool as any)({
+    description: 'Search for individual contacts by name, email, role, or other criteria. Use this when user asks about specific people or wants to find contacts.',
+    parameters: z.object({
+      query: z.string().min(1).describe('Search term (first name, last name, email, role, etc.)'),
+      clientId: z.string().optional().describe('Optional: filter by specific client UUID'),
+    }).strict(),
+    execute: async ({ query, clientId }: { query: string; clientId?: string }) => {
+      const supabase = await createClient();
+
+      let queryBuilder = supabase
+        .from('contacts')
+        .select(`
+          id,
+          first_name,
+          last_name,
+          email,
+          phone,
+          role,
+          is_primary,
+          client_id,
+          client:clients(
+            id,
+            company_name
+          ),
+          created_at
+        `)
+        .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%,role.ilike.%${query}%`)
+        .limit(10);
+
+      if (clientId) {
+        queryBuilder = queryBuilder.eq('client_id', clientId);
+      }
+
+      const { data, error } = await queryBuilder;
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      return {
+        contacts: (data || []).map((contact: any) => ({
+          id: contact.id,
+          name: `${contact.first_name} ${contact.last_name}`,
+          firstName: contact.first_name,
+          lastName: contact.last_name,
+          email: contact.email,
+          phone: contact.phone,
+          role: contact.role,
+          isPrimary: contact.is_primary,
+          client: contact.client ? {
+            id: contact.client.id,
+            name: contact.client.company_name,
+          } : null,
+          createdAt: contact.created_at,
+        })),
+        count: data?.length || 0,
+      };
+    },
+  } as any),
+
+  /**
    * Get current goals and progress
    */
   getGoals: (tool as any)({

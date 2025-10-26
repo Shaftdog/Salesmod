@@ -4,7 +4,29 @@ export type MigrationSource = 'asana' | 'hubspot' | 'csv' | 'other';
 export type MigrationEntity = 'orders' | 'contacts' | 'clients' | 'deals' | 'tasks';
 export type MigrationStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export type DuplicateStrategy = 'skip' | 'update' | 'create';
-export type TransformFunction = 'lowercase' | 'toNumber' | 'toDate' | 'concat' | 'coalesce' | 'extract_domain' | 'splitUSAddress' | 'mapOrderStatus' | 'mapOrderType' | 'combineAddress' | 'none';
+export type TransformFunction = 
+  | 'lowercase' 
+  | 'toNumber' 
+  | 'toDate' 
+  | 'toBoolean'
+  | 'concat' 
+  | 'coalesce' 
+  | 'extract_domain' 
+  | 'splitUSAddress' 
+  | 'mapOrderStatus' 
+  | 'mapOrderType' 
+  | 'combineAddress'
+  // Appraisal workflow transforms
+  | 'mapScopeOfWork'
+  | 'mapReportFormat'
+  | 'splitFormsArray'
+  | 'mapBillingMethod'
+  | 'mapSalesCampaign'
+  | 'mapSiteInfluence'
+  | 'extractMultiunitType'
+  | 'extractNewConstructionType'
+  | 'extractZoningType'
+  | 'none';
 
 export interface FieldMapping {
   sourceColumn: string; // Primary source column (or special value like '__composite__' for multi-column mappings)

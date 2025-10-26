@@ -95,6 +95,23 @@ export interface Order {
   createdAt: string;
   updatedAt: string;
   metadata?: any; // jsonb
+  
+  // Appraisal Workflow Fields (added 2025-10-24)
+  scopeOfWork?: 'desktop' | 'exterior_only' | 'interior' | 'inspection_only' | 'desk_review' | 'field_review';
+  intendedUse?: string; // Refinance, Purchase, FHA, etc. (30+ values)
+  reportFormType?: string; // 1004, 1073, 2055, 1025, etc.
+  additionalForms?: string[]; // Array: ['1007', 'REO Addendum', etc.]
+  billingMethod?: 'online' | 'bill' | 'cod';
+  salesCampaign?: string; // client_selection, bid_request, etc.
+  serviceRegion?: string; // ORL-SW-PRIMARY, TAMPA-NE-EXTENDED, etc.
+  siteInfluence?: 'none' | 'water' | 'commercial' | 'woods' | 'golf_course';
+  isMultiunit?: boolean;
+  multiunitType?: 'adu_apartment_inlaw' | 'two_unit' | 'three_unit' | 'four_unit' | 'five_plus_commercial';
+  isNewConstruction?: boolean;
+  newConstructionType?: 'community_builder' | 'spec_custom' | 'refinance_newly_constructed';
+  zoningType?: 'residential' | 'planned_unit_development' | 'two_unit' | 'three_unit' | 'four_unit' | 'mixed_use' | 'agricultural' | 'commercial';
+  inspectionDate?: string;
+  
   props?: {
     // Custom fields from imports
     unit?: string; // Unit number if extracted from address

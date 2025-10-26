@@ -66,10 +66,14 @@ export function FieldMapper({ state, setState, onNext, onPrev }: FieldMapperProp
     const preset = getPresetById(presetId);
     if (!preset) return;
 
-    const newMappings: FieldMapping[] = preset.mappings.map((m) => ({
-      ...m,
-      required: databaseFields.find((f) => f.name === m.targetField)?.required || false,
-    }));
+    // Only include mappings where the source column exists in the CSV headers
+    const csvHeaders = state.previewData?.headers || [];
+    const newMappings: FieldMapping[] = preset.mappings
+      .filter((m) => csvHeaders.includes(m.sourceColumn))
+      .map((m) => ({
+        ...m,
+        required: databaseFields.find((f) => f.name === m.targetField)?.required || false,
+      }));
 
     setState((prev) => ({ ...prev, mappings: newMappings }));
 
@@ -207,11 +211,25 @@ export function FieldMapper({ state, setState, onNext, onPrev }: FieldMapperProp
   };
 
   const requiredFields = databaseFields.filter((f) => f.required);
+  
+  // Check if composite address fields satisfy the address requirement
+  const hasCompositeAddress = (fieldName: string) => {
+    if (fieldName === 'address') {
+      // Address is satisfied if we have address.line1 OR address.street (plus optional city/state/zip)
+      return state.mappings.some((m) => 
+        m.targetField === 'address.line1' || 
+        m.targetField === 'address.street' ||
+        m.targetField === 'address.city'
+      );
+    }
+    return false;
+  };
+  
   const mappedRequiredFields = requiredFields.filter((f) =>
-    state.mappings.some((m) => m.targetField === f.name)
+    state.mappings.some((m) => m.targetField === f.name) || hasCompositeAddress(f.name)
   );
   const missingRequiredFields = requiredFields.filter(
-    (f) => !state.mappings.some((m) => m.targetField === f.name)
+    (f) => !state.mappings.some((m) => m.targetField === f.name) && !hasCompositeAddress(f.name)
   );
 
   const canProceed = missingRequiredFields.length === 0 && state.mappings.length > 0;
