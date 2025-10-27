@@ -17,7 +17,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { UserRole } from '@/lib/admin/permissions'
+import type { UserRole } from '@/lib/admin/types'
 
 interface UseAdminResult {
   isAdmin: boolean

@@ -27,8 +27,8 @@ import {
   requireAdmin,
   requireRole,
   requirePermission,
-  type UserRole,
 } from './permissions'
+import type { UserRole } from './types'
 import { logFailure } from './audit'
 
 /**

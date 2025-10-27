@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAdmin } from '@/hooks/use-admin'
 import { usePermission } from '@/hooks/use-permission'
-import { PERMISSIONS } from '@/lib/admin/permissions'
+import { PERMISSIONS } from '@/lib/admin/types'
 
 export default function AdminTestPage() {
   const { isAdmin, role, userId, isLoading, error } = useAdmin()
