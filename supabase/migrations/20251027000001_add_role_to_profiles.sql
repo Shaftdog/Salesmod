@@ -1,6 +1,11 @@
 -- =============================================
 -- Admin Panel: Add Role Column to Profiles
 -- Phase 1: Extend Profiles with Role
+--
+-- NOTE: This migration was originally timestamped 20251025000001
+-- but was renamed to 20251027000001 to maintain proper sequence
+-- after renaming the RBAC tables migration
+-- The migration was already applied to production on Oct 26, 2025
 -- =============================================
 
 -- =============================================
