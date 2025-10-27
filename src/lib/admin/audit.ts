@@ -46,7 +46,9 @@ export const AUDIT_ACTIONS = {
   CLIENT_DELETE: 'client.delete',
 
   // Settings actions
+  SETTINGS_CREATE: 'settings.create',
   SETTINGS_UPDATE: 'settings.update',
+  SETTINGS_DELETE: 'settings.delete',
   INTEGRATION_UPDATE: 'integration.update',
 
   // Data actions
