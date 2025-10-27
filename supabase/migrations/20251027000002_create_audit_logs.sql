@@ -1,6 +1,11 @@
 -- =============================================
 -- Admin Panel: Audit Logging System
 -- Phase 1: Track All Admin Actions
+--
+-- NOTE: This migration was originally timestamped 20251025000002
+-- but was renamed to 20251027000002 to maintain proper sequence
+-- after renaming the RBAC tables migration
+-- The migration was already applied to production on Oct 26, 2025
 -- =============================================
 
 -- =============================================

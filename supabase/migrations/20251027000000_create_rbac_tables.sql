@@ -1,6 +1,11 @@
 -- =============================================
 -- Admin Panel: Role-Based Access Control (RBAC)
 -- Phase 1: Core RBAC Tables
+--
+-- NOTE: This migration was originally timestamped 20251025000000
+-- but was renamed to 20251027000000 to avoid conflict with
+-- 20251025000000_add_client_type_field.sql
+-- The migration was already applied to production on Oct 26, 2025
 -- =============================================
 
 -- =============================================

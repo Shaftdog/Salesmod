@@ -1,6 +1,11 @@
 -- =============================================
 -- Admin Panel: Seed Default Roles and Permissions
 -- Phase 1: Default RBAC Data
+--
+-- NOTE: This migration was originally timestamped 20251025000003
+-- but was renamed to 20251027000003 to maintain proper sequence
+-- after renaming the RBAC tables migration
+-- The migration was already applied to production on Oct 26, 2025
 -- =============================================
 
 -- =============================================
