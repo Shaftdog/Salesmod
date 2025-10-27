@@ -13,6 +13,7 @@ import {
   Settings,
   Target,
   CheckSquare,
+  Shield,
 } from "lucide-react";
 import {
   Breadcrumb,
@@ -195,6 +196,14 @@ function Header() {
           <DropdownMenuItem asChild>
             <Link href="/settings">Settings</Link>
           </DropdownMenuItem>
+          {currentUser?.role === 'admin' && (
+            <DropdownMenuItem asChild>
+              <Link href="/admin" className="flex items-center">
+                <Shield className="h-4 w-4 mr-2" />
+                Admin Panel
+              </Link>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem>Support</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleSignOut}>

@@ -15,20 +15,26 @@ export const GET = withAdminAuth(async (request: NextRequest, { supabase }) => {
       new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
     // User Growth Data
-    const { data: userGrowth, error: userGrowthError } = await supabase
-      .rpc('get_user_growth_by_day', {
-        p_start_date: startDate,
-        p_end_date: endDate,
-      })
-      .catch(() => {
-        // If RPC doesn't exist, fall back to manual query
-        return supabase
-          .from('profiles')
-          .select('created_at')
-          .gte('created_at', startDate)
-          .lte('created_at', endDate)
-          .order('created_at')
-      })
+    let userGrowth, userGrowthError
+    try {
+      const result = await supabase
+        .rpc('get_user_growth_by_day', {
+          p_start_date: startDate,
+          p_end_date: endDate,
+        })
+      userGrowth = result.data
+      userGrowthError = result.error
+    } catch (rpcError) {
+      // If RPC doesn't exist, fall back to manual query
+      const result = await supabase
+        .from('profiles')
+        .select('created_at')
+        .gte('created_at', startDate)
+        .lte('created_at', endDate)
+        .order('created_at')
+      userGrowth = result.data
+      userGrowthError = result.error
+    }
 
     // Process user growth data if it's not from RPC
     let processedUserGrowth = userGrowth

@@ -22,23 +22,28 @@ import {
   Database,
   Users,
   MapPin,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const navItems = [
-  { href: "/dashboard", icon: Home, label: "Dashboard" },
-  { href: "/orders", icon: Package, label: "Orders" },
-  { href: "/properties", icon: MapPin, label: "Properties" },
-  { href: "/clients", icon: Briefcase, label: "Clients" },
-  { href: "/contacts", icon: Users, label: "Contacts" },
-  { href: "/deals", icon: Target, label: "Deals" },
-  { href: "/tasks", icon: CheckSquare, label: "Tasks" },
-  { href: "/cases", icon: LifeBuoy, label: "Cases" },
-  { href: "/migrations", icon: Database, label: "Migrations" },
-];
+import { useCurrentUser } from "@/hooks/use-appraisers";
 
 function Sidebar() {
   const pathname = usePathname();
+  const { data: currentUser } = useCurrentUser();
+
+  // Create nav items with conditional admin panel
+  const navItems = [
+    { href: "/dashboard", icon: Home, label: "Dashboard" },
+    { href: "/orders", icon: Package, label: "Orders" },
+    { href: "/properties", icon: MapPin, label: "Properties" },
+    { href: "/clients", icon: Briefcase, label: "Clients" },
+    { href: "/contacts", icon: Users, label: "Contacts" },
+    { href: "/deals", icon: Target, label: "Deals" },
+    { href: "/tasks", icon: CheckSquare, label: "Tasks" },
+    { href: "/cases", icon: LifeBuoy, label: "Cases" },
+    { href: "/migrations", icon: Database, label: "Migrations" },
+    ...(currentUser?.role === 'admin' ? [{ href: "/admin", icon: Shield, label: "Admin" }] : []),
+  ];
 
   return (
     <aside className="fixed inset-y-0 left-0 z-10 hidden w-14 flex-col border-r bg-background sm:flex">

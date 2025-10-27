@@ -11,19 +11,22 @@ export const GET = withAdminAuth(async (request: NextRequest, { supabase }) => {
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')
 
-    let query = supabase
+    // Check if settings table exists by trying to query it
+    const { data: settings, error } = await supabase
       .from('settings')
       .select('*')
       .order('category')
       .order('key')
 
-    if (category) {
-      query = query.eq('category', category)
-    }
-
-    const { data: settings, error } = await query
-
     if (error) {
+      // If settings table doesn't exist, return empty settings
+      if (error.code === 'PGRST205') {
+        return NextResponse.json({
+          settings: [],
+          grouped: {},
+          message: 'Settings table not yet created - using default configuration'
+        })
+      }
       throw error
     }
 
@@ -62,6 +65,19 @@ export const PATCH = withAdminAuth(async (request: NextRequest, { userId, supaba
       return NextResponse.json(
         { error: 'Updates must be an array of {key, value} objects' },
         { status: 400 }
+      )
+    }
+
+    // Check if settings table exists first
+    const { error: tableError } = await supabase
+      .from('settings')
+      .select('id')
+      .limit(1)
+
+    if (tableError && tableError.code === 'PGRST205') {
+      return NextResponse.json(
+        { error: 'Settings table not yet created - cannot update settings' },
+        { status: 503 }
       )
     }
 
@@ -124,6 +140,19 @@ export const POST = withAdminAuth(async (request: NextRequest, { userId, supabas
       return NextResponse.json(
         { error: 'Key, value, and category are required' },
         { status: 400 }
+      )
+    }
+
+    // Check if settings table exists first
+    const { error: tableError } = await supabase
+      .from('settings')
+      .select('id')
+      .limit(1)
+
+    if (tableError && tableError.code === 'PGRST205') {
+      return NextResponse.json(
+        { error: 'Settings table not yet created - cannot create settings' },
+        { status: 503 }
       )
     }
 

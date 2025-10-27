@@ -32,12 +32,7 @@ export const GET = withAdminAuth(async (request: NextRequest, { supabase }) => {
     let query = supabase
       .from('audit_logs')
       .select(`
-        *,
-        profiles:user_id (
-          id,
-          name,
-          email
-        )
+        *
       `, { count: 'exact' })
 
     // Apply filters

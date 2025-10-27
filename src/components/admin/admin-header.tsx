@@ -1,6 +1,7 @@
 'use client'
 
 import { useAdmin } from '@/hooks/use-admin'
+import { useCurrentUser } from '@/hooks/use-appraisers'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -18,6 +19,7 @@ import { useRouter } from 'next/navigation'
 
 export function AdminHeader() {
   const { role, userId, isAdmin } = useAdmin()
+  const { data: currentUser } = useCurrentUser()
   const router = useRouter()
 
   const handleSignOut = async () => {
@@ -27,8 +29,19 @@ export function AdminHeader() {
   }
 
   const getInitials = () => {
-    // You can enhance this by fetching the user's name
+    if (currentUser?.name) {
+      return currentUser.name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+    }
     return role?.charAt(0).toUpperCase() || 'A'
+  }
+
+  const getUserDisplayName = () => {
+    return currentUser?.name || 'Admin'
   }
 
   return (
@@ -61,13 +74,20 @@ export function AdminHeader() {
                 </AvatarFallback>
               </Avatar>
               <span className="hidden sm:inline text-sm font-medium">
-                {role || 'Admin'}
+                {getUserDisplayName()}
               </span>
               <ChevronDown className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Admin Account</DropdownMenuLabel>
+            <DropdownMenuLabel>
+              {getUserDisplayName()}
+              {currentUser?.email && (
+                <div className="text-xs font-normal text-muted-foreground">
+                  {currentUser.email}
+                </div>
+              )}
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem disabled className="text-xs text-muted-foreground">
               {userId?.slice(0, 8)}...
