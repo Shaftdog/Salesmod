@@ -41,7 +41,6 @@ Be helpful and use the tool when appropriate.`;
       messages,
       tools: simpleAgentTools,
       temperature: 0.7,
-      maxTokens: 2000,
     });
 
     // Convert to text stream
