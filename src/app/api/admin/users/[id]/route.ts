@@ -8,7 +8,8 @@ import { NextRequest, NextResponse } from 'next/server'
  */
 export const GET = withAdminAuth(async (request: NextRequest, { supabase, params }) => {
   try {
-    const { id } = await params
+    const { id: rawId } = await params
+    const id = Array.isArray(rawId) ? rawId[0] : rawId
 
     const { data: user, error } = await supabase
       .from('profiles')
@@ -53,7 +54,8 @@ export const GET = withAdminAuth(async (request: NextRequest, { supabase, params
  */
 export const PUT = withAdminAuth(async (request: NextRequest, { userId, supabase, params }) => {
   try {
-    const { id } = await params
+    const { id: rawId } = await params
+    const id = Array.isArray(rawId) ? rawId[0] : rawId
     const body = await request.json()
     const { name, email, role } = body
 
@@ -134,7 +136,8 @@ export const PUT = withAdminAuth(async (request: NextRequest, { userId, supabase
  */
 export const DELETE = withAdminAuth(async (request: NextRequest, { userId, supabase, params }) => {
   try {
-    const { id } = await params
+    const { id: rawId } = await params
+    const id = Array.isArray(rawId) ? rawId[0] : rawId
 
     // Prevent deletion of self
     if (id === userId) {
