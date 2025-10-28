@@ -168,6 +168,13 @@ async function createKanbanCards(
         body: action.emailDraft.body,
         replyTo: action.emailDraft.replyTo,
       };
+      console.log('Creating card with emailDraft:', {
+        title: action.title,
+        hasSubject: !!action.emailDraft.subject,
+        hasBody: !!action.emailDraft.body,
+        subjectLength: action.emailDraft.subject?.length || 0,
+        bodyLength: action.emailDraft.body?.length || 0,
+      });
     } else if (action.taskDetails) {
       actionPayload = {
         description: action.taskDetails.description,
@@ -180,6 +187,12 @@ async function createKanbanCards(
         stage: action.dealDetails.stage,
         description: action.dealDetails.description,
       };
+    } else if (action.type === 'send_email') {
+      console.error('ERROR: send_email action missing emailDraft!', {
+        title: action.title,
+        type: action.type,
+        rationale: action.rationale,
+      });
     }
 
     // Validate contactId is a UUID (not an email address)

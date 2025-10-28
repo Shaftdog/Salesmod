@@ -219,10 +219,20 @@ Analyze the current situation and propose 3-7 high-impact actions to achieve the
 - **Medium**: Good opportunities, regular clients, standard follow-ups
 - **Low**: Exploratory, lower-value clients, nice-to-have
 
-Generate a plan with specific, actionable items. Each action should include:
-- Clear rationale tied to goals and client context
-- For emails: complete draft with subject and body
-- For tasks: specific description and due date
+## CRITICAL: Action Requirements
+Generate a plan with specific, actionable items. Each action MUST include:
+- **type**: The action type (send_email, create_task, etc.)
+- **title**: Brief title for the action
+- **rationale**: Clear explanation of WHY this action is recommended (separate from email content)
+- **For send_email actions**: You MUST include the complete emailDraft object with:
+  - **to**: Recipient email address
+  - **subject**: Complete email subject line (at least 5 characters)
+  - **body**: Complete HTML email body (at least 20 characters, use <p>, <strong>, <ul>, <li> tags)
+  - **replyTo**: (optional) Reply-to address
+- **For create_task actions**: Include taskDetails with description and optional dueDate
+- **For create_deal actions**: Include dealDetails with title, stage, and optional value/description
+
+IMPORTANT: For send_email actions, the rationale field should explain WHY you're sending the email (business reasoning), while the emailDraft.body contains the ACTUAL email message to send. These are separate fields!
 
 Remember: You're in **Review Mode**, so all actions will be reviewed by a human before execution. Be thoughtful and strategic.`;
 }
@@ -264,13 +274,17 @@ export function validatePlan(plan: AgentPlan, context: AgentContext): {
     // Validate email actions
     if (action.type === 'send_email') {
       if (!action.emailDraft) {
-        errors.push(`Action ${index + 1}: Email action must include emailDraft`);
+        errors.push(`Action ${index + 1} "${action.title}": Email action MUST include emailDraft with subject and body. The rationale field should only contain WHY you're sending the email, not the email content itself.`);
+        console.error('Missing emailDraft for send_email action:', {
+          title: action.title,
+          rationale: action.rationale,
+        });
       } else {
         if (!action.emailDraft.subject || action.emailDraft.subject.length < 5) {
-          errors.push(`Action ${index + 1}: Email subject is required and must be at least 5 characters`);
+          errors.push(`Action ${index + 1} "${action.title}": Email subject is required and must be at least 5 characters`);
         }
         if (!action.emailDraft.body || action.emailDraft.body.length < 20) {
-          errors.push(`Action ${index + 1}: Email body is required and must be at least 20 characters`);
+          errors.push(`Action ${index + 1} "${action.title}": Email body is required and must be at least 20 characters`);
         }
         // Check for contact email
         if (action.contactId) {

@@ -185,18 +185,18 @@ export const agentTools = {
    * Create an action card
    */
   createCard: tool({
-    description: 'Create a new action card on the Kanban board. Use this when user requests to create a task, draft an email, or propose an action. For calls/meetings, create a task instead. ClientId is optional - omit it for general strategic cards.',
+    description: 'Create a new action card on the Kanban board. Use this when user requests to create a task, draft an email, or propose an action. For calls/meetings, create a task instead. ClientId is optional - omit it for general strategic cards. IMPORTANT: For send_email type, you MUST include emailDraft with subject and body. The rationale explains WHY, the emailDraft.body is the ACTUAL email message.',
     parameters: z.object({
       type: z.enum(['send_email', 'create_task', 'create_deal', 'follow_up', 'research']),
       clientId: z.string().optional().describe('UUID of the client (optional - omit for general strategic cards)'),
       title: z.string().describe('Brief title for the action'),
-      rationale: z.string().describe('Why this action is recommended'),
+      rationale: z.string().describe('Why this action is recommended (business reasoning, NOT the email content)'),
       priority: z.enum(['low', 'medium', 'high']).default('medium'),
       emailDraft: z.object({
         to: z.string(),
-        subject: z.string(),
-        body: z.string().describe('HTML email body'),
-      }).optional(),
+        subject: z.string().min(5).describe('Complete email subject line'),
+        body: z.string().min(20).describe('Complete HTML email body (the actual message to send)'),
+      }).optional().describe('REQUIRED for send_email type. Contains the actual email to send.'),
       taskDetails: z.object({
         description: z.string(),
         dueDate: z.string().optional(),
@@ -208,10 +208,32 @@ export const agentTools = {
       
       if (!user) return { error: 'Not authenticated' };
 
+      // Validate send_email actions have emailDraft
+      if (params.type === 'send_email') {
+        if (!params.emailDraft) {
+          console.error('ERROR: createCard called with send_email but no emailDraft!', {
+            title: params.title,
+            rationale: params.rationale,
+          });
+          return { error: 'send_email actions must include emailDraft with subject and body' };
+        }
+        if (!params.emailDraft.subject || params.emailDraft.subject.length < 5) {
+          return { error: 'Email subject must be at least 5 characters' };
+        }
+        if (!params.emailDraft.body || params.emailDraft.body.length < 20) {
+          return { error: 'Email body must be at least 20 characters' };
+        }
+      }
+
       // Build action payload
       let actionPayload: any = {};
       if (params.emailDraft) {
         actionPayload = params.emailDraft;
+        console.log('Creating card via chat with emailDraft:', {
+          title: params.title,
+          hasSubject: !!params.emailDraft.subject,
+          hasBody: !!params.emailDraft.body,
+        });
       } else if (params.taskDetails) {
         actionPayload = params.taskDetails;
       }
