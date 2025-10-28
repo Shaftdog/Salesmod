@@ -70,6 +70,14 @@ export function AgentChat() {
 
     try {
       console.log('[Chat] Sending request to /api/agent/chat-simple');
+      
+      // Add a timeout to the fetch request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.error('[Chat] Request timeout after 60 seconds');
+        controller.abort();
+      }, 60000); // 60 second timeout
+
       const response = await fetch('/api/agent/chat-simple', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -79,7 +87,8 @@ export function AgentChat() {
             content: m.content,
           })),
         }),
-      });
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeoutId));
 
       console.log('[Chat] Response status:', response.status);
       
@@ -141,8 +150,18 @@ export function AgentChat() {
       }
     } catch (err: any) {
       console.error('[Chat] Error:', err);
-      setError(err.message);
-      const errorMessage = `Sorry, I encountered an error: ${err.message}`;
+      
+      let errorMessage = 'Sorry, I encountered an error.';
+      
+      if (err.name === 'AbortError') {
+        errorMessage = 'Request timed out. The AI service is taking too long to respond. Please try again with a simpler question.';
+      } else if (err.message.includes('Failed to fetch')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else {
+        errorMessage = `Sorry, I encountered an error: ${err.message}`;
+      }
+      
+      setError(errorMessage);
       setMessages((prev) => [
         ...prev,
         {
@@ -284,9 +303,16 @@ export function AgentChat() {
                         "prose-strong:text-gray-900 prose-strong:font-semibold",
                         "prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline"
                       )}>
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {message.content || (isLoading ? 'Thinking...' : '')}
-                        </ReactMarkdown>
+                        {message.content ? (
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {message.content}
+                          </ReactMarkdown>
+                        ) : isLoading ? (
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <span className="text-sm italic">Thinking...</span>
+                          </div>
+                        ) : null}
                       </div>
                     )}
                     

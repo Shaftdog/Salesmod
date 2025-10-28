@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     // Get contacts for context (using service role to bypass RLS)
     const serviceClient = createServiceRoleClient();
 
-    // Get all contacts with assigned clients
+    // Get contacts with assigned clients (limit to 300 to avoid timeout)
     const { data: contacts, error: contactsError } = await serviceClient
       .from('contacts')
       .select(`
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       .order('client_id', { ascending: true })
       .order('is_primary', { ascending: false })
       .order('last_name', { ascending: true })
-      .limit(1000);  // Increase to ensure we get all contacts
+      .limit(300);
 
     if (contactsError) {
       console.error('[Chat] Error fetching contacts:', contactsError);
@@ -78,43 +78,22 @@ export async function POST(request: Request) {
       }
     }
 
-    // Get all properties for context (Supabase default max is 1000, so we need to handle pagination)
-    let allProperties: any[] = [];
-    let page = 0;
-    const pageSize = 1000;
-
-    while (true) {
-      const { data: propertiesPage, error: propertiesError } = await serviceClient
-        .from('properties')
-        .select(`
-          id,
-          address_line1,
-          address_line2,
-          city,
-          state,
-          postal_code,
-          property_type,
-          org_id,
-          county
-        `)
-        .order('created_at', { ascending: false })
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (propertiesError) {
-        console.error('[Chat] Error fetching properties:', propertiesError);
-        break;
-      }
-
-      if (!propertiesPage || propertiesPage.length === 0) break;
-
-      allProperties = allProperties.concat(propertiesPage);
-
-      if (propertiesPage.length < pageSize) break; // Last page
-      page++;
-    }
-
-    const properties = allProperties;
-    const propertiesError = null;
+    // Get properties for context (limit to recent 500 to avoid timeout)
+    const { data: properties, error: propertiesError } = await serviceClient
+      .from('properties')
+      .select(`
+        id,
+        address_line1,
+        address_line2,
+        city,
+        state,
+        postal_code,
+        property_type,
+        org_id,
+        county
+      `)
+      .order('created_at', { ascending: false })
+      .limit(500);
 
     // Add client names to properties using org_id
     if (properties && properties.length > 0) {
@@ -137,7 +116,7 @@ export async function POST(request: Request) {
       console.log(`[Chat] Loaded ${properties?.length || 0} properties`);
     }
 
-    // Get orders for context (up to 3000 most recent)
+    // Get orders for context (limit to recent 500 to avoid timeout)
     const { data: orders, error: ordersError } = await serviceClient
       .from('orders')
       .select(`
@@ -160,7 +139,7 @@ export async function POST(request: Request) {
         borrower_name
       `)
       .order('ordered_date', { ascending: false })
-      .limit(3000);
+      .limit(500);
 
     // Add client names to orders
     if (orders && orders.length > 0) {
@@ -183,7 +162,7 @@ export async function POST(request: Request) {
       console.log(`[Chat] Loaded ${orders?.length || 0} orders`);
     }
 
-    // Get cases for context
+    // Get cases for context (limit to recent 200 to avoid timeout)
     const { data: cases, error: casesError } = await serviceClient
       .from('cases')
       .select(`
@@ -205,7 +184,7 @@ export async function POST(request: Request) {
         updated_at
       `)
       .order('created_at', { ascending: false })
-      .limit(1000);
+      .limit(200);
 
     // Add related data to cases
     if (cases && cases.length > 0) {
@@ -487,10 +466,12 @@ Current context:
 - User: ${user.email}
 - Active goals: ${goals?.length || 0}
 - Active clients: ${clients?.length || 0}
-- Total contacts: ${contacts?.length || 0}
-- Total properties: ${properties?.length || 0}
-- Total orders: ${orders?.length || 0}
-- Total cases: ${cases?.length || 0}
+- Contacts (showing recent 300): ${contacts?.length || 0}
+- Properties (showing recent 500): ${properties?.length || 0}
+- Orders (showing recent 500): ${orders?.length || 0}
+- Cases (showing recent 200): ${cases?.length || 0}
+
+Note: For performance, I'm showing recent records. If you need specific historical data, let me know.
 
 Goals:
 ${goals?.map((g: any) => `- ${g.metric_type}: Target ${g.target_value}, Period: ${g.period_type}`).join('\n') || 'No active goals'}
