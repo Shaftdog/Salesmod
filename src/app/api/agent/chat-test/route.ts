@@ -49,7 +49,7 @@ Be helpful and use the tool when appropriate.`;
         try {
           for await (const part of result.fullStream) {
             if (part.type === 'text-delta') {
-              controller.enqueue(new TextEncoder().encode(part.textDelta));
+              controller.enqueue(new TextEncoder().encode(part.text));
             } else if (part.type === 'tool-call') {
               console.log('[Chat Test] Tool call:', part.toolName, part.args);
             } else if (part.type === 'tool-result') {
