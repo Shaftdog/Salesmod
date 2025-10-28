@@ -15,7 +15,7 @@ export const simpleAgentTools = {
       priority: z.enum(['low', 'medium', 'high']).default('medium'),
       clientId: z.string().optional(),
     }),
-    execute: async ({ type, title, rationale, priority, clientId }) => {
+    execute: async (params: any) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -25,11 +25,11 @@ export const simpleAgentTools = {
         .from('kanban_cards')
         .insert({
           org_id: user.id,
-          client_id: clientId || null,
-          type,
-          title,
-          rationale,
-          priority,
+          client_id: params.clientId || null,
+          type: params.type,
+          title: params.title,
+          rationale: params.rationale,
+          priority: params.priority,
           state: 'suggested',
           action_payload: {},
           created_by: user.id,
