@@ -37,7 +37,7 @@ import { logFailure } from './audit'
 export interface AuthContext {
   userId: string
   supabase: Awaited<ReturnType<typeof createClient>>
-  params?: Promise<any>
+  params?: Promise<Record<string, string | string[]>>
 }
 
 /**
