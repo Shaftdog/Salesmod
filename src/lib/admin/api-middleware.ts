@@ -37,6 +37,7 @@ import { logFailure } from './audit'
 export interface AuthContext {
   userId: string
   supabase: Awaited<ReturnType<typeof createClient>>
+  params?: Promise<any>
 }
 
 /**
@@ -52,7 +53,7 @@ export type AuthenticatedHandler = (
  * Returns 401 if not authenticated, 403 if not admin
  */
 export function withAdminAuth(handler: AuthenticatedHandler) {
-  return async (request: NextRequest) => {
+  return async (request: NextRequest, routeContext?: { params?: Promise<any> }) => {
     try {
       const supabase = await createClient()
 
@@ -60,7 +61,11 @@ export function withAdminAuth(handler: AuthenticatedHandler) {
       const userId = await requireAdmin(supabase)
 
       // Call the actual handler with authenticated context
-      return await handler(request, { userId, supabase })
+      return await handler(request, {
+        userId,
+        supabase,
+        params: routeContext?.params
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unauthorized'
 
@@ -89,7 +94,7 @@ export function withAdminAuth(handler: AuthenticatedHandler) {
  * Returns 401 if not authenticated, 403 if doesn't have required role
  */
 export function withRole(role: UserRole, handler: AuthenticatedHandler) {
-  return async (request: NextRequest) => {
+  return async (request: NextRequest, routeContext?: { params?: Promise<any> }) => {
     try {
       const supabase = await createClient()
 
@@ -97,7 +102,11 @@ export function withRole(role: UserRole, handler: AuthenticatedHandler) {
       const userId = await requireRole(role, supabase)
 
       // Call the actual handler with authenticated context
-      return await handler(request, { userId, supabase })
+      return await handler(request, {
+        userId,
+        supabase,
+        params: routeContext?.params
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unauthorized'
 
@@ -130,7 +139,7 @@ export function withPermission(
   permission: string,
   handler: AuthenticatedHandler
 ) {
-  return async (request: NextRequest) => {
+  return async (request: NextRequest, routeContext?: { params?: Promise<any> }) => {
     try {
       const supabase = await createClient()
 
@@ -138,7 +147,11 @@ export function withPermission(
       const userId = await requirePermission(permission, supabase)
 
       // Call the actual handler with authenticated context
-      return await handler(request, { userId, supabase })
+      return await handler(request, {
+        userId,
+        supabase,
+        params: routeContext?.params
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unauthorized'
 
