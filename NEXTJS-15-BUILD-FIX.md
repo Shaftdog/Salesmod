@@ -15,18 +15,23 @@ Type error: Route "src/app/api/admin-test/route.ts" has an invalid "GET" export:
 ## Root Cause
 Next.js 15 has stricter TypeScript requirements for route handler signatures. The middleware functions (`withAdminAuth`, `withRole`, `withPermission`) were using an outdated type signature for the route context parameter.
 
-The key issue: **The context parameter itself must be required (not optional)**, only the `params` property inside it should be optional.
+**Key issues identified:**
+1. The context parameter itself must be **required** (not optional)
+2. The `params` property inside context must **also be required** (not optional)
+3. Next.js 15 always provides `params` even for routes without dynamic segments
 
 **Old (incorrect):**
 ```typescript
 routeContext: { params?: Promise<any> } = {}
 // or
 routeContext?: { params?: Promise<Record<string, string | string[]>> }
+// or
+context: { params?: Promise<Record<string, string | string[]>> }
 ```
 
 **New (correct):**
 ```typescript
-context: { params?: Promise<Record<string, string | string[]>> }
+context: { params: Promise<Record<string, string | string[]>> }
 ```
 
 ## Changes Made
@@ -40,8 +45,8 @@ Fixed all three middleware wrapper functions:
 3. **withPermission**
 
 Each function now properly types the context parameter as:
-- **Required** (not optional) - Next.js always provides this parameter
-- Only `params` property inside is optional
+- **Context parameter is required** (not optional) - Next.js always provides this
+- **Params property is also required** (not optional) - Next.js always provides params even for non-dynamic routes
 - Properly typed params as `Promise<Record<string, string | string[]>>`
 - Renamed from `routeContext` to `context` for clarity
 
@@ -51,7 +56,7 @@ Each function now properly types the context parameter as:
 ```typescript
 export function withAdminAuth(handler: AuthenticatedHandler) {
   return async (request: NextRequest, routeContext?: { params?: Promise<any> }) => {
-    // ❌ Context parameter is optional - this causes the type error
+    // ❌ Both context AND params are optional - causes type error
     return await handler(request, {
       userId,
       supabase,
@@ -66,8 +71,8 @@ export function withAdminAuth(handler: AuthenticatedHandler) {
 export function withAdminAuth(handler: AuthenticatedHandler) {
   return async (
     request: NextRequest,
-    context: { params?: Promise<Record<string, string | string[]>> }
-    // ✅ Context parameter is required, only params inside is optional
+    context: { params: Promise<Record<string, string | string[]>> }
+    // ✅ Both context AND params are required - matches Next.js 15 expectations
   ) => {
     // ...
     return await handler(request, {
@@ -102,8 +107,10 @@ Should now complete without TypeScript errors.
 The next push to `main` branch will trigger a new Vercel build that should succeed.
 
 ## Commits
-- Commit: `730f35f` - Initial attempt (still had issue)
-- Commit: `c033edc` - **Final fix**: "Make route context parameter required (not optional) for Next.js 15"
+- Commit: `730f35f` - Initial attempt (params was `Promise<any>`)
+- Commit: `c033edc` - Made context required (params still optional)
+- Commit: `092ee84` - Fixed params type to `Promise<Record<...>>`
+- Commit: `b02eb74` - **Final fix**: Made params property required (not optional)
 
 ## References
 - [Next.js 15 Route Handlers Documentation](https://nextjs.org/docs/app/building-your-application/routing/route-handlers)
