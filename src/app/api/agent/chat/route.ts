@@ -124,7 +124,6 @@ Remember: You're helping achieve business goals. Be strategic and data-driven.`;
       messages,
       tools: agentTools,
       temperature: 0.7,
-      maxTokens: 4000,
     });
 
     // Save conversation to memory asynchronously (don't await)
@@ -147,16 +146,16 @@ Remember: You're helping achieve business goals. Be strategic and data-driven.`;
           for await (const part of result.fullStream) {
             // Handle text deltas
             if (part.type === 'text-delta') {
-              controller.enqueue(new TextEncoder().encode(part.textDelta));
+              controller.enqueue(new TextEncoder().encode(part.text));
             }
             // Log tool calls for debugging
             else if (part.type === 'tool-call') {
               toolCallsDetected = true;
-              console.log('[Chat API] Tool call:', part.toolName, part.args);
+              console.log('[Chat API] Tool call:', part);
             }
             // Log tool results for debugging
             else if (part.type === 'tool-result') {
-              console.log('[Chat API] Tool result:', part.toolName, 'success:', !part.result?.error);
+              console.log('[Chat API] Tool result:', part);
             }
           }
           
