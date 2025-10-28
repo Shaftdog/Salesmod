@@ -54,7 +54,7 @@ export async function executeComputerUseTask(
       console.log(`[Computer Use] Step ${step + 1}/${maxSteps}`);
 
       const response = await client.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-3-5-sonnet-20240620',
         max_tokens: 4096,
         tools: [
           {

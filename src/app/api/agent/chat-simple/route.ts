@@ -635,7 +635,7 @@ You help manage client relationships and achieve business goals. Be helpful, con
     let result;
     try {
       result = streamText({
-        model: anthropic('claude-3-5-sonnet-20241022'),
+        model: anthropic('claude-3-5-sonnet-20240620'),
         system: systemPrompt,
         messages,
         temperature: 0.7,

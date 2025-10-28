@@ -47,7 +47,7 @@ export async function generatePlan(context: AgentContext): Promise<AgentPlan> {
 
   try {
     const { object } = await generateObject({
-      model: anthropic('claude-3-5-sonnet-20241022'),
+      model: anthropic('claude-3-5-sonnet-20240620'),
       schema: PlanSchema,
       prompt,
       temperature: 0.5, // Reduced for more consistent output
