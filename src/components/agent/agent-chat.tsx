@@ -4,10 +4,11 @@ import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Send, Loader2, Sparkles, User, Bot, Trash2 } from 'lucide-react';
+import { Send, Loader2, User, Bot, Trash2, CheckCircle2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useChatMessages, useSaveChatMessage, useClearChatHistory } from '@/hooks/use-chat-messages';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Message {
   id: string;
@@ -68,6 +69,7 @@ export function AgentChat() {
     saveChatMessage.mutate({ role: 'user', content: userMessage.content });
 
     try {
+      console.log('[Chat] Sending request to /api/agent/chat-simple');
       const response = await fetch('/api/agent/chat-simple', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -79,8 +81,12 @@ export function AgentChat() {
         }),
       });
 
+      console.log('[Chat] Response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error('Chat request failed');
+        const errorText = await response.text();
+        console.error('[Chat] Error response:', errorText);
+        throw new Error(`Chat request failed: ${response.status} ${errorText.substring(0, 100)}`);
       }
 
       // Read streaming response
@@ -100,11 +106,16 @@ export function AgentChat() {
       ]);
 
       if (reader) {
+        let chunkCount = 0;
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            console.log('[Chat] Stream finished, total chunks:', chunkCount);
+            break;
+          }
 
           const chunk = decoder.decode(value, { stream: true });
+          chunkCount++;
           assistantContent += chunk;
           
           // Update assistant message in real-time
@@ -117,12 +128,19 @@ export function AgentChat() {
           });
         }
         
+        console.log('[Chat] Final content length:', assistantContent.length);
+        
         // Save final assistant message to database
         if (assistantContent) {
           saveChatMessage.mutate({ role: 'assistant', content: assistantContent });
+        } else {
+          console.warn('[Chat] No content received from stream');
         }
+      } else {
+        console.error('[Chat] No reader available');
       }
     } catch (err: any) {
+      console.error('[Chat] Error:', err);
       setError(err.message);
       const errorMessage = `Sorry, I encountered an error: ${err.message}`;
       setMessages((prev) => [
@@ -144,7 +162,7 @@ export function AgentChat() {
     { label: 'Check Goals', prompt: 'What are my current goals and how am I tracking?' },
     { label: 'Pending Actions', prompt: 'What actions are pending my review?' },
     { label: 'Recent Activity', prompt: 'Summarize recent activity with my clients' },
-    { label: 'Draft Email', prompt: 'Help me draft an email to Acme' },
+    { label: 'Draft Email', prompt: 'Help me draft an email to one of my clients' },
   ];
 
   const handleQuickAction = (prompt: string) => {
@@ -154,6 +172,41 @@ export function AgentChat() {
   const handleClearHistory = () => {
     clearHistory.mutate();
     setMessages([]);
+  };
+
+  // Function to render tool invocations
+  const renderToolInvocations = (toolInvocations: any[]) => {
+    if (!toolInvocations || toolInvocations.length === 0) return null;
+    
+    return (
+      <div className="mt-2 space-y-2 border-t pt-2 opacity-75">
+        {toolInvocations.map((tool: any, i: number) => {
+          const toolName = tool.toolName || 'unknown';
+          const state = tool.state;
+          
+          return (
+            <div key={i} className="text-xs flex items-start gap-2">
+              {state === 'result' ? (
+                <CheckCircle2 className="h-3 w-3 mt-0.5 text-green-600 flex-shrink-0" />
+              ) : (
+                <Loader2 className="h-3 w-3 mt-0.5 animate-spin flex-shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="font-medium">{toolName}</div>
+                {tool.result && (
+                  <div className="mt-1 text-xs opacity-75 truncate">
+                    {typeof tool.result === 'string' 
+                      ? tool.result 
+                      : JSON.stringify(tool.result).substring(0, 100)
+                    }
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -215,19 +268,30 @@ export function AgentChat() {
                         : 'bg-muted'
                     )}
                   >
-                    {message.content}
-                    
-                    {/* Show tool calls if any */}
-                    {message.toolInvocations && message.toolInvocations.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-blue-500/20">
-                        {message.toolInvocations.map((tool: any, i: number) => (
-                          <div key={i} className="text-xs opacity-75 flex items-center gap-1">
-                            <Sparkles className="h-3 w-3" />
-                            <span>Using tool: {tool.toolName}</span>
-                          </div>
-                        ))}
+                    {message.role === 'user' ? (
+                      // User messages: simple text
+                      <div className="whitespace-pre-wrap">{message.content}</div>
+                    ) : (
+                      // Assistant messages: rendered markdown
+                      <div className={cn(
+                        "prose prose-sm max-w-none",
+                        "prose-p:my-2 prose-p:leading-relaxed",
+                        "prose-pre:my-2 prose-pre:bg-gray-900 prose-pre:text-gray-100",
+                        "prose-code:text-blue-600 prose-code:bg-blue-50 prose-code:px-1 prose-code:py-0.5 prose-code:rounded",
+                        "prose-ul:my-2 prose-ol:my-2",
+                        "prose-li:my-1",
+                        "prose-headings:mt-4 prose-headings:mb-2",
+                        "prose-strong:text-gray-900 prose-strong:font-semibold",
+                        "prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline"
+                      )}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {message.content || (isLoading ? 'Thinking...' : '')}
+                        </ReactMarkdown>
                       </div>
                     )}
+                    
+                    {/* Show tool calls if any */}
+                    {message.toolInvocations && renderToolInvocations(message.toolInvocations)}
                   </div>
 
                   {message.role === 'user' && (

@@ -1,13 +1,24 @@
 'use client';
 
 import { useState } from 'react';
-import { useKanbanCards, useUpdateCardState, KanbanCard } from '@/hooks/use-agent';
+import { useKanbanCards, useUpdateCardState, useDeleteCard, KanbanCard } from '@/hooks/use-agent';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Check, X, Clock, AlertCircle } from 'lucide-react';
+import { Loader2, Check, X, Clock, AlertCircle, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
 
 const COLUMNS = [
   { id: 'suggested', title: 'Suggested', color: 'bg-blue-50 border-blue-200' },
@@ -25,7 +36,10 @@ interface KanbanBoardProps {
 export function KanbanBoard({ onCardClick }: KanbanBoardProps) {
   const { data: cards, isLoading } = useKanbanCards();
   const updateCardState = useUpdateCardState();
+  const deleteCard = useDeleteCard();
+  const { toast } = useToast();
   const [draggedCard, setDraggedCard] = useState<KanbanCard | null>(null);
+  const [cardToDelete, setCardToDelete] = useState<KanbanCard | null>(null);
 
   const getCardsByState = (state: string) => {
     return cards?.filter((card) => card.state === state) || [];
@@ -49,6 +63,26 @@ export function KanbanBoard({ onCardClick }: KanbanBoardProps) {
     setDraggedCard(null);
   };
 
+  const handleDeleteCard = async () => {
+    if (!cardToDelete) return;
+    
+    try {
+      await deleteCard.mutateAsync(cardToDelete.id);
+      toast({
+        title: 'Card Deleted',
+        description: `"${cardToDelete.title}" has been deleted.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Delete Failed',
+        description: error.message || 'Failed to delete card',
+        variant: 'destructive',
+      });
+    } finally {
+      setCardToDelete(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -62,7 +96,7 @@ export function KanbanBoard({ onCardClick }: KanbanBoardProps) {
       {COLUMNS.map((column) => (
         <div
           key={column.id}
-          className="flex-shrink-0 w-80"
+          className="flex-shrink-0 w-96"
           onDragOver={handleDragOver}
           onDrop={() => handleDrop(column.id)}
         >
@@ -84,6 +118,7 @@ export function KanbanBoard({ onCardClick }: KanbanBoardProps) {
                       card={card}
                       onDragStart={handleDragStart}
                       onClick={() => onCardClick?.(card)}
+                      onDelete={() => setCardToDelete(card)}
                     />
                   ))}
                   {getCardsByState(column.id).length === 0 && (
@@ -97,6 +132,24 @@ export function KanbanBoard({ onCardClick }: KanbanBoardProps) {
           </Card>
         </div>
       ))}
+      
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!cardToDelete} onOpenChange={(open) => !open && setCardToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Card?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{cardToDelete?.title}&quot;? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteCard} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -105,9 +158,10 @@ interface KanbanCardItemProps {
   card: KanbanCard;
   onDragStart: (card: KanbanCard) => void;
   onClick: () => void;
+  onDelete: () => void;
 }
 
-function KanbanCardItem({ card, onDragStart, onClick }: KanbanCardItemProps) {
+function KanbanCardItem({ card, onDragStart, onClick, onDelete }: KanbanCardItemProps) {
   const priorityColors = {
     low: 'border-l-gray-400',
     medium: 'border-l-blue-500',
@@ -127,27 +181,39 @@ function KanbanCardItem({ card, onDragStart, onClick }: KanbanCardItemProps) {
     <Card
       draggable
       onDragStart={() => onDragStart(card)}
-      onClick={onClick}
       className={cn(
-        'cursor-pointer hover:shadow-md transition-shadow border-l-4',
+        'cursor-pointer hover:shadow-md transition-shadow border-l-4 group relative',
         priorityColors[card.priority as keyof typeof priorityColors]
       )}
     >
-      <CardContent className="p-3 space-y-2">
+      <CardContent className="p-3 space-y-2" onClick={onClick}>
         <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">{typeIcons[card.type as keyof typeof typeIcons] || '📄'}</span>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <span className="text-lg flex-shrink-0">{typeIcons[card.type as keyof typeof typeIcons] || '📄'}</span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{card.title}</p>
+              <p className="text-sm font-medium line-clamp-2">{card.title}</p>
             </div>
           </div>
-          <Badge variant="outline" className="text-xs flex-shrink-0">
-            {card.priority}
-          </Badge>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <Badge variant="outline" className="text-xs">
+              {card.priority}
+            </Badge>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 hover:text-red-600"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
         </div>
 
         {card.client && (
-          <p className="text-xs text-muted-foreground truncate">
+          <p className="text-xs text-muted-foreground">
             {card.client.company_name}
           </p>
         )}

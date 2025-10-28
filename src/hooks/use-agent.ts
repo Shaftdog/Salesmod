@@ -126,7 +126,7 @@ export function useKanbanCards(state?: string, clientId?: string) {
         .select(`
           *,
           client:clients(id, company_name, primary_contact, email),
-          contact:contacts(id, first_name, last_name, email)
+          contact:contacts!kanban_cards_contact_id_fkey(id, first_name, last_name, email)
         `)
         .eq('org_id', user.id)
         .order('created_at', { ascending: false });
@@ -184,7 +184,7 @@ export function useKanbanCard(cardId: string) {
         .select(`
           *,
           client:clients(id, company_name, primary_contact, email),
-          contact:contacts(id, first_name, last_name, email)
+          contact:contacts!kanban_cards_contact_id_fkey(id, first_name, last_name, email)
         `)
         .eq('id', cardId)
         .single();
@@ -348,6 +348,30 @@ export function useUpdateCardState() {
 
       if (error) throw error;
       return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kanban-cards'] });
+    },
+  });
+}
+
+// =============================================
+// MUTATION: Delete Card
+// =============================================
+
+export function useDeleteCard() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (cardId: string) => {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('kanban_cards')
+        .delete()
+        .eq('id', cardId);
+
+      if (error) throw error;
+      return { success: true };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['kanban-cards'] });

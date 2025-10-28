@@ -15,11 +15,11 @@ import {
 /**
  * Agent tools for conversational interaction
  */
-export const agentTools: any = {
+export const agentTools = {
   /**
    * Search for clients
    */
-  searchClients: (tool as any)({
+  searchClients: tool({
     description: 'Search for clients by name, email, or other criteria. Use this when user asks about specific clients or wants to find clients.',
     parameters: z.object({
       query: z.string().min(1).describe('Search term (company name, contact name, email, etc.)'),
@@ -51,12 +51,12 @@ export const agentTools: any = {
         count: data?.length || 0,
       };
     },
-  } as any),
+  }),
 
   /**
    * Search for contacts
    */
-  searchContacts: (tool as any)({
+  searchContacts: tool({
     description: 'Search for individual contacts by name, email, title, or other criteria. Use this when user asks about specific people or wants to find contacts.',
     parameters: z.object({
       query: z.string().min(1).describe('Search term (first name, last name, email, title, etc.)'),
@@ -76,7 +76,7 @@ export const agentTools: any = {
           title,
           is_primary,
           client_id,
-          client:clients(
+          client:clients!contacts_client_id_fkey(
             id,
             company_name
           ),
@@ -114,12 +114,12 @@ export const agentTools: any = {
         count: data?.length || 0,
       };
     },
-  } as any),
+  }),
 
   /**
    * Get current goals and progress
    */
-  getGoals: (tool as any)({
+  getGoals: tool({
     description: 'Get active goals and their current progress. Use this when user asks about goals, targets, or performance.',
     parameters: z.object({}),
     execute: async (): Promise<any> => {
@@ -179,16 +179,16 @@ export const agentTools: any = {
         },
       };
     },
-  } as any),
+  }),
 
   /**
    * Create an action card
    */
-  createCard: (tool as any)({
-    description: 'Create a new action card on the Kanban board. Use this when user requests to create a task, draft an email, or propose an action. For calls/meetings, create a task instead.',
+  createCard: tool({
+    description: 'Create a new action card on the Kanban board. Use this when user requests to create a task, draft an email, or propose an action. For calls/meetings, create a task instead. ClientId is optional - omit it for general strategic cards.',
     parameters: z.object({
       type: z.enum(['send_email', 'create_task', 'create_deal', 'follow_up', 'research']),
-      clientId: z.string().describe('UUID of the client'),
+      clientId: z.string().optional().describe('UUID of the client (optional - omit for general strategic cards)'),
       title: z.string().describe('Brief title for the action'),
       rationale: z.string().describe('Why this action is recommended'),
       priority: z.enum(['low', 'medium', 'high']).default('medium'),
@@ -220,7 +220,7 @@ export const agentTools: any = {
         .from('kanban_cards')
         .insert({
           org_id: user.id,
-          client_id: params.clientId,
+          client_id: params.clientId || null, // Allow null for general strategic cards
           type: params.type,
           title: params.title,
           rationale: params.rationale,
@@ -246,12 +246,428 @@ export const agentTools: any = {
         },
       };
     },
-  } as any),
+  }),
+
+  /**
+   * Delete action card(s)
+   */
+  deleteCard: tool({
+    description: 'Delete one or more action cards from the Kanban board. Use this when user asks to delete, remove, or dismiss cards. Can match by ID, priority, type, or title.',
+    parameters: z.object({
+      cardId: z.string().optional().describe('Specific card UUID to delete'),
+      priority: z.enum(['low', 'medium', 'high']).optional().describe('Delete all cards with this priority'),
+      type: z.enum(['send_email', 'create_task', 'create_deal', 'follow_up', 'research']).optional().describe('Delete all cards of this type'),
+      titleMatch: z.string().optional().describe('Delete cards with titles containing this text'),
+      clientId: z.string().optional().describe('Delete cards associated with this client'),
+    }),
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) return { error: 'Not authenticated' };
+
+      // Get all cards first to match
+      const { data: allCards, error: fetchError } = await supabase
+        .from('kanban_cards')
+        .select('id, title, type, priority, state, client_id, client:clients(company_name)')
+        .eq('org_id', user.id);
+
+      if (fetchError) {
+        return { error: fetchError.message };
+      }
+
+      if (!allCards || allCards.length === 0) {
+        return {
+          success: true,
+          deletedCount: 0,
+          message: 'No cards found to delete',
+        };
+      }
+
+      // Filter cards based on criteria
+      let cardsToDelete = allCards;
+
+      if (params.cardId) {
+        cardsToDelete = cardsToDelete.filter(c => c.id === params.cardId);
+      }
+      
+      if (params.priority) {
+        cardsToDelete = cardsToDelete.filter(c => c.priority === params.priority);
+      }
+      
+      if (params.type) {
+        cardsToDelete = cardsToDelete.filter(c => c.type === params.type);
+      }
+      
+      if (params.titleMatch) {
+        const searchTerm = params.titleMatch.toLowerCase();
+        cardsToDelete = cardsToDelete.filter(c => 
+          c.title.toLowerCase().includes(searchTerm)
+        );
+      }
+      
+      if (params.clientId) {
+        cardsToDelete = cardsToDelete.filter(c => c.client_id === params.clientId);
+      }
+
+      if (cardsToDelete.length === 0) {
+        return {
+          success: true,
+          deletedCount: 0,
+          message: 'No cards matched the criteria',
+        };
+      }
+
+      // Delete the matched cards
+      const cardIds = cardsToDelete.map(c => c.id);
+      const { error: deleteError } = await supabase
+        .from('kanban_cards')
+        .delete()
+        .in('id', cardIds)
+        .eq('org_id', user.id);
+
+      if (deleteError) {
+        return { error: deleteError.message };
+      }
+
+      return {
+        success: true,
+        deletedCount: cardsToDelete.length,
+        deletedCards: cardsToDelete.map(c => ({
+          id: c.id,
+          title: c.title,
+          type: c.type,
+          priority: c.priority,
+          client: (c.client as any)?.company_name || null,
+        })),
+      };
+    },
+  }),
+
+  /**
+   * Update an existing action card
+   */
+  updateCard: tool({
+    description: 'Update an existing action card. Use this to change priority, state, title, or move it to a different stage.',
+    parameters: z.object({
+      cardId: z.string().describe('Card UUID to update'),
+      state: z.enum(['suggested', 'in_review', 'approved', 'rejected', 'completed']).optional().describe('New state for the card'),
+      priority: z.enum(['low', 'medium', 'high']).optional().describe('New priority'),
+      title: z.string().optional().describe('New title'),
+      rationale: z.string().optional().describe('Updated rationale'),
+    }),
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) return { error: 'Not authenticated' };
+
+      const updates: any = {};
+      if (params.state) updates.state = params.state;
+      if (params.priority) updates.priority = params.priority;
+      if (params.title) updates.title = params.title;
+      if (params.rationale) updates.rationale = params.rationale;
+
+      const { data, error } = await supabase
+        .from('kanban_cards')
+        .update(updates)
+        .eq('id', params.cardId)
+        .eq('org_id', user.id)
+        .select('id, title, type, state, priority')
+        .single();
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      return {
+        success: true,
+        card: data,
+      };
+    },
+  }),
+
+  /**
+   * Create a case
+   */
+  createCase: tool({
+    description: 'Create a new support case or issue. Use this when user reports a problem, asks to track an issue, or needs help with something.',
+    parameters: z.object({
+      subject: z.string().describe('Brief subject/title of the case'),
+      description: z.string().describe('Detailed description of the issue or request'),
+      caseType: z.enum(['support', 'billing', 'quality_concern', 'complaint', 'service_request', 'technical', 'feedback', 'other']).describe('Type of case'),
+      priority: z.enum(['low', 'normal', 'high', 'urgent', 'critical']).default('normal'),
+      clientId: z.string().optional().describe('Associated client UUID'),
+      contactId: z.string().optional().describe('Associated contact UUID'),
+      orderId: z.string().optional().describe('Related order UUID'),
+    }),
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) return { error: 'Not authenticated' };
+
+      // Generate case number
+      const { data: lastCase } = await supabase
+        .from('cases')
+        .select('case_number')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      let caseNumber = 'CASE-0001';
+      if (lastCase?.case_number) {
+        const lastNum = parseInt(lastCase.case_number.split('-')[1] || '0');
+        caseNumber = `CASE-${String(lastNum + 1).padStart(4, '0')}`;
+      }
+
+      const { data, error } = await supabase
+        .from('cases')
+        .insert({
+          case_number: caseNumber,
+          subject: params.subject,
+          description: params.description,
+          case_type: params.caseType,
+          priority: params.priority,
+          status: 'new',
+          client_id: params.clientId || null,
+          contact_id: params.contactId || null,
+          order_id: params.orderId || null,
+          created_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      return {
+        success: true,
+        case: {
+          id: data.id,
+          caseNumber: data.case_number,
+          subject: data.subject,
+          status: data.status,
+          priority: data.priority,
+        },
+      };
+    },
+  }),
+
+  /**
+   * Update a case
+   */
+  updateCase: tool({
+    description: 'Update an existing case status, priority, or add resolution notes. Use this to manage case lifecycle.',
+    parameters: z.object({
+      caseId: z.string().describe('Case UUID or case number to update'),
+      status: z.enum(['new', 'open', 'pending', 'in_progress', 'resolved', 'closed', 'reopened']).optional().describe('New status'),
+      priority: z.enum(['low', 'normal', 'high', 'urgent', 'critical']).optional().describe('New priority'),
+      resolution: z.string().optional().describe('Resolution notes (if resolving or closing)'),
+      assignTo: z.string().optional().describe('User UUID to assign the case to'),
+    }),
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) return { error: 'Not authenticated' };
+
+      const updates: any = {};
+      if (params.status) updates.status = params.status;
+      if (params.priority) updates.priority = params.priority;
+      if (params.resolution) updates.resolution = params.resolution;
+      if (params.assignTo) updates.assigned_to = params.assignTo;
+
+      if (params.status === 'resolved' && !updates.resolved_at) {
+        updates.resolved_at = new Date().toISOString();
+      }
+      if (params.status === 'closed' && !updates.closed_at) {
+        updates.closed_at = new Date().toISOString();
+      }
+
+      // Handle both UUID and case number
+      let query = supabase.from('cases').update(updates);
+      
+      if (params.caseId.includes('CASE-')) {
+        query = query.eq('case_number', params.caseId);
+      } else {
+        query = query.eq('id', params.caseId);
+      }
+
+      const { data, error } = await query.select().single();
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      return {
+        success: true,
+        case: {
+          id: data.id,
+          caseNumber: data.case_number,
+          subject: data.subject,
+          status: data.status,
+          priority: data.priority,
+        },
+      };
+    },
+  }),
+
+  /**
+   * Delete a case
+   */
+  deleteCase: tool({
+    description: 'Delete a case. Use this when a case was created by mistake or is no longer needed.',
+    parameters: z.object({
+      caseId: z.string().describe('Case UUID or case number to delete'),
+    }),
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) return { error: 'Not authenticated' };
+
+      // Get case info first
+      let query = supabase.from('cases').select('id, case_number, subject');
+      
+      if (params.caseId.includes('CASE-')) {
+        query = query.eq('case_number', params.caseId);
+      } else {
+        query = query.eq('id', params.caseId);
+      }
+
+      const { data: caseData, error: fetchError } = await query.single();
+
+      if (fetchError || !caseData) {
+        return { error: 'Case not found' };
+      }
+
+      // Delete the case
+      const { error: deleteError } = await supabase
+        .from('cases')
+        .delete()
+        .eq('id', caseData.id);
+
+      if (deleteError) {
+        return { error: deleteError.message };
+      }
+
+      return {
+        success: true,
+        deleted: {
+          id: caseData.id,
+          caseNumber: caseData.case_number,
+          subject: caseData.subject,
+        },
+      };
+    },
+  }),
+
+  /**
+   * Log an activity
+   */
+  createActivity: tool({
+    description: 'Log a completed activity like a call, email, meeting, or note. Use this to record interactions with clients.',
+    parameters: z.object({
+      activityType: z.enum(['call', 'email', 'meeting', 'note', 'task']).describe('Type of activity'),
+      subject: z.string().describe('Brief subject of the activity'),
+      description: z.string().optional().describe('Detailed notes about the activity'),
+      clientId: z.string().optional().describe('Related client UUID'),
+      contactId: z.string().optional().describe('Related contact UUID'),
+      orderId: z.string().optional().describe('Related order UUID'),
+      outcome: z.string().optional().describe('Outcome or result of the activity'),
+      scheduledAt: z.string().optional().describe('When the activity occurred (ISO date string)'),
+    }),
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) return { error: 'Not authenticated' };
+
+      const { data, error } = await supabase
+        .from('activities')
+        .insert({
+          activity_type: params.activityType,
+          subject: params.subject,
+          description: params.description || '',
+          status: 'completed',
+          client_id: params.clientId || null,
+          contact_id: params.contactId || null,
+          order_id: params.orderId || null,
+          outcome: params.outcome || null,
+          scheduled_at: params.scheduledAt || new Date().toISOString(),
+          created_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      return {
+        success: true,
+        activity: {
+          id: data.id,
+          type: data.activity_type,
+          subject: data.subject,
+          status: data.status,
+        },
+      };
+    },
+  }),
+
+  /**
+   * Delete a contact
+   */
+  deleteContact: tool({
+    description: 'Delete a contact from the system. Use this when a contact is no longer needed or was created by mistake.',
+    parameters: z.object({
+      contactId: z.string().describe('Contact UUID to delete'),
+    }),
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) return { error: 'Not authenticated' };
+
+      // Get contact info first
+      const { data: contact, error: fetchError } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, email')
+        .eq('id', params.contactId)
+        .single();
+
+      if (fetchError || !contact) {
+        return { error: 'Contact not found' };
+      }
+
+      // Delete the contact
+      const { error: deleteError } = await supabase
+        .from('contacts')
+        .delete()
+        .eq('id', params.contactId);
+
+      if (deleteError) {
+        return { error: deleteError.message };
+      }
+
+      return {
+        success: true,
+        deleted: {
+          id: contact.id,
+          name: `${contact.first_name} ${contact.last_name}`,
+          email: contact.email,
+        },
+      };
+    },
+  }),
 
   /**
    * Search knowledge base (RAG)
    */
-  searchKnowledge: (tool as any)({
+  searchKnowledge: tool({
     description: 'Search the knowledge base for relevant information about clients, activities, notes, or past interactions. Use this to find specific information.',
     parameters: z.object({
       query: z.string().describe('What to search for'),
@@ -275,12 +691,12 @@ export const agentTools: any = {
         count: results.length,
       };
     },
-  } as any),
+  }),
 
   /**
    * Get recent activity for a client
    */
-  getClientActivity: (tool as any)({
+  getClientActivity: tool({
     description: 'Get recent activity and interaction history for a specific client.',
     parameters: z.object({
       clientId: z.string().describe('Client UUID'),
@@ -314,12 +730,12 @@ export const agentTools: any = {
         count: activities?.length || 0,
       };
     },
-  } as any),
+  }),
 
   /**
    * Get pending action cards
    */
-  getPendingCards: (tool as any)({
+  getPendingCards: tool({
     description: 'Get pending action cards that need review or approval. Use when user asks "what\'s pending?" or "what needs my attention?"',
     parameters: z.object({
       state: z.enum(['suggested', 'in_review', 'approved']).optional(),
@@ -363,12 +779,75 @@ export const agentTools: any = {
         count: data?.length || 0,
       };
     },
-  } as any),
+  }),
+
+  /**
+   * Get ALL current Kanban cards (including completed/rejected)
+   */
+  getAllCards: tool({
+    description: 'Get all current Kanban cards across all states (suggested, in_review, approved, rejected, completed). Use this to see the complete current state of the Kanban board or when user asks "what cards do we have?" or "show me all cards".',
+    parameters: z.object({
+      includeCompleted: z.boolean().optional().default(false).describe('Include completed and rejected cards'),
+      limit: z.number().optional().default(50).describe('Maximum number of cards to return'),
+    }),
+    execute: async ({ includeCompleted = false, limit = 50 }: { includeCompleted?: boolean; limit?: number }) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) return { error: 'Not authenticated' };
+
+      let query = supabase
+        .from('kanban_cards')
+        .select(`
+          id,
+          type,
+          title,
+          state,
+          priority,
+          rationale,
+          created_at,
+          client:clients(id, company_name)
+        `)
+        .eq('org_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (!includeCompleted) {
+        // Exclude completed and rejected
+        query = query.in('state', ['suggested', 'in_review', 'approved']);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      // Format response with clean client data
+      const formattedCards = (data || []).map(card => ({
+        id: card.id,
+        title: card.title,
+        type: card.type,
+        state: card.state,
+        priority: card.priority,
+        rationale: card.rationale,
+        createdAt: card.created_at,
+        client: (card.client as any)?.company_name || null,
+        clientId: (card.client as any)?.id || null,
+      }));
+
+      return {
+        cards: formattedCards,
+        count: formattedCards.length,
+        totalCards: formattedCards.length,
+      };
+    },
+  }),
 
   /**
    * Get agent run history
    */
-  getRunHistory: (tool as any)({
+  getRunHistory: tool({
     description: 'Get recent agent run history and performance metrics.',
     parameters: z.object({
       limit: z.number().optional().default(5),
@@ -395,12 +874,12 @@ export const agentTools: any = {
         count: data?.length || 0,
       };
     },
-  } as any),
+  }),
 
   /**
    * Search the web
    */
-  searchWeb: (tool as any)({
+  searchWeb: tool({
     description: 'Search the internet for information about companies, people, news, or any topic. Use this when the user asks you to search for something or when you need external information not available in the database.',
     parameters: z.object({
       query: z.string().describe('Search query - what to look up on the internet'),
@@ -437,12 +916,12 @@ export const agentTools: any = {
         };
       }
     },
-  } as any),
+  }),
 
   /**
    * Computer Use - Visual research task
    */
-  computerUseTask: (tool as any)({
+  computerUseTask: tool({
     description: 'Execute a computer use task for visual research. Use this for: browsing websites visually, extracting data from web pages, competitive research, or any task requiring actual web browsing. This is more expensive and slower than APIs, so only use when necessary.',
     parameters: z.object({
       instruction: z.string().describe('Detailed instruction for what to do (e.g., "Go to competitor.com and extract all pricing information")'),
@@ -481,12 +960,12 @@ export const agentTools: any = {
         };
       }
     },
-  } as any),
+  }),
 
   /**
    * Research competitor pricing
    */
-  researchCompetitorPricing: (tool as any)({
+  researchCompetitorPricing: tool({
     description: 'Research competitor pricing by visiting their website and extracting pricing information. Returns structured pricing data.',
     parameters: z.object({
       competitorUrl: z.string().describe('URL of the competitor website'),
@@ -512,12 +991,12 @@ export const agentTools: any = {
         };
       }
     },
-  } as any),
+  }),
 
   /**
    * Deep company research
    */
-  deepCompanyResearch: (tool as any)({
+  deepCompanyResearch: tool({
     description: 'Perform deep research on a company by browsing their website and gathering information. Returns a comprehensive report.',
     parameters: z.object({
       companyName: z.string().describe('Name of the company to research'),
@@ -549,12 +1028,12 @@ export const agentTools: any = {
         };
       }
     },
-  } as any),
+  }),
 
   /**
    * Check Computer Use availability
    */
-  checkComputerUseStatus: (tool as any)({
+  checkComputerUseStatus: tool({
     description: 'Check if Computer Use capabilities are available and properly configured.',
     parameters: z.object({}),
     execute: async () => {
@@ -568,6 +1047,6 @@ export const agentTools: any = {
           : `Computer Use is not available: ${status.reason}`,
       };
     },
-  } as any),
+  }),
 };
 

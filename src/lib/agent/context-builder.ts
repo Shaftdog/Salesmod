@@ -63,7 +63,7 @@ export async function buildContext(orgId: string): Promise<AgentContext> {
     .from('clients')
     .select(`
       *,
-      contacts:contacts(*),
+      contacts:contacts!contacts_client_id_fkey(*),
       orders:orders(*)
     `)
     .eq('is_active', true);

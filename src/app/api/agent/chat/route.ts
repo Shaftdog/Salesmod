@@ -61,13 +61,33 @@ export async function POST(request: Request) {
     const systemPrompt = `You are an AI Account Manager assistant for a property appraisal management company. You help manage client relationships, track goals, and coordinate outreach.
 
 Your capabilities:
+
+**Data Access:**
 - Search for clients and their information (searchClients)
 - Search for individual contacts by name, email, or title (searchContacts)
 - Get client activity history (getClientActivity)
 - Check goal progress and performance (getGoals)
-- Create action cards (emails, tasks, calls, deals) (createCard)
-- Search the knowledge base for past interactions and context (searchKnowledge)
 - Get pending actions that need review (getPendingCards)
+- Get ALL current Kanban cards to see what exists (getAllCards) - USE THIS to verify card existence
+- Search the knowledge base for past interactions and context (searchKnowledge)
+
+**Card Management:**
+- Create action cards (emails, tasks, calls, deals) (createCard)
+- Update existing cards - change state, priority, title (updateCard)
+- Delete cards by ID, priority, type, or title match (deleteCard)
+
+**Case Management:**
+- Create support cases for issues and requests (createCase)
+- Update case status, priority, or resolution (updateCase)
+- Delete cases when no longer needed (deleteCase)
+
+**Activity Logging:**
+- Log completed activities (calls, emails, meetings, notes) (createActivity)
+
+**Contact Management:**
+- Delete contacts from the system (deleteContact)
+
+**Research & Web:**
 - Search the web for company information (searchWeb)
 - Computer Use capabilities for visual research (if enabled):
   - Execute visual browsing tasks (computerUseTask)
@@ -83,13 +103,17 @@ ${memoriesContext}${ragContext}
 
 Guidelines:
 - Be helpful, concise, and action-oriented
-- Use tools to get accurate, up-to-date information
+- ALWAYS use tools to get accurate, up-to-date information - NEVER assume or hallucinate data
+- When user asks about cards, ALWAYS use getAllCards or getPendingCards to check current state
 - When asked about contacts, use searchContacts to find individual people
 - When asked about clients/companies, use searchClients to find organizations
 - When creating cards, provide clear rationales
+- When deleting/updating cards, ALWAYS fetch current cards first with getAllCards
 - Reference specific data points when available
 - Suggest next steps proactively
 - If you use RAG context, cite the source
+
+CRITICAL: Never claim to "check" something without actually using a tool. If you need current data, use the appropriate tool first.
 
 Remember: You're helping achieve business goals. Be strategic and data-driven.`;
 
@@ -100,6 +124,7 @@ Remember: You're helping achieve business goals. Be strategic and data-driven.`;
       messages,
       tools: agentTools,
       temperature: 0.7,
+      maxTokens: 4000,
     });
 
     // Save conversation to memory asynchronously (don't await)
@@ -112,11 +137,52 @@ Remember: You're helping achieve business goals. Be strategic and data-driven.`;
       console.error('Failed to save chat messages:', err);
     });
 
-    return result.toTextStreamResponse();
+    // Convert to text stream with tool information logged
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          let toolCallsDetected = false;
+          
+          // Process the full stream to capture text and tool calls
+          for await (const part of result.fullStream) {
+            // Handle text deltas
+            if (part.type === 'text-delta') {
+              controller.enqueue(new TextEncoder().encode(part.textDelta));
+            }
+            // Log tool calls for debugging
+            else if (part.type === 'tool-call') {
+              toolCallsDetected = true;
+              console.log('[Chat API] Tool call:', part.toolName, part.args);
+            }
+            // Log tool results for debugging
+            else if (part.type === 'tool-result') {
+              console.log('[Chat API] Tool result:', part.toolName, 'success:', !part.result?.error);
+            }
+          }
+          
+          if (toolCallsDetected) {
+            console.log('[Chat API] Tools were executed during this response');
+          }
+          
+          controller.close();
+        } catch (error) {
+          console.error('[Chat API] Stream error:', error);
+          controller.error(error);
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Transfer-Encoding': 'chunked',
+      },
+    });
   } catch (error: any) {
-    console.error('Chat API error:', error);
+    console.error('[Chat API] Error:', error);
+    console.error('[Chat API] Error stack:', error.stack);
     return Response.json(
-      { error: error.message || 'Chat failed' },
+      { error: error.message || 'Chat failed', details: error.toString() },
       { status: 500 }
     );
   }

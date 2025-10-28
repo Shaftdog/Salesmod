@@ -264,7 +264,10 @@ export async function POST(request: Request) {
       .limit(20);
 
     const lastMessage = messages[messages.length - 1]?.content || '';
-    
+
+    console.log('[Chat] Checking message for commands:', lastMessage);
+    console.log('[Chat] Is command?:', isCommand(lastMessage));
+
     // Check for commands
     let commandResult = '';
     if (isCommand(lastMessage)) {
@@ -275,41 +278,63 @@ export async function POST(request: Request) {
       // Execute command
       try {
         if (command.action === 'create') {
-          // Get client ID from name
+          // Get client ID from name (optional)
           let clientId = null;
+          let foundClientName = null;
           if (command.clientName) {
-            const { data: matchedClient } = await supabase
-              .from('clients')
-              .select('id, company_name')
-              .ilike('company_name', `%${command.clientName}%`)
-              .limit(1)
-              .single();
-            clientId = matchedClient?.id;
+            // Remove spaces and special chars for fuzzy matching
+            const cleanSearchName = command.clientName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            
+            // Search through clients with fuzzy matching
+            const potentialClients = clients?.filter(c => {
+              const cleanClientName = c.company_name.toLowerCase().replace(/[^a-z0-9]/g, '');
+              return cleanClientName.includes(cleanSearchName) || cleanSearchName.includes(cleanClientName);
+            });
+
+            if (potentialClients && potentialClients.length > 0) {
+              clientId = potentialClients[0].id;
+              foundClientName = potentialClients[0].company_name;
+              console.log(`[Chat] Matched client: "${command.clientName}" → "${foundClientName}"`);
+            } else {
+              // Client name specified but not found
+              commandResult = `\n\n⚠️ Could not find client "${command.clientName}". Available clients: ${clients?.map(c => c.company_name).join(', ')}\n\nTip: Omit the client name to create a general strategic card.`;
+              console.log(`[Chat] Client not found: "${command.clientName}"`);
+            }
           }
 
-          if (!clientId) {
-            commandResult = `\n\n⚠️ Could not find client "${command.clientName}". Available clients: ${clients?.map(c => c.company_name).join(', ')}`;
-          } else {
-            // Create the card
-            const response = await fetch(`${process.env.NEXT_PUBLIC_URL || 'http://localhost:9002'}/api/agent/card/manage`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'create',
-                cardData: {
-                  clientId,
+          // Allow cards without clients (for strategic/general tasks)
+          if (!command.clientName || clientId) {
+            // Create the card directly in database (avoid auth issues with fetch)
+            try {
+              const cardTitle = command.topic || lastMessage.substring(0, 60);
+
+              const { data: newCard, error: createError } = await supabase
+                .from('kanban_cards')
+                .insert({
+                  org_id: user.id,
+                  client_id: clientId || null,
                   type: command.cardType,
-                  title: `${command.topic || lastMessage.substring(0, 60)}`,
+                  title: cardTitle,
                   rationale: `Created via chat: ${lastMessage}`,
                   priority: command.priority || 'medium',
-                  actionPayload: {},
-                },
-              }),
-            });
-            
-            const result = await response.json();
-            if (result.success) {
-              commandResult = `\n\n✅ Created ${result.card.type} card for ${command.clientName}!\n   Title: "${result.card.title}"\n   Priority: ${result.card.priority}\n   Status: Suggested (go to /agent to review)`;
+                  state: 'suggested',
+                  action_payload: {},
+                  created_by: user.id,
+                })
+                .select()
+                .single();
+
+              if (createError) {
+                console.error('[Chat] Card creation error:', createError);
+                commandResult = `\n\n❌ Failed to create card: ${createError.message}`;
+              } else if (newCard) {
+                const clientInfo = clientId ? `for ${foundClientName || command.clientName}` : '(general strategic card)';
+                commandResult = `\n\n✅ Created ${newCard.type} card ${clientInfo}!\n   Title: "${newCard.title}"\n   Priority: ${newCard.priority}\n   Status: Suggested (go to /agent to review)`;
+                console.log('[Chat] Card created successfully:', newCard.id);
+              }
+            } catch (err: any) {
+              console.error('[Chat] Card creation exception:', err);
+              commandResult = `\n\n❌ Failed to create card: ${err.message}`;
             }
           }
         } else if (command.action === 'delete') {
@@ -517,10 +542,9 @@ ${kanbanCards?.map((card: any) => {
 ${commandResult}${webSearchResults}
 
 Capabilities:
-- You CAN search the internet! Tavily web search is integrated.
-- When users ask you to search or look up information, I will automatically search for you.
-- You'll see the results in the context above.
-- Reference the web search results when answering.
+- You CAN create cards! When users ask you to create a card, the command parser will handle it automatically.
+- You CAN search the internet using the searchWeb integration
+- You have access to all data listed above (contacts, properties, orders, cases, goals)
 
 What you CAN do:
 - Answer questions about goals, clients, and business
@@ -537,12 +561,44 @@ What you CAN do:
 - Provide strategic advice and recommendations
 - Reference past conversations and data
 - **SEE all Kanban cards** - You can see what's on the board above!
-- **CREATE action cards** - Via chat commands!
-- **Edit/Update cards** - Change priority, details, etc.
-- **Delete cards** - Remove unwanted cards
-- **Approve cards** - Move to approved state
-- **Execute cards** - Run approved actions
+- **CREATE action cards** - When users ask you to create a card, respond with a confirmation and the card will be created automatically
+- **Search for information** - Use the data provided above to answer questions
 - **Reference existing cards** - When users ask "what's pending?" or "what cards do we have?"
+
+🎯 YOUR CORE MISSION:
+You are an AUTONOMOUS account manager. Your job is to:
+1. **ANALYZE** the business context (goals, clients, orders, recent activity)
+2. **IDENTIFY** opportunities and actions that will help meet goals
+3. **PROACTIVELY CREATE** action cards to drive business forward
+4. **BE STRATEGIC** - think about what would help achieve goals
+
+💡 PROACTIVE CARD CREATION:
+You should ALWAYS analyze the current situation and suggest cards that would help, even if the user doesn't explicitly ask for them.
+
+When you want to create a card, embed this tag in your response:
+[CREATE_CARD: type=send_email, title=Follow up with iFund Cities, client=i Fund Cities LLC, priority=high, rationale=Need to discuss Q4 orders and increase revenue]
+
+When you want to delete a card, use this tag:
+[DELETE_CARD: bcf580af-7934-40c6-b620-aab9d7ca03ae]
+or
+[DELETE_CARD: id=bcf580af-7934-40c6-b620-aab9d7ca03ae]
+
+Card types available:
+- send_email: Outreach to clients
+- create_task: Action items, calls, follow-ups
+- research: Investigate opportunities, competitors, market
+- create_deal: Track potential contracts
+- follow_up: Check-ins with existing clients
+
+Example autonomous responses:
+"Looking at your goals and recent activity, I notice you're 25% behind your revenue target. Here are strategic actions: [CREATE_CARD: type=send_email, title=Q4 Upsell to iFund Cities, client=i Fund Cities LLC, priority=high, rationale=They have 45 active orders but no recent upsell discussion - opportunity to increase order value] [CREATE_CARD: type=create_task, title=Review Acme Real Estate pipeline, client=Acme Real Estate, priority=medium, rationale=Second largest client but only 12 orders this quarter - need to understand if there are barriers] [CREATE_CARD: type=research, title=Competitor pricing analysis, priority=medium, rationale=Market intelligence to inform Q4 pricing strategy]"
+
+🚨 IMPORTANT: 
+- Create cards proactively based on your analysis
+- Don't wait for user to ask
+- Be strategic and goal-driven
+- Create multiple cards when you see multiple opportunities
+- Always include clear rationales tied to business goals
 
 When users ask about contacts:
 - You HAVE access to contact information - it's listed above in the "Contacts" section
@@ -571,20 +627,17 @@ When users ask about cases:
 - You can analyze case resolution times, identify trends, track support issues
 - Be helpful and reference the actual case data you can see
 
-How to use commands:
-- "Create an email card for Acme about Q4 package"
-- "Create a research task for iFund"
-- "Delete card #5"
-- "Edit card #3 to high priority"
-- "Approve the research card"
-- "Execute approved cards"
+Example user requests:
+- "Create an email card for Acme about Q4 package" -> Respond that you'll create it
+- "What are my active goals?" -> Use the goals data above
+- "Who works at iFund?" -> Use the contacts data above
+- "Search for information about competitor pricing" -> Tell user to search manually
 
-When you execute a command, you'll see the result above (marked with ✅ or ❌).
-Reference the command result in your response to confirm what happened.
+When users ask you to create cards, respond with confirmation. The system will handle the creation.
 
 You help manage client relationships and achieve business goals. Be helpful, concise, and action-oriented. When you can't do something directly, guide users to the right place in the UI.`;
 
-    // Stream response WITHOUT tools for now
+    // Stream response WITHOUT tools (command parser will handle card creation)
     const result = streamText({
       model: anthropic('claude-3-5-sonnet-20241022'),
       system: systemPrompt,
@@ -592,13 +645,177 @@ You help manage client relationships and achieve business goals. Be helpful, con
       temperature: 0.7,
     });
 
-    return result.toTextStreamResponse();
+    // Collect the full response to parse for card creation tags
+    let fullResponse = '';
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of result.textStream) {
+            fullResponse += chunk;
+            controller.enqueue(new TextEncoder().encode(chunk));
+          }
+          controller.close();
+          
+          // After streaming completes, parse for [CREATE_CARD: ...] and [DELETE_CARD: ...] tags
+          await parseAndCreateCards(fullResponse, user.id, clients);
+          await parseAndDeleteCards(fullResponse, user.id);
+        } catch (error) {
+          console.error('[Chat] Stream error:', error);
+          controller.error(error);
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Transfer-Encoding': 'chunked',
+      },
+    });
   } catch (error: any) {
     console.error('Chat API error:', error);
     return Response.json(
       { error: error.message || 'Chat failed' },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * Parse agent response for [CREATE_CARD: ...] tags and create those cards
+ */
+async function parseAndCreateCards(response: string, orgId: string, clients: any[]) {
+  const cardPattern = /\[CREATE_CARD:\s*([^\]]+)\]/g;
+  const matches = [...response.matchAll(cardPattern)];
+  
+  if (matches.length === 0) {
+    return;
+  }
+  
+  console.log(`[Chat] Found ${matches.length} card creation tags in agent response`);
+  
+  const supabase = await createClient();
+  
+  for (const match of matches) {
+    try {
+      const params = match[1];
+      const parsed: any = {};
+      
+      // Parse key=value pairs
+      const pairs = params.split(',').map(p => p.trim());
+      for (const pair of pairs) {
+        const [key, ...valueParts] = pair.split('=');
+        const value = valueParts.join('=').trim();
+        parsed[key.trim()] = value;
+      }
+      
+      console.log('[Chat] Parsed card params:', parsed);
+      
+      // Find client ID if client name provided
+      let clientId = null;
+      if (parsed.client) {
+        const cleanSearchName = parsed.client.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const potentialClients = clients?.filter(c => {
+          const cleanClientName = c.company_name.toLowerCase().replace(/[^a-z0-9]/g, '');
+          return cleanClientName.includes(cleanSearchName) || cleanSearchName.includes(cleanClientName);
+        });
+        
+        if (potentialClients && potentialClients.length > 0) {
+          clientId = potentialClients[0].id;
+          console.log(`[Chat] Matched client: "${parsed.client}" → "${potentialClients[0].company_name}"`);
+        }
+      }
+      
+      // Create the card
+      const { data, error } = await supabase
+        .from('kanban_cards')
+        .insert({
+          org_id: orgId,
+          client_id: clientId,
+          type: parsed.type || 'create_task',
+          title: parsed.title || 'Untitled',
+          rationale: parsed.rationale || 'Agent suggested',
+          priority: parsed.priority || 'medium',
+          state: 'suggested',
+          action_payload: {},
+          created_by: orgId,
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('[Chat] Auto-card creation error:', error);
+      } else {
+        console.log('[Chat] Auto-created card from agent response:', data.id, data.title);
+      }
+    } catch (err) {
+      console.error('[Chat] Error parsing card tag:', err);
+    }
+  }
+}
+
+/**
+ * Parse agent response for [DELETE_CARD: ...] tags and delete those cards
+ */
+async function parseAndDeleteCards(response: string, orgId: string) {
+  // Match [DELETE_CARD: id] or [DELETE_CARD: id=uuid]
+  const deletePattern = /\[DELETE_CARD:\s*([^\]]+)\]/g;
+  const matches = [...response.matchAll(deletePattern)];
+  
+  if (matches.length === 0) {
+    return;
+  }
+  
+  console.log(`[Chat] Found ${matches.length} delete card tags in agent response`);
+  
+  const supabase = await createClient();
+  
+  for (const match of matches) {
+    try {
+      let cardId = match[1].trim();
+      
+      // Parse if it's in key=value format
+      if (cardId.includes('=')) {
+        const pairs = cardId.split(',').map(p => p.trim());
+        for (const pair of pairs) {
+          const [key, value] = pair.split('=');
+          if (key.trim() === 'id') {
+            cardId = value.trim();
+            break;
+          }
+        }
+      }
+      
+      console.log(`[Chat] Attempting to delete card: ${cardId}`);
+      
+      // Get card info before deleting
+      const { data: card } = await supabase
+        .from('kanban_cards')
+        .select('id, title, type, client:clients(company_name)')
+        .eq('id', cardId)
+        .eq('org_id', orgId)
+        .single();
+      
+      if (!card) {
+        console.error(`[Chat] Card not found: ${cardId}`);
+        continue;
+      }
+      
+      // Delete the card
+      const { error: deleteError } = await supabase
+        .from('kanban_cards')
+        .delete()
+        .eq('id', cardId)
+        .eq('org_id', orgId);
+      
+      if (deleteError) {
+        console.error('[Chat] Auto-delete error:', deleteError);
+      } else {
+        console.log(`[Chat] ✓ Auto-deleted card via tag: ${card.title} (${cardId})`);
+      }
+    } catch (err) {
+      console.error('[Chat] Error parsing delete tag:', err);
+    }
   }
 }
 

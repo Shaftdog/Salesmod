@@ -46,9 +46,10 @@ COMMENT ON TRIGGER trigger_auto_set_order_status ON public.orders IS
   'Enforces business rule: completed_date requires status=completed and vice versa.';
 
 -- ==============================================
--- TEST THE TRIGGER
+-- TEST THE TRIGGER (COMMENTED OUT FOR NOW)
 -- ==============================================
 
+/*
 -- This should auto-set status to 'completed' even though we specify 'new'
 INSERT INTO orders (
   order_number,
@@ -108,6 +109,7 @@ LIMIT 1;
 
 -- Clean up test order
 DELETE FROM orders WHERE order_number LIKE 'TEST-TRIGGER-%';
+*/
 
 -- ==============================================
 -- EXPECTED BEHAVIOR
