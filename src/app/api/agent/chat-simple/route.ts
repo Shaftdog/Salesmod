@@ -763,11 +763,11 @@ async function parseAndCreateCards(response: string, orgId: string, clients: any
       const actionPayload: any = {};
       
       if (parsed.type === 'send_email') {
-        // For email cards, include subject and message
+        // For email cards, include subject and body (frontend expects 'body' not 'message')
         actionPayload.subject = parsed.subject || '';
-        actionPayload.message = parsed.message || parsed.body || '';
+        actionPayload.body = parsed.message || parsed.body || '';
         actionPayload.draft = true;
-        console.log('[Chat] Email payload:', { subject: actionPayload.subject, messageLength: actionPayload.message.length });
+        console.log('[Chat] Email payload:', { subject: actionPayload.subject, bodyLength: actionPayload.body.length });
       } else if (parsed.type === 'schedule_call') {
         // For call cards, include agenda
         actionPayload.agenda = parsed.agenda || parsed.notes || '';
