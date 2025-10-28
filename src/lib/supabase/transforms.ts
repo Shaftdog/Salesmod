@@ -101,6 +101,7 @@ export function transformUser(dbUser: any): User {
     name: dbUser.name,
     email: dbUser.email,
     avatarUrl: dbUser.avatar_url,
+    role: dbUser.role,
     availability: dbUser.availability,
     geographicCoverage: dbUser.geographic_coverage,
     workload: dbUser.workload,

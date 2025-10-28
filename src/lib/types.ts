@@ -21,6 +21,8 @@ export interface User {
   name: string;
   email: string;
   avatarUrl?: string;
+  // Role from profiles table (e.g., 'admin', 'user')
+  role?: string;
   availability?: boolean;
   geographicCoverage?: string;
   workload?: number;
