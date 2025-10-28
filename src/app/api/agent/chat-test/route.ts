@@ -51,9 +51,9 @@ Be helpful and use the tool when appropriate.`;
             if (part.type === 'text-delta') {
               controller.enqueue(new TextEncoder().encode(part.text));
             } else if (part.type === 'tool-call') {
-              console.log('[Chat Test] Tool call:', part.toolName, part.args);
+              console.log('[Chat Test] Tool call:', part);
             } else if (part.type === 'tool-result') {
-              console.log('[Chat Test] Tool result:', part.toolName, part.result);
+              console.log('[Chat Test] Tool result:', part);
             }
           }
           controller.close();
