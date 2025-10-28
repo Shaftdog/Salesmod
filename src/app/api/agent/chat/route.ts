@@ -119,7 +119,7 @@ Remember: You're helping achieve business goals. Be strategic and data-driven.`;
 
     // Stream response with tools
     const result = streamText({
-      model: anthropic('claude-3-5-sonnet-20240620'),
+      model: anthropic('claude-sonnet-4-5-20250929'),
       system: systemPrompt,
       messages,
       tools: agentTools,

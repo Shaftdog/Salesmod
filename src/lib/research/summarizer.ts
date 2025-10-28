@@ -52,7 +52,7 @@ Be concise but actionable. Focus on information that helps us provide better ser
 
   try {
     const { text } = await generateText({
-      model: anthropic('claude-3-5-sonnet-20240620'),
+      model: anthropic('claude-sonnet-4-5-20250929'),
       prompt,
       temperature: 0.5, // More consistent outputs
     });

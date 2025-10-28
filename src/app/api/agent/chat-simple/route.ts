@@ -634,7 +634,7 @@ You help manage client relationships and achieve business goals. Be helpful, con
     console.log('[Chat] Last message:', messages[messages.length - 1]?.content?.substring(0, 100));
     
     const result = streamText({
-      model: anthropic('claude-3-5-sonnet-20240620'),
+      model: anthropic('claude-sonnet-4-5-20250929'),
       system: systemPrompt,
       messages,
       temperature: 0.7,
