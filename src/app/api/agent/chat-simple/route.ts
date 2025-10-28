@@ -631,25 +631,16 @@ You help manage client relationships and achieve business goals. Be helpful, con
     console.log('[Chat] Starting streamText with Anthropic API...');
     console.log('[Chat] Message count:', messages.length);
     console.log('[Chat] System prompt length:', systemPrompt.length);
+    console.log('[Chat] Last message:', messages[messages.length - 1]?.content?.substring(0, 100));
     
-    let result;
-    try {
-      result = streamText({
-        model: anthropic('claude-3-5-sonnet-20240620'),
-        system: systemPrompt,
-        messages,
-        temperature: 0.7,
-      });
-      console.log('[Chat] streamText initialized successfully');
-    } catch (error: any) {
-      console.error('[Chat] Failed to initialize streamText:', error);
-      console.error('[Chat] Error details:', {
-        message: error.message,
-        name: error.name,
-        stack: error.stack
-      });
-      throw error;
-    }
+    const result = streamText({
+      model: anthropic('claude-3-5-sonnet-20240620'),
+      system: systemPrompt,
+      messages,
+      temperature: 0.7,
+    });
+
+    console.log('[Chat] streamText initialized, creating ReadableStream...');
 
     // Collect the full response to parse for card creation tags
     let fullResponse = '';
@@ -657,32 +648,43 @@ You help manage client relationships and achieve business goals. Be helpful, con
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          console.log('[Chat] Starting to read from textStream...');
+          console.log('[Chat] ReadableStream started, iterating textStream...');
+          
           for await (const chunk of result.textStream) {
             chunkCount++;
             fullResponse += chunk;
             controller.enqueue(new TextEncoder().encode(chunk));
+            
             if (chunkCount === 1) {
-              console.log('[Chat] First chunk received, length:', chunk.length);
+              console.log('[Chat] ✓ First chunk received! Length:', chunk.length);
+            }
+            if (chunkCount % 10 === 0) {
+              console.log(`[Chat] Progress: ${chunkCount} chunks, ${fullResponse.length} chars`);
             }
           }
-          console.log('[Chat] Stream finished. Total chunks:', chunkCount, 'Total length:', fullResponse.length);
+          
+          console.log('[Chat] ✓ Stream complete! Chunks:', chunkCount, 'Length:', fullResponse.length);
           controller.close();
           
           // After streaming completes, parse for [CREATE_CARD: ...] and [DELETE_CARD: ...] tags
-          await parseAndCreateCards(fullResponse, user.id, clients || []);
-          await parseAndDeleteCards(fullResponse, user.id);
+          if (fullResponse.length > 0) {
+            await parseAndCreateCards(fullResponse, user.id, clients || []);
+            await parseAndDeleteCards(fullResponse, user.id);
+          }
         } catch (error: any) {
-          console.error('[Chat] Stream error:', error);
-          console.error('[Chat] Error details:', {
-            message: error.message,
-            name: error.name,
-            stack: error.stack
-          });
+          console.error('[Chat] ❌ Stream error:', error);
+          console.error('[Chat] Error type:', error.constructor.name);
+          console.error('[Chat] Error message:', error.message);
+          console.error('[Chat] Error cause:', error.cause);
+          console.error('[Chat] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
           
           // Send error message to client
-          const errorMsg = `Error: ${error.message || 'Unknown error occurred'}`;
-          controller.enqueue(new TextEncoder().encode(errorMsg));
+          const errorMsg = `\n\n❌ Error: ${error.message || 'Unknown error occurred'}\n\nPlease check the server logs for details.`;
+          try {
+            controller.enqueue(new TextEncoder().encode(errorMsg));
+          } catch (e) {
+            console.error('[Chat] Failed to send error to client:', e);
+          }
           controller.close();
         }
       },
