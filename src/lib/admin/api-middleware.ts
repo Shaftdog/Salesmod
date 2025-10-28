@@ -55,7 +55,7 @@ export type AuthenticatedHandler = (
 export function withAdminAuth(handler: AuthenticatedHandler) {
   return async (
     request: NextRequest,
-    routeContext?: { params?: Promise<Record<string, string | string[]>> }
+    context: { params?: Promise<Record<string, string | string[]>> }
   ) => {
     try {
       const supabase = await createClient()
@@ -67,7 +67,7 @@ export function withAdminAuth(handler: AuthenticatedHandler) {
       return await handler(request, {
         userId,
         supabase,
-        params: routeContext?.params
+        params: context.params
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unauthorized'
@@ -99,7 +99,7 @@ export function withAdminAuth(handler: AuthenticatedHandler) {
 export function withRole(role: UserRole, handler: AuthenticatedHandler) {
   return async (
     request: NextRequest,
-    routeContext?: { params?: Promise<Record<string, string | string[]>> }
+    context: { params?: Promise<Record<string, string | string[]>> }
   ) => {
     try {
       const supabase = await createClient()
@@ -111,7 +111,7 @@ export function withRole(role: UserRole, handler: AuthenticatedHandler) {
       return await handler(request, {
         userId,
         supabase,
-        params: routeContext?.params
+        params: context.params
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unauthorized'
@@ -147,7 +147,7 @@ export function withPermission(
 ) {
   return async (
     request: NextRequest,
-    routeContext?: { params?: Promise<Record<string, string | string[]>> }
+    context: { params?: Promise<Record<string, string | string[]>> }
   ) => {
     try {
       const supabase = await createClient()
@@ -159,7 +159,7 @@ export function withPermission(
       return await handler(request, {
         userId,
         supabase,
-        params: routeContext?.params
+        params: context.params
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unauthorized'
