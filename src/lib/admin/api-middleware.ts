@@ -37,7 +37,7 @@ import { logFailure } from './audit'
 export interface AuthContext {
   userId: string
   supabase: Awaited<ReturnType<typeof createClient>>
-  params?: Promise<any>
+  params: Promise<any>
 }
 
 /**
@@ -53,7 +53,7 @@ export type AuthenticatedHandler = (
  * Returns 401 if not authenticated, 403 if not admin
  */
 export function withAdminAuth(handler: AuthenticatedHandler) {
-  return async (request: NextRequest, routeContext: { params?: Promise<any> } = {}) => {
+  return async (request: NextRequest, params: Promise<any> = Promise.resolve({})) => {
     try {
       const supabase = await createClient()
 
@@ -64,7 +64,7 @@ export function withAdminAuth(handler: AuthenticatedHandler) {
       return await handler(request, {
         userId,
         supabase,
-        params: routeContext.params
+        params
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unauthorized'
@@ -94,7 +94,7 @@ export function withAdminAuth(handler: AuthenticatedHandler) {
  * Returns 401 if not authenticated, 403 if doesn't have required role
  */
 export function withRole(role: UserRole, handler: AuthenticatedHandler) {
-  return async (request: NextRequest, routeContext: { params?: Promise<any> } = {}) => {
+  return async (request: NextRequest, params: Promise<any> = Promise.resolve({})) => {
     try {
       const supabase = await createClient()
 
@@ -105,7 +105,7 @@ export function withRole(role: UserRole, handler: AuthenticatedHandler) {
       return await handler(request, {
         userId,
         supabase,
-        params: routeContext.params
+        params
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unauthorized'
@@ -139,7 +139,7 @@ export function withPermission(
   permission: string,
   handler: AuthenticatedHandler
 ) {
-  return async (request: NextRequest, routeContext: { params?: Promise<any> } = {}) => {
+  return async (request: NextRequest, params: Promise<any> = Promise.resolve({})) => {
     try {
       const supabase = await createClient()
 
@@ -150,7 +150,7 @@ export function withPermission(
       return await handler(request, {
         userId,
         supabase,
-        params: routeContext.params
+        params
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unauthorized'
