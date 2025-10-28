@@ -37,7 +37,7 @@ import { logFailure } from './audit'
 export interface AuthContext {
   userId: string
   supabase: Awaited<ReturnType<typeof createClient>>
-  params?: Promise<Record<string, string | string[]>>
+  params: Promise<Record<string, string | string[]>>
 }
 
 /**
@@ -55,7 +55,7 @@ export type AuthenticatedHandler = (
 export function withAdminAuth(handler: AuthenticatedHandler) {
   return async (
     request: NextRequest,
-    context: { params?: Promise<Record<string, string | string[]>> }
+    context: { params: Promise<Record<string, string | string[]>> }
   ) => {
     try {
       const supabase = await createClient()
@@ -99,7 +99,7 @@ export function withAdminAuth(handler: AuthenticatedHandler) {
 export function withRole(role: UserRole, handler: AuthenticatedHandler) {
   return async (
     request: NextRequest,
-    context: { params?: Promise<Record<string, string | string[]>> }
+    context: { params: Promise<Record<string, string | string[]>> }
   ) => {
     try {
       const supabase = await createClient()
@@ -147,7 +147,7 @@ export function withPermission(
 ) {
   return async (
     request: NextRequest,
-    context: { params?: Promise<Record<string, string | string[]>> }
+    context: { params: Promise<Record<string, string | string[]>> }
   ) => {
     try {
       const supabase = await createClient()
