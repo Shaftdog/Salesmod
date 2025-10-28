@@ -13,6 +13,15 @@ export const maxDuration = 60;
 export async function POST(request: Request) {
   try {
     const { messages } = await request.json();
+    
+    // Check for API key
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error('[Chat] ANTHROPIC_API_KEY is not set!');
+      return Response.json({ 
+        error: 'AI service not configured. Please set ANTHROPIC_API_KEY in environment variables.' 
+      }, { status: 500 });
+    }
+    
     const supabase = await createClient();
 
     // Get authenticated user
@@ -619,30 +628,62 @@ When users ask you to create cards, respond with confirmation. The system will h
 You help manage client relationships and achieve business goals. Be helpful, concise, and action-oriented. When you can't do something directly, guide users to the right place in the UI.`;
 
     // Stream response WITHOUT tools (command parser will handle card creation)
-    const result = streamText({
-      model: anthropic('claude-3-5-sonnet-20241022'),
-      system: systemPrompt,
-      messages,
-      temperature: 0.7,
-    });
+    console.log('[Chat] Starting streamText with Anthropic API...');
+    console.log('[Chat] Message count:', messages.length);
+    console.log('[Chat] System prompt length:', systemPrompt.length);
+    
+    let result;
+    try {
+      result = streamText({
+        model: anthropic('claude-3-5-sonnet-20241022'),
+        system: systemPrompt,
+        messages,
+        temperature: 0.7,
+      });
+      console.log('[Chat] streamText initialized successfully');
+    } catch (error: any) {
+      console.error('[Chat] Failed to initialize streamText:', error);
+      console.error('[Chat] Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
+      throw error;
+    }
 
     // Collect the full response to parse for card creation tags
     let fullResponse = '';
+    let chunkCount = 0;
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          console.log('[Chat] Starting to read from textStream...');
           for await (const chunk of result.textStream) {
+            chunkCount++;
             fullResponse += chunk;
             controller.enqueue(new TextEncoder().encode(chunk));
+            if (chunkCount === 1) {
+              console.log('[Chat] First chunk received, length:', chunk.length);
+            }
           }
+          console.log('[Chat] Stream finished. Total chunks:', chunkCount, 'Total length:', fullResponse.length);
           controller.close();
           
           // After streaming completes, parse for [CREATE_CARD: ...] and [DELETE_CARD: ...] tags
           await parseAndCreateCards(fullResponse, user.id, clients || []);
           await parseAndDeleteCards(fullResponse, user.id);
-        } catch (error) {
+        } catch (error: any) {
           console.error('[Chat] Stream error:', error);
-          controller.error(error);
+          console.error('[Chat] Error details:', {
+            message: error.message,
+            name: error.name,
+            stack: error.stack
+          });
+          
+          // Send error message to client
+          const errorMsg = `Error: ${error.message || 'Unknown error occurred'}`;
+          controller.enqueue(new TextEncoder().encode(errorMsg));
+          controller.close();
         }
       },
     });
