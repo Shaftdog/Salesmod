@@ -657,7 +657,7 @@ You help manage client relationships and achieve business goals. Be helpful, con
           controller.close();
           
           // After streaming completes, parse for [CREATE_CARD: ...] and [DELETE_CARD: ...] tags
-          await parseAndCreateCards(fullResponse, user.id, clients);
+          await parseAndCreateCards(fullResponse, user.id, clients || []);
           await parseAndDeleteCards(fullResponse, user.id);
         } catch (error) {
           console.error('[Chat] Stream error:', error);
