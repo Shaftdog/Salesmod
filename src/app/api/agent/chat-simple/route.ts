@@ -675,8 +675,8 @@ You help manage client relationships and achieve business goals. Be helpful, con
           // After streaming completes, parse for [CREATE_CARD: ...] and [DELETE_CARD: ...] tags
           if (fullResponse.length > 0) {
             console.log('[Chat] Parsing response for card operations...');
-            await parseAndCreateCards(fullResponse, user.id, clients || [], supabase);
-            await parseAndDeleteCards(fullResponse, user.id, supabase);
+            await parseAndCreateCards(fullResponse, user.id, clients || []);
+            await parseAndDeleteCards(fullResponse, user.id);
             console.log('[Chat] Card operations completed');
           }
         } catch (error: any) {
@@ -716,7 +716,7 @@ You help manage client relationships and achieve business goals. Be helpful, con
 /**
  * Parse agent response for [CREATE_CARD: ...] tags and create those cards
  */
-async function parseAndCreateCards(response: string, orgId: string, clients: any[], supabase: any) {
+async function parseAndCreateCards(response: string, orgId: string, clients: any[]) {
   const cardPattern = /\[CREATE_CARD:\s*([^\]]+)\]/g;
   const matches = [...response.matchAll(cardPattern)];
   
@@ -725,6 +725,9 @@ async function parseAndCreateCards(response: string, orgId: string, clients: any
   }
   
   console.log(`[Chat] Found ${matches.length} card creation tags in agent response`);
+  
+  // Use service role client to bypass auth issues
+  const supabase = createServiceRoleClient();
   
   for (const match of matches) {
     try {
@@ -806,7 +809,7 @@ async function parseAndCreateCards(response: string, orgId: string, clients: any
 /**
  * Parse agent response for [DELETE_CARD: ...] tags and delete those cards
  */
-async function parseAndDeleteCards(response: string, orgId: string, supabase: any) {
+async function parseAndDeleteCards(response: string, orgId: string) {
   // Match [DELETE_CARD: id] or [DELETE_CARD: id=uuid]
   const deletePattern = /\[DELETE_CARD:\s*([^\]]+)\]/g;
   const matches = [...response.matchAll(deletePattern)];
@@ -817,6 +820,9 @@ async function parseAndDeleteCards(response: string, orgId: string, supabase: an
   }
   
   console.log(`[Chat] Found ${matches.length} delete card tags in agent response`);
+  
+  // Use service role client to bypass auth issues
+  const serviceClient = createServiceRoleClient();
   
   for (const match of matches) {
     try {
@@ -835,9 +841,6 @@ async function parseAndDeleteCards(response: string, orgId: string, supabase: an
       }
       
       console.log(`[Chat] Attempting to delete card: ${cardId}`);
-      
-      // Delete the card directly (use service role to bypass RLS issues)
-      const serviceClient = createServiceRoleClient();
       
       // Get card info before deleting for logging
       const { data: card } = await serviceClient
