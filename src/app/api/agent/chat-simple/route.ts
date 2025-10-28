@@ -566,7 +566,12 @@ You are an AUTONOMOUS account manager. Your job is to:
 You should ALWAYS analyze the current situation and suggest cards that would help, even if the user doesn't explicitly ask for them.
 
 When you want to create a card, embed this tag in your response:
-[CREATE_CARD: type=send_email, title=Follow up with iFund Cities, client=i Fund Cities LLC, priority=high, rationale=Need to discuss Q4 orders and increase revenue]
+
+**For Email Cards (MUST include subject and message):**
+[CREATE_CARD: type=send_email, title=Q4 Follow-up Email, client=i Fund Cities LLC, priority=high, subject=Q4 Order Volume Discussion, message=Hi [Name], I wanted to reach out to discuss your Q4 order volume and explore opportunities to increase our partnership value..., rationale=They have 45 active orders but no recent upsell discussion]
+
+**For Other Cards:**
+[CREATE_CARD: type=create_task, title=Review pipeline, client=Acme Corp, priority=medium, rationale=Check for barriers in their ordering process]
 
 When you want to delete a card, use this tag:
 [DELETE_CARD: bcf580af-7934-40c6-b620-aab9d7ca03ae]
@@ -574,14 +579,15 @@ or
 [DELETE_CARD: id=bcf580af-7934-40c6-b620-aab9d7ca03ae]
 
 Card types available:
-- send_email: Outreach to clients
+- send_email: Outreach to clients (MUST include: subject, message)
 - create_task: Action items, calls, follow-ups
 - research: Investigate opportunities, competitors, market
 - create_deal: Track potential contracts
 - follow_up: Check-ins with existing clients
+- schedule_call: Schedule calls (can include: agenda, duration)
 
 Example autonomous responses:
-"Looking at your goals and recent activity, I notice you're 25% behind your revenue target. Here are strategic actions: [CREATE_CARD: type=send_email, title=Q4 Upsell to iFund Cities, client=i Fund Cities LLC, priority=high, rationale=They have 45 active orders but no recent upsell discussion - opportunity to increase order value] [CREATE_CARD: type=create_task, title=Review Acme Real Estate pipeline, client=Acme Real Estate, priority=medium, rationale=Second largest client but only 12 orders this quarter - need to understand if there are barriers] [CREATE_CARD: type=research, title=Competitor pricing analysis, priority=medium, rationale=Market intelligence to inform Q4 pricing strategy]"
+"Looking at your goals and recent activity, I notice you're 25% behind your revenue target. Here are strategic actions: [CREATE_CARD: type=send_email, title=Q4 Upsell to iFund Cities, client=i Fund Cities LLC, priority=high, subject=Q4 Partnership Growth Opportunity, message=Hello! I wanted to reach out regarding your Q4 activity. You've been a fantastic partner with 45 active orders. I'd love to discuss opportunities to increase order value and explore additional services that could benefit your business. Would you be available for a brief call next week?, rationale=They have 45 active orders but no recent upsell discussion - opportunity to increase order value] [CREATE_CARD: type=create_task, title=Review Acme Real Estate pipeline, client=Acme Real Estate, priority=medium, rationale=Second largest client but only 12 orders this quarter - need to understand if there are barriers] [CREATE_CARD: type=research, title=Competitor pricing analysis, priority=medium, rationale=Market intelligence to inform Q4 pricing strategy]"
 
 🚨 IMPORTANT: 
 - Create cards proactively based on your analysis
@@ -750,6 +756,25 @@ async function parseAndCreateCards(response: string, orgId: string, clients: any
         }
       }
       
+      // Build action_payload based on card type
+      const actionPayload: any = {};
+      
+      if (parsed.type === 'send_email') {
+        // For email cards, include subject and message
+        actionPayload.subject = parsed.subject || '';
+        actionPayload.message = parsed.message || parsed.body || '';
+        actionPayload.draft = true;
+        console.log('[Chat] Email payload:', { subject: actionPayload.subject, messageLength: actionPayload.message.length });
+      } else if (parsed.type === 'schedule_call') {
+        // For call cards, include agenda
+        actionPayload.agenda = parsed.agenda || parsed.notes || '';
+        actionPayload.duration = parsed.duration || 30;
+      } else if (parsed.type === 'research') {
+        // For research cards, include scope
+        actionPayload.scope = parsed.scope || parsed.description || '';
+        actionPayload.sources = parsed.sources ? parsed.sources.split(';') : [];
+      }
+      
       // Create the card
       const { data, error } = await supabase
         .from('kanban_cards')
@@ -761,7 +786,7 @@ async function parseAndCreateCards(response: string, orgId: string, clients: any
           rationale: parsed.rationale || 'Agent suggested',
           priority: parsed.priority || 'medium',
           state: 'suggested',
-          action_payload: {},
+          action_payload: actionPayload,
           created_by: orgId,
         })
         .select()
