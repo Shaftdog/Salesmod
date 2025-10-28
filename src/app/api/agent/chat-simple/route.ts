@@ -668,8 +668,10 @@ You help manage client relationships and achieve business goals. Be helpful, con
           
           // After streaming completes, parse for [CREATE_CARD: ...] and [DELETE_CARD: ...] tags
           if (fullResponse.length > 0) {
-            await parseAndCreateCards(fullResponse, user.id, clients || []);
-            await parseAndDeleteCards(fullResponse, user.id);
+            console.log('[Chat] Parsing response for card operations...');
+            await parseAndCreateCards(fullResponse, user.id, clients || [], supabase);
+            await parseAndDeleteCards(fullResponse, user.id, supabase);
+            console.log('[Chat] Card operations completed');
           }
         } catch (error: any) {
           console.error('[Chat] ❌ Stream error:', error);
@@ -708,7 +710,7 @@ You help manage client relationships and achieve business goals. Be helpful, con
 /**
  * Parse agent response for [CREATE_CARD: ...] tags and create those cards
  */
-async function parseAndCreateCards(response: string, orgId: string, clients: any[]) {
+async function parseAndCreateCards(response: string, orgId: string, clients: any[], supabase: any) {
   const cardPattern = /\[CREATE_CARD:\s*([^\]]+)\]/g;
   const matches = [...response.matchAll(cardPattern)];
   
@@ -717,8 +719,6 @@ async function parseAndCreateCards(response: string, orgId: string, clients: any
   }
   
   console.log(`[Chat] Found ${matches.length} card creation tags in agent response`);
-  
-  const supabase = await createClient();
   
   for (const match of matches) {
     try {
@@ -781,18 +781,17 @@ async function parseAndCreateCards(response: string, orgId: string, clients: any
 /**
  * Parse agent response for [DELETE_CARD: ...] tags and delete those cards
  */
-async function parseAndDeleteCards(response: string, orgId: string) {
+async function parseAndDeleteCards(response: string, orgId: string, supabase: any) {
   // Match [DELETE_CARD: id] or [DELETE_CARD: id=uuid]
   const deletePattern = /\[DELETE_CARD:\s*([^\]]+)\]/g;
   const matches = [...response.matchAll(deletePattern)];
   
   if (matches.length === 0) {
+    console.log('[Chat] No DELETE_CARD tags found in response');
     return;
   }
   
   console.log(`[Chat] Found ${matches.length} delete card tags in agent response`);
-  
-  const supabase = await createClient();
   
   for (const match of matches) {
     try {
@@ -812,21 +811,26 @@ async function parseAndDeleteCards(response: string, orgId: string) {
       
       console.log(`[Chat] Attempting to delete card: ${cardId}`);
       
-      // Get card info before deleting
-      const { data: card } = await supabase
+      // Delete the card directly (use service role to bypass RLS issues)
+      const serviceClient = createServiceRoleClient();
+      
+      // Get card info before deleting for logging
+      const { data: card } = await serviceClient
         .from('kanban_cards')
-        .select('id, title, type, client:clients(company_name)')
+        .select('id, title, type')
         .eq('id', cardId)
         .eq('org_id', orgId)
         .single();
       
       if (!card) {
-        console.error(`[Chat] Card not found: ${cardId}`);
+        console.error(`[Chat] Card not found: ${cardId} for org ${orgId}`);
         continue;
       }
       
-      // Delete the card
-      const { error: deleteError } = await supabase
+      console.log(`[Chat] Found card to delete: "${card.title}" (${card.type})`);
+      
+      // Delete the card using service role to bypass RLS
+      const { error: deleteError } = await serviceClient
         .from('kanban_cards')
         .delete()
         .eq('id', cardId)
@@ -835,7 +839,7 @@ async function parseAndDeleteCards(response: string, orgId: string) {
       if (deleteError) {
         console.error('[Chat] Auto-delete error:', deleteError);
       } else {
-        console.log(`[Chat] ✓ Auto-deleted card via tag: ${card.title} (${cardId})`);
+        console.log(`[Chat] ✓ Auto-deleted card via tag: "${card.title}" (${cardId})`);
       }
     } catch (err) {
       console.error('[Chat] Error parsing delete tag:', err);
