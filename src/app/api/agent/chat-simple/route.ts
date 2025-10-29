@@ -670,15 +670,19 @@ You help manage client relationships and achieve business goals. Be helpful, con
           }
           
           console.log('[Chat] ✓ Stream complete! Chunks:', chunkCount, 'Length:', fullResponse.length);
-          controller.close();
           
-          // After streaming completes, parse for [CREATE_CARD: ...] and [DELETE_CARD: ...] tags
+          // CRITICAL: Parse and create cards BEFORE closing stream
+          // If we do it after controller.close(), the serverless function terminates
+          // and database connections fail with "TypeError: fetch failed"
           if (fullResponse.length > 0) {
-            console.log('[Chat] Parsing response for card operations...');
+            console.log('[Chat] Parsing response for card operations (before closing stream)...');
             await parseAndCreateCards(fullResponse, user.id, clients || []);
             await parseAndDeleteCards(fullResponse, user.id);
-            console.log('[Chat] Card operations completed');
+            console.log('[Chat] ✓ Card operations completed successfully');
           }
+          
+          // Now close the stream
+          controller.close();
         } catch (error: any) {
           console.error('[Chat] ❌ Stream error:', error);
           console.error('[Chat] Error type:', error.constructor.name);
