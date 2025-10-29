@@ -738,15 +738,35 @@ async function parseAndCreateCards(response: string, orgId: string, clients: any
       const params = match[1];
       const parsed: any = {};
       
-      // Parse key=value pairs
-      const pairs = params.split(',').map(p => p.trim());
-      for (const pair of pairs) {
-        const [key, ...valueParts] = pair.split('=');
-        const value = valueParts.join('=').trim();
-        parsed[key.trim()] = value;
-      }
+      // Smart parsing to handle multi-line values with commas
+      // Extract specific fields using regex to avoid breaking on commas in message content
+      const typeMatch = params.match(/type=([^,]+)/);
+      const titleMatch = params.match(/title=([^,]+?)(?=,\s*(?:client|priority|subject|message|rationale)=|$)/);
+      const clientMatch = params.match(/client=([^,]+?)(?=,\s*(?:type|title|priority|subject|message|rationale)=|$)/);
+      const priorityMatch = params.match(/priority=(low|medium|high)/);
+      const subjectMatch = params.match(/subject=([^,]+?)(?=,\s*(?:message|rationale)=)/);
       
-      console.log('[Chat] Parsed card params:', parsed);
+      // For message and rationale, capture everything until the next known field
+      const messageMatch = params.match(/message=(.+?)(?=,\s*rationale=|$)/s);
+      const rationaleMatch = params.match(/rationale=(.+?)$/s);
+      
+      parsed.type = typeMatch?.[1]?.trim();
+      parsed.title = titleMatch?.[1]?.trim();
+      parsed.client = clientMatch?.[1]?.trim();
+      parsed.priority = priorityMatch?.[1]?.trim();
+      parsed.subject = subjectMatch?.[1]?.trim();
+      parsed.message = messageMatch?.[1]?.trim();
+      parsed.rationale = rationaleMatch?.[1]?.trim();
+      
+      console.log('[Chat] Parsed card params:', { 
+        type: parsed.type, 
+        title: parsed.title, 
+        client: parsed.client,
+        priority: parsed.priority,
+        subject: parsed.subject,
+        messageLength: parsed.message?.length || 0,
+        rationaleLength: parsed.rationale?.length || 0
+      });
       
       // Find client ID if client name provided
       let clientId = null;
