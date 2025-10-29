@@ -747,8 +747,9 @@ async function parseAndCreateCards(response: string, orgId: string, clients: any
       const subjectMatch = params.match(/subject=([^,]+?)(?=,\s*(?:message|rationale)=)/);
       
       // For message and rationale, capture everything until the next known field
-      const messageMatch = params.match(/message=(.+?)(?=,\s*rationale=|$)/s);
-      const rationaleMatch = params.match(/rationale=(.+?)$/s);
+      // Use [\s\S] instead of . with /s flag (which requires ES2018+)
+      const messageMatch = params.match(/message=([\s\S]+?)(?=,\s*rationale=|$)/);
+      const rationaleMatch = params.match(/rationale=([\s\S]+?)$/);
       
       parsed.type = typeMatch?.[1]?.trim();
       parsed.title = titleMatch?.[1]?.trim();
