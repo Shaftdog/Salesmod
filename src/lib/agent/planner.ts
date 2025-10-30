@@ -225,14 +225,20 @@ Generate a plan with specific, actionable items. Each action MUST include:
 - **title**: Brief title for the action
 - **rationale**: Clear explanation of WHY this action is recommended (separate from email content)
 - **For send_email actions**: You MUST include the complete emailDraft object with:
-  - **to**: Recipient email address
+  - **to**: REQUIRED - Extract the email address from the Primary Contact field above (e.g., from "John Doe <john@example.com>" extract "john@example.com")
   - **subject**: Complete email subject line (at least 5 characters)
   - **body**: Complete HTML email body (at least 20 characters, use <p>, <strong>, <ul>, <li> tags)
   - **replyTo**: (optional) Reply-to address
 - **For create_task actions**: Include taskDetails with description and optional dueDate
 - **For create_deal actions**: Include dealDetails with title, stage, and optional value/description
 
-IMPORTANT: For send_email actions, the rationale field should explain WHY you're sending the email (business reasoning), while the emailDraft.body contains the ACTUAL email message to send. These are separate fields!
+CRITICAL EMAIL REQUIREMENTS:
+- NEVER create a send_email action without the "to" field in emailDraft
+- Extract email addresses from the contact information provided (look for format "Name <email@example.com>")
+- If a client has no contact email, use create_task instead to ask the user to reach out
+- The rationale field explains WHY you're sending the email (business reasoning)
+- The emailDraft.body contains the ACTUAL email message to send
+- These are separate fields!
 
 Remember: You're in **Review Mode**, so all actions will be reviewed by a human before execution. Be thoughtful and strategic.`;
 }

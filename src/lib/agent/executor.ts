@@ -160,6 +160,25 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
     };
   }
 
+  // Validate email payload
+  if (!payload || !payload.to) {
+    return {
+      success: false,
+      cardId: card.id,
+      message: 'Invalid email payload',
+      error: 'Email action is missing the "to" field. The action_payload must include: to, subject, and body.',
+    };
+  }
+
+  if (!payload.subject || !payload.body) {
+    return {
+      success: false,
+      cardId: card.id,
+      message: 'Incomplete email payload',
+      error: `Missing required fields. Subject: ${!!payload.subject}, Body: ${!!payload.body}`,
+    };
+  }
+
   // Check for email suppression
   const contactId = card.contact_id;
   if (contactId) {
@@ -215,6 +234,9 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
     }
 
     // Real Resend send
+    // Ensure 'to' is a string (Resend accepts both string and array, but string is cleaner for single recipient)
+    const toEmail = Array.isArray(payload.to) ? payload.to[0] : payload.to;
+
     const resendResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -223,7 +245,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
       },
       body: JSON.stringify({
         from: 'Account Manager <onboarding@resend.dev>', // Use Resend's verified onboarding domain
-        to: [payload.to],
+        to: toEmail,
         subject: payload.subject,
         html: payload.body,
         reply_to: payload.replyTo || 'manager@myroihome.com',

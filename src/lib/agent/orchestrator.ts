@@ -170,11 +170,22 @@ async function createKanbanCards(
       };
       console.log('Creating card with emailDraft:', {
         title: action.title,
+        hasTo: !!action.emailDraft.to,
+        to: action.emailDraft.to,
         hasSubject: !!action.emailDraft.subject,
         hasBody: !!action.emailDraft.body,
         subjectLength: action.emailDraft.subject?.length || 0,
         bodyLength: action.emailDraft.body?.length || 0,
       });
+
+      // Warn if email is missing critical fields
+      if (!action.emailDraft.to) {
+        console.error('WARNING: Email card created without "to" field!', {
+          title: action.title,
+          clientId: action.clientId,
+          contactId: action.contactId,
+        });
+      }
     } else if (action.taskDetails) {
       actionPayload = {
         description: action.taskDetails.description,
