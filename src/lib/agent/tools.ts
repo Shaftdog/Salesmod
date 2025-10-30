@@ -190,7 +190,7 @@ export const agentTools = {
    * Create an action card
    */
   createCard: tool({
-    description: 'Create a new action card on the Kanban board. Use this when user requests to create a task, draft an email, or propose an action. For calls/meetings, create a task instead. ClientId is optional - omit it for general strategic cards. IMPORTANT: For send_email type, you MUST include emailDraft with subject and body. The rationale explains WHY, the emailDraft.body is the ACTUAL email message.',
+    description: 'Create a new action card on the Kanban board. Use this when user requests to create a task, draft an email, or propose an action. For calls/meetings, create a task instead. ClientId is optional - omit it for general strategic cards. IMPORTANT: For send_email type, you MUST include emailDraft with to, subject, and body. The rationale explains WHY, the emailDraft.body is the ACTUAL email message.',
     parameters: z.object({
       type: z.enum(['send_email', 'create_task', 'create_deal', 'follow_up', 'research']),
       clientId: z.string().optional().describe('UUID of the client (optional - omit for general strategic cards)'),
@@ -198,10 +198,11 @@ export const agentTools = {
       rationale: z.string().describe('Why this action is recommended (business reasoning, NOT the email content)'),
       priority: z.enum(['low', 'medium', 'high']).default('medium'),
       emailDraft: z.object({
-        to: z.string(),
+        to: z.string().describe('Recipient email address (REQUIRED)'),
         subject: z.string().min(5).describe('Complete email subject line'),
         body: z.string().min(20).describe('Complete HTML email body (the actual message to send)'),
-      }).optional().describe('REQUIRED for send_email type. Contains the actual email to send.'),
+        replyTo: z.string().optional().describe('Reply-to email address (optional)'),
+      }).optional().describe('REQUIRED for send_email type. Must include to, subject, and body fields.'),
       taskDetails: z.object({
         description: z.string(),
         dueDate: z.string().optional(),
@@ -221,7 +222,11 @@ export const agentTools = {
             title: params.title,
             rationale: params.rationale,
           });
-          return { error: 'send_email actions must include emailDraft with subject and body' };
+          return { error: 'send_email actions must include emailDraft with subject, body, and to fields' };
+        }
+        if (!params.emailDraft.to || !params.emailDraft.to.includes('@')) {
+          console.error('ERROR: emailDraft missing or invalid to field!', params.emailDraft);
+          return { error: 'Email must include a valid to address' };
         }
         if (!params.emailDraft.subject || params.emailDraft.subject.length < 5) {
           return { error: 'Email subject must be at least 5 characters' };
@@ -237,6 +242,7 @@ export const agentTools = {
         actionPayload = params.emailDraft;
         console.log('Creating card via chat with emailDraft:', {
           title: params.title,
+          to: params.emailDraft.to,
           hasSubject: !!params.emailDraft.subject,
           hasBody: !!params.emailDraft.body,
         });

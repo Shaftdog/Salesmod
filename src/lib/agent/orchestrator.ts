@@ -170,6 +170,8 @@ async function createKanbanCards(
       };
       console.log('Creating card with emailDraft:', {
         title: action.title,
+        to: action.emailDraft.to,
+        hasTo: !!action.emailDraft.to,
         hasSubject: !!action.emailDraft.subject,
         hasBody: !!action.emailDraft.body,
         subjectLength: action.emailDraft.subject?.length || 0,
