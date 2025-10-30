@@ -223,7 +223,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
       },
       body: JSON.stringify({
         from: 'Account Manager <onboarding@resend.dev>', // Use Resend's verified onboarding domain
-        to: [payload.to],
+        to: payload.to, // Must be a string for onboarding domain
         subject: payload.subject,
         html: payload.body,
         reply_to: payload.replyTo || 'manager@myroihome.com',

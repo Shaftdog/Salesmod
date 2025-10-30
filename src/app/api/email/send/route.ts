@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           from: replyTo || 'Account Manager <manager@myroihome.com>',
-          to: [to],
+          to: to, // Must be a string
           subject,
           html,
           text,
