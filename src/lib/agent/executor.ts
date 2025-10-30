@@ -162,44 +162,78 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
 
   // Get recipient email from payload, contact, or client
   let recipientEmail = payload.to;
+  const debugInfo: string[] = [];
+  
+  debugInfo.push(`payload.to: ${payload.to || 'missing'}`);
   
   if (!recipientEmail) {
     // Try to get email from contact if contact_id exists
     if (card.contact_id) {
-      const { data: contact } = await supabase
+      debugInfo.push(`contact_id: ${card.contact_id}`);
+      const { data: contact, error: contactError } = await supabase
         .from('contacts')
         .select('email')
         .eq('id', card.contact_id)
         .single();
       
+      if (contactError) {
+        debugInfo.push(`contact lookup error: ${contactError.message}`);
+      } else {
+        debugInfo.push(`contact.email: ${contact?.email || 'missing'}`);
+      }
+      
       if (contact?.email) {
         recipientEmail = contact.email;
       }
+    } else {
+      debugInfo.push('contact_id: not set');
     }
     
     // Fallback to client email if still no email
     if (!recipientEmail && card.client_id) {
-      const { data: client } = await supabase
+      debugInfo.push(`client_id: ${card.client_id}`);
+      const { data: client, error: clientError } = await supabase
         .from('clients')
         .select('email')
         .eq('id', card.client_id)
         .single();
       
+      if (clientError) {
+        debugInfo.push(`client lookup error: ${clientError.message}`);
+      } else {
+        debugInfo.push(`client.email: ${client?.email || 'missing'}`);
+      }
+      
       if (client?.email) {
         recipientEmail = client.email;
       }
+    } else if (!recipientEmail) {
+      debugInfo.push(`client_id: ${card.client_id || 'not set'}`);
     }
   }
 
   // Validate we have an email address
   if (!recipientEmail) {
+    console.error('[Email Execution] Missing recipient email:', {
+      cardId: card.id,
+      cardTitle: card.title,
+      payload: JSON.stringify(payload),
+      debugInfo,
+    });
+    
     return {
       success: false,
       cardId: card.id,
       message: 'No recipient email address',
-      error: 'Cannot send email: no email address found in payload, contact, or client record',
+      error: `Cannot send email: no email address found in payload, contact, or client record. Debug: ${debugInfo.join(', ')}`,
     };
   }
+  
+  console.log('[Email Execution] Recipient email resolved:', {
+    cardId: card.id,
+    recipientEmail,
+    source: payload.to ? 'payload' : (card.contact_id ? 'contact' : 'client'),
+  });
 
   // Check for email suppression
   const contactId = card.contact_id;
