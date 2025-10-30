@@ -160,6 +160,47 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
     };
   }
 
+  // Get recipient email from payload, contact, or client
+  let recipientEmail = payload.to;
+  
+  if (!recipientEmail) {
+    // Try to get email from contact if contact_id exists
+    if (card.contact_id) {
+      const { data: contact } = await supabase
+        .from('contacts')
+        .select('email')
+        .eq('id', card.contact_id)
+        .single();
+      
+      if (contact?.email) {
+        recipientEmail = contact.email;
+      }
+    }
+    
+    // Fallback to client email if still no email
+    if (!recipientEmail && card.client_id) {
+      const { data: client } = await supabase
+        .from('clients')
+        .select('email')
+        .eq('id', card.client_id)
+        .single();
+      
+      if (client?.email) {
+        recipientEmail = client.email;
+      }
+    }
+  }
+
+  // Validate we have an email address
+  if (!recipientEmail) {
+    return {
+      success: false,
+      cardId: card.id,
+      message: 'No recipient email address',
+      error: 'Cannot send email: no email address found in payload, contact, or client record',
+    };
+  }
+
   // Check for email suppression
   const contactId = card.contact_id;
   if (contactId) {
@@ -186,7 +227,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
     
     if (!resendApiKey || resendApiKey === 're_YOUR_API_KEY_HERE') {
       // Simulate send if no Resend key
-      console.log('Email send (simulated):', { to: payload.to, subject: payload.subject });
+      console.log('Email send (simulated):', { to: recipientEmail, subject: payload.subject });
       
       await supabase
         .from('activities')
@@ -195,7 +236,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
           contact_id: card.contact_id,
           activity_type: 'email',
           subject: payload.subject,
-          description: `Email sent (simulated) via agent: ${card.title}`,
+          description: `Email sent (simulated) to ${recipientEmail} via agent: ${card.title}`,
           status: 'completed',
           completed_at: new Date().toISOString(),
           outcome: 'sent',
@@ -208,7 +249,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
         message: 'Email sent successfully (simulated)',
         metadata: {
           messageId: `sim_${Date.now()}`,
-          to: payload.to,
+          to: recipientEmail,
           simulated: true,
         },
       };
@@ -223,7 +264,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
       },
       body: JSON.stringify({
         from: 'Account Manager <onboarding@resend.dev>', // Use Resend's verified onboarding domain
-        to: payload.to, // Must be a string for onboarding domain
+        to: recipientEmail, // Must be a string for onboarding domain
         subject: payload.subject,
         html: payload.body,
         reply_to: payload.replyTo || 'manager@myroihome.com',
@@ -246,7 +287,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
         contact_id: card.contact_id,
         activity_type: 'email',
         subject: payload.subject,
-        description: `Email sent via agent: ${card.title} (ID: ${messageId})`,
+        description: `Email sent to ${recipientEmail} via agent: ${card.title} (ID: ${messageId})`,
         status: 'completed',
         completed_at: new Date().toISOString(),
         outcome: 'sent',
@@ -259,7 +300,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
       message: 'Email sent successfully via Resend',
       metadata: {
         messageId,
-        to: payload.to,
+        to: recipientEmail,
         simulated: false,
       },
     };
