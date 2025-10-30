@@ -162,6 +162,16 @@ async function createKanbanCards(
     let actionPayload: any = {};
 
     if (action.emailDraft) {
+      // Validate email draft has required fields
+      if (!action.emailDraft.to || !action.emailDraft.to.includes('@')) {
+        console.error('ERROR: emailDraft missing or invalid to field!', {
+          title: action.title,
+          emailDraft: action.emailDraft,
+        });
+        // Skip this card - don't create invalid email cards
+        continue;
+      }
+      
       actionPayload = {
         to: action.emailDraft.to,
         subject: action.emailDraft.subject,

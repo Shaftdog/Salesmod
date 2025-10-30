@@ -166,6 +166,18 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
   
   debugInfo.push(`payload.to: ${payload.to || 'missing'}`);
   
+  // Fallback: Try to extract email from rationale or description if missing
+  if (!recipientEmail) {
+    const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+    const textToSearch = `${card.rationale || ''} ${card.description || ''}`;
+    const emails = textToSearch.match(emailRegex);
+    if (emails && emails.length > 0) {
+      recipientEmail = emails[0]; // Use first email found
+      debugInfo.push(`extracted from text: ${recipientEmail}`);
+      console.log('[Email Execution] Extracted email from card text:', recipientEmail);
+    }
+  }
+  
   if (!recipientEmail) {
     // Try to get email from contact if contact_id exists
     if (card.contact_id) {

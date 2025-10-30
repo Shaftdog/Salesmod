@@ -28,6 +28,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate email cards have required fields
+    if (type === 'send_email') {
+      if (!emailDraft) {
+        return NextResponse.json(
+          { error: 'send_email type requires emailDraft with to, subject, and body fields' },
+          { status: 400 }
+        );
+      }
+      if (!emailDraft.to || !emailDraft.to.includes('@')) {
+        return NextResponse.json(
+          { error: 'Email draft must include a valid to address' },
+          { status: 400 }
+        );
+      }
+      if (!emailDraft.subject || emailDraft.subject.length < 5) {
+        return NextResponse.json(
+          { error: 'Email subject must be at least 5 characters' },
+          { status: 400 }
+        );
+      }
+      if (!emailDraft.body || emailDraft.body.length < 20) {
+        return NextResponse.json(
+          { error: 'Email body must be at least 20 characters' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Build action payload
     let actionPayload: any = {};
     if (emailDraft) {

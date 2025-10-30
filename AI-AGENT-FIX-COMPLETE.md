@@ -258,3 +258,5 @@ If you encounter any issues:
 **Remember**: The Kanban board auto-refreshes every 5 seconds. Be patient after creating cards - they should appear shortly!
 
 
+
+

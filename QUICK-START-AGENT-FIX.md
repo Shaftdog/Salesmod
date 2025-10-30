@@ -130,3 +130,5 @@ If you want visual tool indicators:
 **Need Help?** Check `AI-AGENT-FIX-COMPLETE.md` for detailed documentation.
 
 
+
+

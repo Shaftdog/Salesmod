@@ -48,3 +48,5 @@ FROM kanban_cards
 WHERE org_id = auth.uid();
 
 
+
+

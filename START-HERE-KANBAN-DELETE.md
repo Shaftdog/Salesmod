@@ -95,3 +95,5 @@ The delete button will appear when you hover over any card. 🗑️✨
 
 Super convenient and safe with confirmation!
 
+
+

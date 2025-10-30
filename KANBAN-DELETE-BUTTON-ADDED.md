@@ -194,3 +194,5 @@ Currently delete is mouse/touch only. Keyboard shortcuts could be added in the f
 
 Clean up your board with ease! 🗑️✨
 
+
+
