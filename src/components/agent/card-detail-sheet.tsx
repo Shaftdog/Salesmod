@@ -15,6 +15,36 @@ import { KanbanCard, useApproveCard, useExecuteCard, useRejectCard } from '@/hoo
 import { Send, Check, X, Loader2, AlertCircle, Calendar, DollarSign, Phone, FileSearch } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
+/**
+ * Format email body to handle both plain text and HTML
+ * Converts plain text line breaks to HTML while preserving existing HTML
+ */
+function formatEmailBody(body: string): string {
+  if (!body) return '';
+
+  // Check if body already contains HTML tags
+  const hasHtmlTags = /<[a-z][\s\S]*>/i.test(body);
+
+  if (hasHtmlTags) {
+    // Already HTML, return as-is
+    return body;
+  }
+
+  // Plain text - convert line breaks to HTML
+  // Replace double line breaks with paragraph breaks
+  // Replace single line breaks with <br> tags
+  return body
+    .split('\n\n')
+    .map(paragraph => {
+      // Replace single line breaks within paragraph with <br>
+      const formattedParagraph = paragraph
+        .split('\n')
+        .join('<br>');
+      return `<p>${formattedParagraph}</p>`;
+    })
+    .join('');
+}
+
 interface CardDetailSheetProps {
   card: KanbanCard | null;
   open: boolean;
@@ -184,8 +214,8 @@ export function CardDetailSheet({ card, open, onOpenChange }: CardDetailSheetPro
                   <div>
                     <p className="text-xs text-muted-foreground">Message</p>
                     <div
-                      className="prose prose-sm max-w-none rounded-md border p-4 bg-white text-sm"
-                      dangerouslySetInnerHTML={{ __html: card.action_payload.body }}
+                      className="prose prose-sm max-w-none rounded-md border p-4 bg-white text-sm whitespace-pre-wrap"
+                      dangerouslySetInnerHTML={{ __html: formatEmailBody(card.action_payload.body) }}
                     />
                   </div>
                 </div>
