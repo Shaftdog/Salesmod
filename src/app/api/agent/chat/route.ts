@@ -136,47 +136,8 @@ Remember: You're helping achieve business goals. Be strategic and data-driven.`;
       console.error('Failed to save chat messages:', err);
     });
 
-    // Convert to text stream with tool information logged
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          let toolCallsDetected = false;
-          
-          // Process the full stream to capture text and tool calls
-          for await (const part of result.fullStream) {
-            // Handle text deltas
-            if (part.type === 'text-delta') {
-              controller.enqueue(new TextEncoder().encode(part.text));
-            }
-            // Log tool calls for debugging
-            else if (part.type === 'tool-call') {
-              toolCallsDetected = true;
-              console.log('[Chat API] Tool call:', part);
-            }
-            // Log tool results for debugging
-            else if (part.type === 'tool-result') {
-              console.log('[Chat API] Tool result:', part);
-            }
-          }
-          
-          if (toolCallsDetected) {
-            console.log('[Chat API] Tools were executed during this response');
-          }
-          
-          controller.close();
-        } catch (error) {
-          console.error('[Chat API] Stream error:', error);
-          controller.error(error);
-        }
-      },
-    });
-
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
-      },
-    });
+    // Use AI SDK's built-in text stream response
+    return result.toTextStreamResponse();
   } catch (error: any) {
     console.error('[Chat API] Error:', error);
     console.error('[Chat API] Error stack:', error.stack);

@@ -69,7 +69,7 @@ export function AgentChat() {
     saveChatMessage.mutate({ role: 'user', content: userMessage.content });
 
     try {
-      console.log('[Chat] Sending request to /api/agent/chat with tool support');
+      console.log('[Chat] Sending request to /api/agent/chat-simple');
       
       // Add a timeout to the fetch request
       const controller = new AbortController();
@@ -78,7 +78,7 @@ export function AgentChat() {
         controller.abort();
       }, 60000); // 60 second timeout
 
-      const response = await fetch('/api/agent/chat', {
+      const response = await fetch('/api/agent/chat-simple', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
