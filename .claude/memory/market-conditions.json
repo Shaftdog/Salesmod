@@ -1,0 +1,12 @@
+{
+  "last_updated": "2025-11-03",
+  "markets": {
+    "brevard_county": {
+      "trend": "stable",
+      "monthly_appreciation": 0.005,
+      "inventory_level": "balanced",
+      "median_price": 385000,
+      "days_on_market": 35
+    }
+  }
+}

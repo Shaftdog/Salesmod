@@ -1,0 +1,20 @@
+{
+  "adjustments": {
+    "gla_per_sqft": 95,
+    "waterfront_premium": 0.18,
+    "pool_value": 12000,
+    "garage_per_bay": 20000,
+    "bedroom_value": 10000,
+    "bathroom_value": 5000
+  },
+  "comp_criteria": {
+    "max_distance_miles": 1.0,
+    "max_age_months": 6,
+    "min_similarity_score": 0.7
+  },
+  "coding_standards": {
+    "typescript_strict": true,
+    "test_coverage_minimum": 0.8,
+    "prefer_functional": true
+  }
+}
