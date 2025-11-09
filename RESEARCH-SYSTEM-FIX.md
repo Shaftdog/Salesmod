@@ -178,7 +178,27 @@ git push
 
 ## Summary
 
-- ✅ **Root cause**: AI was creating `create_task` cards instead of `research` cards
-- ✅ **Fix applied**: Updated planner prompt to be more explicit about research automation
-- ❓ **Still needed**: Verify ANTHROPIC_API_KEY is set on Vercel for full AI summarization
-- 🎯 **Expected result**: Future research requests will create proper `research` cards that execute automatically
+- ✅ **Root cause identified**: AI was creating `create_task` cards instead of `research` cards
+- ✅ **Planner fix applied**: Updated planner prompt to be more explicit about research automation (commit: 402adb9)
+- ✅ **RAG indexing fix applied**: Changed source from 'research' to 'note' to match DB constraint (commit: 09b3bde)
+- ✅ **Verified working**: ANTHROPIC_API_KEY confirmed set on Vercel (7,138 char AI summary generated)
+- ✅ **Verified working**: TAVILY_API_KEY confirmed set on Vercel (5 web results found)
+- ✅ **Research executing**: Card executed successfully, saved to activities table
+- ✅ **Deployed to production**: Both fixes pushed and deployed to Vercel
+
+## Test Results ✅
+
+Production logs from successful research execution:
+
+```
+[Execute] Executing card: Research MoFin Lending - Find Contact and Assess Opportunity (research)
+[Research] Starting research for client f9b1d5eb-e8a4-4b17-b475-d994cd398094
+[Research] Gathered internal data: 1 orders, 300 revenue
+[Research] Found 5 web results
+[Research] Generated summary (7138 chars)
+[Research] Saved to activities: a47d7cb9-c5b8-4b78-9429-884d55eb6643
+[Research] Saved insights to agent_memories
+[Execute] ✓ Research MoFin Lending - Find Contact and Assess Opportunity: Success
+```
+
+Everything working as expected! Research results are now visible in the client's activity feed.
