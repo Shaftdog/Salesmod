@@ -1,6 +1,7 @@
 'use client';
 
 import { useJobs } from '@/hooks/use-jobs';
+import { Job } from '@/types/jobs';
 import {
   Select,
   SelectContent,
@@ -25,9 +26,9 @@ export function JobsFilterBar({
   const jobs = data?.jobs || [];
 
   // Only show active jobs (running or pending)
-  const activeJobs = jobs.filter((j) => ['running', 'pending', 'paused'].includes(j.status));
+  const activeJobs = jobs.filter((j: Job) => ['running', 'pending', 'paused'].includes(j.status));
 
-  const selectedJob = jobs.find((j) => j.id === selectedJobId);
+  const selectedJob = jobs.find((j: Job) => j.id === selectedJobId);
 
   if (activeJobs.length === 0) {
     return null; // Don't show filter if no active jobs
