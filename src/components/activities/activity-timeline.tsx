@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { useCreateActivity } from "@/hooks/use-activities";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentUser } from "@/hooks/use-appraisers";
+import ReactMarkdown from "react-markdown";
 
 const activityIcons = {
   call: Phone,
@@ -115,9 +116,9 @@ export function ActivityTimeline({ clientId, activities, isLoading }: ActivityTi
                         </div>
                         <h4 className="font-semibold">{activity.subject}</h4>
                         {activity.description && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {activity.description}
-                          </p>
+                          <div className="text-sm text-muted-foreground mt-2 prose prose-sm max-w-none prose-headings:text-foreground prose-headings:font-semibold prose-h2:text-base prose-h2:mt-4 prose-h2:mb-2 prose-p:my-2 prose-ul:my-2 prose-li:my-0.5 prose-strong:text-foreground">
+                            <ReactMarkdown>{activity.description}</ReactMarkdown>
+                          </div>
                         )}
                         {activity.outcome && (
                           <div className="mt-2">
