@@ -13,8 +13,9 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { KanbanCard, useApproveCard, useExecuteCard, useRejectCard } from '@/hooks/use-agent';
-import { Send, Check, X, Loader2, AlertCircle } from 'lucide-react';
+import { Send, Check, X, Loader2, AlertCircle, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { CardReviewChat } from './card-review-chat';
 
 interface EmailDraftSheetProps {
   card: KanbanCard | null;
@@ -28,6 +29,7 @@ export function EmailDraftSheet({ card, open, onOpenChange }: EmailDraftSheetPro
   const executeCard = useExecuteCard();
   const rejectCard = useRejectCard();
   const [isApproving, setIsApproving] = useState(false);
+  const [showReviewChat, setShowReviewChat] = useState(false);
 
   if (!card || card.type !== 'send_email') {
     return null;
@@ -76,14 +78,14 @@ export function EmailDraftSheet({ card, open, onOpenChange }: EmailDraftSheetPro
     }
   };
 
-  const handleReject = async () => {
+  const handleRejectAndReview = async () => {
     try {
       await rejectCard.mutateAsync(card.id);
+      setShowReviewChat(true);
       toast({
         title: 'Card Rejected',
-        description: 'Email draft has been rejected',
+        description: 'Review this card with the AI agent below',
       });
-      onOpenChange(false);
     } catch (error: any) {
       toast({
         title: 'Rejection Failed',
@@ -91,6 +93,22 @@ export function EmailDraftSheet({ card, open, onOpenChange }: EmailDraftSheetPro
         variant: 'destructive',
       });
     }
+  };
+
+  const handleCardRevised = (newCard: any) => {
+    toast({
+      title: 'Card Revised',
+      description: 'A new card has been created. Check the Suggested column.',
+    });
+    setShowReviewChat(false);
+    onOpenChange(false);
+  };
+
+  const handleFeedbackStored = (feedback: any) => {
+    toast({
+      title: 'Feedback Stored',
+      description: 'The agent will learn from this feedback.',
+    });
   };
 
   const isApproved = card.state === 'approved';
@@ -178,21 +196,33 @@ export function EmailDraftSheet({ card, open, onOpenChange }: EmailDraftSheetPro
                 <p className="text-sm text-red-700">{card.description}</p>
               </div>
             )}
+
+            {/* Card Review Chat - shown when rejected */}
+            {showReviewChat && (
+              <div className="mt-6">
+                <CardReviewChat
+                  card={card}
+                  onCardRevised={handleCardRevised}
+                  onFeedbackStored={handleFeedbackStored}
+                  onClose={() => setShowReviewChat(false)}
+                />
+              </div>
+            )}
           </div>
         </ScrollArea>
 
         {/* Actions */}
         <div className="flex gap-2 pt-4 border-t">
-          {!isDone && !isApproved && (
+          {!isDone && !isApproved && !showReviewChat && (
             <>
               <Button
-                onClick={handleReject}
+                onClick={handleRejectAndReview}
                 variant="outline"
                 className="flex-1"
                 disabled={rejectCard.isPending}
               >
-                <X className="h-4 w-4 mr-2" />
-                Reject
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Reject & Review
               </Button>
               <Button
                 onClick={handleApprove}
@@ -241,6 +271,19 @@ export function EmailDraftSheet({ card, open, onOpenChange }: EmailDraftSheetPro
             <div className="flex-1 text-center text-sm text-muted-foreground py-2">
               Email has been sent
             </div>
+          )}
+
+          {showReviewChat && (
+            <Button
+              onClick={() => {
+                setShowReviewChat(false);
+                onOpenChange(false);
+              }}
+              variant="outline"
+              className="flex-1"
+            >
+              Close
+            </Button>
           )}
         </div>
       </SheetContent>
