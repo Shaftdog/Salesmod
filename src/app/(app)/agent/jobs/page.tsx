@@ -33,6 +33,7 @@ import {
   XCircle,
   Mail,
   AlertTriangle,
+  Edit,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Job } from '@/types/jobs';
@@ -40,6 +41,7 @@ import { Job } from '@/types/jobs';
 export default function JobsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
 
   const { data, isLoading, error } = useJobs(
     statusFilter === 'all' ? undefined : statusFilter
@@ -189,7 +191,7 @@ export default function JobsPage() {
               </TableHeader>
               <TableBody>
                 {jobs.map((job) => (
-                  <JobRow key={job.id} job={job} />
+                  <JobRow key={job.id} job={job} onEdit={() => setEditingJob(job)} />
                 ))}
               </TableBody>
             </Table>
@@ -197,36 +199,55 @@ export default function JobsPage() {
         </CardContent>
       </Card>
 
-      {/* Create Job Dialog */}
+      {/* Create/Edit Job Dialog */}
       <JobFormDialog
-        open={isCreateDialogOpen}
-        onOpenChange={setIsCreateDialogOpen}
+        open={isCreateDialogOpen || !!editingJob}
+        onOpenChange={(open) => {
+          setIsCreateDialogOpen(open);
+          if (!open) setEditingJob(null);
+        }}
+        job={editingJob}
       />
     </div>
   );
 }
 
 // Job Table Row Component
-function JobRow({ job }: { job: Job }) {
+function JobRow({ job, onEdit }: { job: Job; onEdit: () => void }) {
   const progress =
     job.cards_created > 0
       ? Math.round((job.cards_executed / job.cards_created) * 100)
       : 0;
 
   return (
-    <TableRow className="cursor-pointer hover:bg-muted/50">
+    <TableRow className="hover:bg-muted/50">
       <TableCell>
-        <Link
-          href={`/agent/jobs/${job.id}`}
-          className="font-medium hover:underline"
-        >
-          {job.name}
-        </Link>
-        {job.description && (
-          <p className="text-xs text-muted-foreground truncate max-w-md">
-            {job.description}
-          </p>
-        )}
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <Link
+              href={`/agent/jobs/${job.id}`}
+              className="font-medium hover:underline"
+            >
+              {job.name}
+            </Link>
+            {job.description && (
+              <p className="text-xs text-muted-foreground truncate max-w-md">
+                {job.description}
+              </p>
+            )}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            className="h-8 w-8 p-0"
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+        </div>
       </TableCell>
       <TableCell>
         <JobStatusBadge status={job.status} />

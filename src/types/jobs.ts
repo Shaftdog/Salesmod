@@ -93,10 +93,12 @@ export const JobParamsSchema = z.object({
   cadence: CadenceConfigSchema.optional(),
 
   // Behavior
-  review_mode: z.boolean().default(true),
-  batch_size: z.number().default(10), // Tasks per batch
-  auto_approve: z.boolean().default(false), // Auto-approve cards
-  stop_on_error: z.boolean().default(false),
+  review_mode: z.boolean().default(true),     // Cards require review before execution
+  edit_mode: z.boolean().default(false),      // Cards can be edited before execution
+  bulk_mode: z.boolean().default(false),      // Process all contacts ignoring cadence
+  batch_size: z.number().default(10),         // Tasks per batch
+  auto_approve: z.boolean().default(false),   // Auto-approve cards
+  stop_on_error: z.boolean().default(false),  // Stop job on first error
 
   // Portal checking
   portal_checks: z.boolean().default(false),

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useCreateJob } from '@/hooks/use-jobs';
+import { useCreateJob, useUpdateJob } from '@/hooks/use-jobs';
+import { Job } from '@/types/jobs';
 import {
   Dialog,
   DialogContent,
@@ -35,10 +36,13 @@ type CreateJobFormData = z.infer<typeof CreateJobRequestSchema>;
 interface JobFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  job?: Job | null; // Optional job for edit mode
 }
 
-export function JobFormDialog({ open, onOpenChange }: JobFormDialogProps) {
+export function JobFormDialog({ open, onOpenChange, job }: JobFormDialogProps) {
+  const isEditMode = !!job;
   const createJob = useCreateJob();
+  const updateJob = useUpdateJob(job?.id || '');
   const [templates, setTemplates] = useState<Array<{ name: string; subject: string; body: string }>>([
     { name: 'intro', subject: '', body: '' },
   ]);
@@ -57,6 +61,8 @@ export function JobFormDialog({ open, onOpenChange }: JobFormDialogProps) {
           day21: false,
         },
         review_mode: true,
+        edit_mode: false,
+        bulk_mode: false,
         batch_size: 10,
         auto_approve: false,
         stop_on_error: false,
@@ -65,6 +71,33 @@ export function JobFormDialog({ open, onOpenChange }: JobFormDialogProps) {
       },
     },
   });
+
+  // Populate form when editing an existing job
+  useEffect(() => {
+    if (job && open) {
+      form.reset({
+        name: job.name,
+        description: job.description || '',
+        params: job.params,
+      });
+
+      // Populate templates from job.params.templates
+      if (job.params.templates) {
+        const templateArray = Object.entries(job.params.templates).map(([name, template]) => ({
+          name,
+          subject: template.subject,
+          body: template.body,
+        }));
+        setTemplates(templateArray.length > 0 ? templateArray : [{ name: 'intro', subject: '', body: '' }]);
+      } else {
+        setTemplates([{ name: 'intro', subject: '', body: '' }]);
+      }
+    } else if (!open) {
+      // Reset form when dialog closes
+      form.reset();
+      setTemplates([{ name: 'intro', subject: '', body: '' }]);
+    }
+  }, [job, open, form]);
 
   const onSubmit = async (data: CreateJobFormData) => {
     // Build templates object from array
@@ -83,7 +116,12 @@ export function JobFormDialog({ open, onOpenChange }: JobFormDialogProps) {
       },
     };
 
-    await createJob.mutateAsync(jobData);
+    if (isEditMode) {
+      await updateJob.mutateAsync(jobData);
+    } else {
+      await createJob.mutateAsync(jobData);
+    }
+
     onOpenChange(false);
     form.reset();
     setTemplates([{ name: 'intro', subject: '', body: '' }]);
@@ -109,9 +147,11 @@ export function JobFormDialog({ open, onOpenChange }: JobFormDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Job</DialogTitle>
+          <DialogTitle>{isEditMode ? 'Edit Job' : 'Create New Job'}</DialogTitle>
           <DialogDescription>
-            Set up a multi-step campaign with automated email outreach and follow-ups.
+            {isEditMode
+              ? 'Update your campaign settings, templates, and target audience.'
+              : 'Set up a multi-step campaign with automated email outreach and follow-ups.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -372,6 +412,48 @@ export function JobFormDialog({ open, onOpenChange }: JobFormDialogProps) {
 
               <FormField
                 control={form.control}
+                name="params.edit_mode"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>Edit Mode</FormLabel>
+                      <FormDescription>
+                        Allow editing email content before approval
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="params.bulk_mode"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>Bulk Mode</FormLabel>
+                      <FormDescription>
+                        Process all contacts in batches, ignoring cadence limits
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="params.stop_on_error"
                 render={({ field }) => (
                   <FormItem className="flex items-center justify-between rounded-lg border p-3">
@@ -400,11 +482,11 @@ export function JobFormDialog({ open, onOpenChange }: JobFormDialogProps) {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={createJob.isPending}>
-                {createJob.isPending && (
+              <Button type="submit" disabled={isEditMode ? updateJob.isPending : createJob.isPending}>
+                {(isEditMode ? updateJob.isPending : createJob.isPending) && (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 )}
-                Create Job
+                {isEditMode ? 'Update Job' : 'Create Job'}
               </Button>
             </DialogFooter>
           </form>

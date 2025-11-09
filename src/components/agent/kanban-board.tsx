@@ -223,6 +223,13 @@ function KanbanCardItem({ card, onDragStart, onClick, onDelete }: KanbanCardItem
           {card.rationale}
         </p>
 
+        {card.state === 'in_review' && (
+          <div className="flex items-center gap-1 text-xs text-yellow-600">
+            <Clock className="h-3 w-3" />
+            <span>Click to edit</span>
+          </div>
+        )}
+
         {card.state === 'blocked' && (
           <div className="flex items-center gap-1 text-xs text-red-600">
             <AlertCircle className="h-3 w-3" />

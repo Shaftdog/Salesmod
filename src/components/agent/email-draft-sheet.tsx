@@ -12,8 +12,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { KanbanCard, useApproveCard, useExecuteCard, useRejectCard } from '@/hooks/use-agent';
-import { Send, Check, X, Loader2, AlertCircle, MessageSquare } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { KanbanCard, useApproveCard, useExecuteCard, useRejectCard, useUpdateCard } from '@/hooks/use-agent';
+import { Send, Check, X, Loader2, AlertCircle, MessageSquare, Edit2, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { CardReviewChat } from './card-review-chat';
 
@@ -28,14 +31,58 @@ export function EmailDraftSheet({ card, open, onOpenChange }: EmailDraftSheetPro
   const approveCard = useApproveCard();
   const executeCard = useExecuteCard();
   const rejectCard = useRejectCard();
+  const updateCard = useUpdateCard();
   const [isApproving, setIsApproving] = useState(false);
   const [showReviewChat, setShowReviewChat] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedSubject, setEditedSubject] = useState('');
+  const [editedBody, setEditedBody] = useState('');
 
   if (!card || card.type !== 'send_email') {
     return null;
   }
 
   const emailData = card.action_payload || {};
+  const isInReview = card.state === 'in_review';
+
+  // Initialize editing values when entering edit mode
+  const handleStartEdit = () => {
+    setEditedSubject(emailData.subject || '');
+    setEditedBody(emailData.body || '');
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      await updateCard.mutateAsync({
+        cardId: card.id,
+        updates: {
+          action_payload: {
+            ...emailData,
+            subject: editedSubject,
+            body: editedBody,
+          },
+        },
+      });
+      setIsEditing(false);
+      toast({
+        title: 'Changes Saved',
+        description: 'Email content has been updated',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Save Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditedSubject('');
+    setEditedBody('');
+  };
 
   const handleApprove = async () => {
     try {
@@ -168,16 +215,47 @@ export function EmailDraftSheet({ card, open, onOpenChange }: EmailDraftSheetPro
 
             {/* Email Content */}
             <div>
-              <h3 className="text-sm font-medium mb-2">Subject</h3>
-              <p className="text-sm font-medium">{emailData.subject}</p>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium">Subject</h3>
+                {isInReview && !isEditing && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleStartEdit}
+                    className="h-8"
+                  >
+                    <Edit2 className="h-3 w-3 mr-1" />
+                    Edit
+                  </Button>
+                )}
+              </div>
+              {isEditing ? (
+                <Input
+                  value={editedSubject}
+                  onChange={(e) => setEditedSubject(e.target.value)}
+                  placeholder="Email subject"
+                  className="w-full"
+                />
+              ) : (
+                <p className="text-sm font-medium">{emailData.subject}</p>
+              )}
             </div>
 
             <div>
               <h3 className="text-sm font-medium mb-2">Message</h3>
-              <div
-                className="prose prose-sm max-w-none rounded-md border p-4 bg-white"
-                dangerouslySetInnerHTML={{ __html: emailData.body }}
-              />
+              {isEditing ? (
+                <Textarea
+                  value={editedBody.replace(/<[^>]*>/g, '')} // Strip HTML for editing
+                  onChange={(e) => setEditedBody(`<p>${e.target.value.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`)}
+                  placeholder="Email message"
+                  className="w-full min-h-[300px] font-mono text-sm"
+                />
+              ) : (
+                <div
+                  className="prose prose-sm max-w-none rounded-md border p-4 bg-white"
+                  dangerouslySetInnerHTML={{ __html: emailData.body }}
+                />
+              )}
             </div>
 
             {emailData.replyTo && (
@@ -213,7 +291,30 @@ export function EmailDraftSheet({ card, open, onOpenChange }: EmailDraftSheetPro
 
         {/* Actions */}
         <div className="flex gap-2 pt-4 border-t">
-          {!isDone && !isApproved && !showReviewChat && (
+          {isEditing ? (
+            <>
+              <Button
+                onClick={handleCancelEdit}
+                variant="outline"
+                className="flex-1"
+              >
+                <X className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveEdit}
+                className="flex-1"
+                disabled={updateCard.isPending}
+              >
+                {updateCard.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Save Changes
+              </Button>
+            </>
+          ) : !isDone && !isApproved && !showReviewChat ? (
             <>
               <Button
                 onClick={handleRejectAndReview}
@@ -250,7 +351,7 @@ export function EmailDraftSheet({ card, open, onOpenChange }: EmailDraftSheetPro
                 Approve & Send
               </Button>
             </>
-          )}
+          ) : null}
 
           {isApproved && !isDone && (
             <Button

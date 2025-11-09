@@ -136,22 +136,6 @@ export async function planNextBatch(
   const nextBatch = currentBatch + 1;
   const tasks: PlanNextBatchResult['tasks'] = [];
 
-  // Determine which cadence step we're at
-  const cadence = params.cadence;
-  if (!cadence) {
-    // No cadence defined, return empty
-    return { tasks: [], batch_number: nextBatch };
-  }
-
-  // Calculate which day we should be processing based on batch
-  const cadenceDays = getCadenceDays(cadence);
-  const dayIndex = currentBatch < cadenceDays.length ? currentBatch : -1;
-
-  if (dayIndex === -1) {
-    // No more cadence steps
-    return { tasks: [], batch_number: nextBatch };
-  }
-
   const templateKeys = Object.keys(params.templates || {});
   if (templateKeys.length === 0) {
     return { tasks: [], batch_number: nextBatch };
@@ -164,10 +148,39 @@ export async function planNextBatch(
     return dayA - dayB;
   });
 
-  // Select template for this batch based on cadence day
-  const templateName = sortedTemplateKeys[dayIndex % sortedTemplateKeys.length];
-  
-  console.log(`[planNextBatch] Batch ${nextBatch}: Using template "${templateName}" (dayIndex: ${dayIndex}, available: ${sortedTemplateKeys.join(', ')})`);
+  let templateName: string;
+  let dayIndex: number;
+
+  // BULK MODE: Process all contacts with the same template, ignoring cadence
+  if (params.bulk_mode) {
+    // Always use the first template (typically "Day 0")
+    templateName = sortedTemplateKeys[0];
+    console.log(`[planNextBatch] BULK MODE - Batch ${nextBatch}: Using template "${templateName}"`);
+
+    // We'll continue until getTargetContacts returns 0 contacts
+    // (which happens when all contacts have been processed)
+  }
+  // CADENCE MODE: Process contacts on different days with different templates
+  else {
+    const cadence = params.cadence;
+    if (!cadence) {
+      // No cadence defined, return empty
+      return { tasks: [], batch_number: nextBatch };
+    }
+
+    // Calculate which day we should be processing based on batch
+    const cadenceDays = getCadenceDays(cadence);
+    dayIndex = currentBatch < cadenceDays.length ? currentBatch : -1;
+
+    if (dayIndex === -1) {
+      // No more cadence steps
+      return { tasks: [], batch_number: nextBatch };
+    }
+
+    // Select template for this batch based on cadence day
+    templateName = sortedTemplateKeys[dayIndex % sortedTemplateKeys.length];
+    console.log(`[planNextBatch] CADENCE MODE - Batch ${nextBatch}: Using template "${templateName}" (dayIndex: ${dayIndex}, available: ${sortedTemplateKeys.join(', ')})`);
+  }
 
   // Create draft_email task
   tasks.push({
@@ -181,6 +194,7 @@ export async function planNextBatch(
       contact_ids: params.target_contact_ids || [],
       template: templateName,
       variables: {},
+      job_id: job.id, // Pass job_id to filter out already-processed contacts
     } as DraftEmailTaskInput,
     output: null,
     status: 'pending',
@@ -305,6 +319,19 @@ async function expandDraftEmailTask(
     // Format body with proper HTML paragraphs and lists
     body = formatEmailBody(body);
 
+    // Determine card state based on job settings:
+    // - edit_mode: Cards created in "in_review" state (allows editing before approval)
+    // - review_mode: Cards created in "suggested" state (requires approval)
+    // - auto_approve: Cards go directly to "approved" state
+    let cardState: string;
+    if (params.edit_mode) {
+      cardState = 'in_review';
+    } else if (params.review_mode) {
+      cardState = 'suggested';
+    } else {
+      cardState = 'approved';
+    }
+
     return {
       job_id: job.id,
       task_id: task.id,
@@ -313,7 +340,7 @@ async function expandDraftEmailTask(
       description: `Send email to ${contact.email}`,
       rationale: `Job "${job.name}" - ${input.template} template (batch ${task.batch})`,
       priority: 'medium',
-      state: params.review_mode ? 'suggested' : 'approved',
+      state: cardState,
       action_payload: {
         to: contact.email,
         subject,
@@ -356,6 +383,16 @@ async function expandCreateTaskTask(
   // Get target contacts
   const targets = await getTargetContacts(input, params, supabase);
 
+  // Determine card state based on job settings
+  let cardState: string;
+  if (params.edit_mode) {
+    cardState = 'in_review';
+  } else if (params.review_mode) {
+    cardState = 'suggested';
+  } else {
+    cardState = 'approved';
+  }
+
   const cards = targets.map((contact) => ({
     job_id: job.id,
     task_id: task.id,
@@ -364,7 +401,7 @@ async function expandCreateTaskTask(
     description: input.task_description || 'Follow-up task',
     rationale: `Job "${job.name}" - automated follow-up (batch ${task.batch})`,
     priority: 'medium',
-    state: params.review_mode ? 'suggested' : 'approved',
+    state: cardState,
     action_payload: {
       title: input.task_title || `Follow up with ${contact.first_name}`,
       description: input.task_description || '',
@@ -404,6 +441,16 @@ async function expandCheckPortalTask(
     return { cards: [] };
   }
 
+  // Determine card state based on job settings
+  let cardState: string;
+  if (params.edit_mode) {
+    cardState = 'in_review';
+  } else if (params.review_mode) {
+    cardState = 'suggested';
+  } else {
+    cardState = 'approved';
+  }
+
   const cards = clients.map((client: any) => ({
     job_id: job.id,
     task_id: task.id,
@@ -412,7 +459,7 @@ async function expandCheckPortalTask(
     description: `Verify portal access at ${portalUrls[client.id]}`,
     rationale: `Job "${job.name}" - portal verification (batch ${task.batch})`,
     priority: 'low',
-    state: params.review_mode ? 'suggested' : 'approved',
+    state: cardState,
     action_payload: {
       type: 'portal_check',
       portal_url: portalUrls[client.id],
@@ -521,9 +568,29 @@ async function getTargetContacts(
 
   // Limit to batch size
   const batchSize = params.batch_size || 10;
-  query = query.limit(batchSize);
-  
+
   console.log(`[getTargetContacts] Executing query with batch size: ${batchSize}`);
+
+  // If job_id is provided, exclude contacts that already have cards from this job
+  let excludedContactIds: string[] = [];
+  if (input.job_id) {
+    const { data: existingCards } = await supabase
+      .from('kanban_cards')
+      .select('contact_id')
+      .eq('job_id', input.job_id)
+      .not('contact_id', 'is', null);
+
+    if (existingCards && existingCards.length > 0) {
+      excludedContactIds = existingCards.map((card: any) => card.contact_id).filter(Boolean);
+      console.log(`[getTargetContacts] Excluding ${excludedContactIds.length} contacts that already have cards from this job`);
+
+      if (excludedContactIds.length > 0) {
+        query = query.not('id', 'in', `(${excludedContactIds.join(',')})`);
+      }
+    }
+  }
+
+  query = query.limit(batchSize);
 
   const { data: contacts, error } = await query;
 
@@ -537,8 +604,8 @@ async function getTargetContacts(
     });
     return [];
   }
-  
-  console.log(`[getTargetContacts] Query returned ${contacts?.length || 0} contacts`);
+
+  console.log(`[getTargetContacts] Query returned ${contacts?.length || 0} contacts (${excludedContactIds.length} excluded)`);
 
   // Fetch avoidance rules from agent_memories
   const { data: { user } } = await supabase.auth.getUser();
