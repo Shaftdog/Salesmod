@@ -31,10 +31,11 @@ const COLUMNS = [
 
 interface KanbanBoardProps {
   onCardClick?: (card: KanbanCard) => void;
+  jobId?: string;
 }
 
-export function KanbanBoard({ onCardClick }: KanbanBoardProps) {
-  const { data: cards, isLoading } = useKanbanCards();
+export function KanbanBoard({ onCardClick, jobId }: KanbanBoardProps) {
+  const { data: cards, isLoading } = useKanbanCards(undefined, undefined, jobId);
   const updateCardState = useUpdateCardState();
   const deleteCard = useDeleteCard();
   const { toast } = useToast();

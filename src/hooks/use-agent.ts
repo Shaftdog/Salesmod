@@ -110,9 +110,9 @@ export function useLatestRun() {
 // QUERY: Fetch Kanban Cards
 // =============================================
 
-export function useKanbanCards(state?: string, clientId?: string) {
+export function useKanbanCards(state?: string, clientId?: string, jobId?: string) {
   return useQuery({
-    queryKey: ['kanban-cards', state, clientId],
+    queryKey: ['kanban-cards', state, clientId, jobId],
     queryFn: async () => {
       const supabase = createClient();
       const {
@@ -137,6 +137,10 @@ export function useKanbanCards(state?: string, clientId?: string) {
 
       if (clientId) {
         query = query.eq('client_id', clientId);
+      }
+
+      if (jobId) {
+        query = query.eq('job_id', jobId);
       }
 
       const { data, error } = await query;
