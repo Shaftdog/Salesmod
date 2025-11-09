@@ -5,16 +5,22 @@ import { KanbanBoard } from '@/components/agent/kanban-board';
 import { AgentPanel } from '@/components/agent/agent-panel';
 import { EmailDraftSheet } from '@/components/agent/email-draft-sheet';
 import { CardDetailSheet } from '@/components/agent/card-detail-sheet';
+import { JobsFilterBar } from '@/components/agent/jobs-filter-bar';
+import { AgentLearningDashboard } from '@/components/agent/learning-dashboard';
+import { RulesManagement } from '@/components/agent/rules-management';
+import { AutomationDashboard } from '@/components/agent/automation-dashboard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { KanbanCard, useAgentStats } from '@/hooks/use-agent';
-import { Bot, BarChart3, Mail, Target, CheckCircle } from 'lucide-react';
+import { Bot, BarChart3, Mail, Target, CheckCircle, Brain, Kanban, Settings, Zap } from 'lucide-react';
 
 export default function AgentPage() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [isDraftSheetOpen, setIsDraftSheetOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const { data: stats } = useAgentStats(30);
 
   const handleCardClick = (card: KanbanCard) => {
@@ -96,10 +102,52 @@ export default function AgentPage() {
         </Card>
       </div>
 
-      {/* Kanban Board */}
-      <div>
-        <KanbanBoard onCardClick={handleCardClick} />
-      </div>
+      {/* Tabs for Board, Learning Dashboard, Rules Management, and Automation */}
+      <Tabs defaultValue="board" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="board">
+            <Kanban className="h-4 w-4 mr-2" />
+            Board
+          </TabsTrigger>
+          <TabsTrigger value="learning">
+            <Brain className="h-4 w-4 mr-2" />
+            Learning
+          </TabsTrigger>
+          <TabsTrigger value="rules">
+            <Settings className="h-4 w-4 mr-2" />
+            Rules
+          </TabsTrigger>
+          <TabsTrigger value="automation">
+            <Zap className="h-4 w-4 mr-2" />
+            Automation
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="board" className="space-y-4">
+          {/* Jobs Filter */}
+          <JobsFilterBar
+            selectedJobId={selectedJobId}
+            onJobSelect={setSelectedJobId}
+          />
+
+          {/* Kanban Board */}
+          <div>
+            <KanbanBoard onCardClick={handleCardClick} jobId={selectedJobId || undefined} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="learning">
+          <AgentLearningDashboard />
+        </TabsContent>
+
+        <TabsContent value="rules">
+          <RulesManagement />
+        </TabsContent>
+
+        <TabsContent value="automation">
+          <AutomationDashboard />
+        </TabsContent>
+      </Tabs>
 
       {/* Agent Panel */}
       <AgentPanel open={isPanelOpen} onOpenChange={setIsPanelOpen} />
