@@ -240,6 +240,29 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
       error: `Cannot send email: no email address found in payload, contact, or client record. Debug: ${debugInfo.join(', ')}`,
     };
   }
+
+  // Validate we have email content (html or text)
+  const emailHtml = payload.body || payload.html;
+  const emailText = payload.text;
+  const emailSubject = payload.subject || card.title || 'No Subject';
+
+  if (!emailHtml && !emailText) {
+    console.error('[Email Execution] Missing email content:', {
+      cardId: card.id,
+      cardTitle: card.title,
+      hasBody: !!payload.body,
+      hasHtml: !!payload.html,
+      hasText: !!payload.text,
+      payload: JSON.stringify(payload),
+    });
+    
+    return {
+      success: false,
+      cardId: card.id,
+      message: 'No email content',
+      error: 'Cannot send email: missing both html and text content. Please ensure the email draft has a body.',
+    };
+  }
   
   console.log('[Email Execution] Recipient email resolved:', {
     cardId: card.id,
@@ -281,7 +304,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
           client_id: card.client_id,
           contact_id: card.contact_id,
           activity_type: 'email',
-          subject: payload.subject,
+          subject: emailSubject,
           description: `Email sent (simulated) to ${recipientEmail} via agent: ${card.title}`,
           status: 'completed',
           completed_at: new Date().toISOString(),
@@ -302,19 +325,28 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
     }
 
     // Real Resend send
+    const resendPayload: any = {
+      from: 'Admin <Admin@roiappraise.com>', // Use verified Resend domain
+      to: recipientEmail, // Must be a string for verified domain
+      subject: emailSubject,
+      reply_to: payload.replyTo || 'Admin@roiappraise.com',
+    };
+
+    // Add html and/or text content (at least one is required)
+    if (emailHtml) {
+      resendPayload.html = emailHtml;
+    }
+    if (emailText) {
+      resendPayload.text = emailText;
+    }
+
     const resendResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${resendApiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        from: 'Account Manager <onboarding@resend.dev>', // Use Resend's verified onboarding domain
-        to: recipientEmail, // Must be a string for onboarding domain
-        subject: payload.subject,
-        html: payload.body,
-        reply_to: payload.replyTo || 'manager@myroihome.com',
-      }),
+      body: JSON.stringify(resendPayload),
     });
 
     if (!resendResponse.ok) {
@@ -332,7 +364,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
         client_id: card.client_id,
         contact_id: card.contact_id,
         activity_type: 'email',
-        subject: payload.subject,
+        subject: emailSubject,
         description: `Email sent to ${recipientEmail} via agent: ${card.title} (ID: ${messageId})`,
         status: 'completed',
         completed_at: new Date().toISOString(),
@@ -675,7 +707,7 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
     try {
       await indexContent(
         card.org_id,
-        'research',
+        'note', // Changed from 'research' to match DB constraint
         card.id,
         `Research: ${intel.client.company_name}`,
         summary,
