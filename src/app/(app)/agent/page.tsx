@@ -5,7 +5,6 @@ import { KanbanBoard } from '@/components/agent/kanban-board';
 import { AgentPanel } from '@/components/agent/agent-panel';
 import { EmailDraftSheet } from '@/components/agent/email-draft-sheet';
 import { CardDetailSheet } from '@/components/agent/card-detail-sheet';
-import { JobsFilterBar } from '@/components/agent/jobs-filter-bar';
 import { AgentLearningDashboard } from '@/components/agent/learning-dashboard';
 import { RulesManagement } from '@/components/agent/rules-management';
 import { AutomationDashboard } from '@/components/agent/automation-dashboard';
@@ -20,7 +19,6 @@ export default function AgentPage() {
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [isDraftSheetOpen, setIsDraftSheetOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const { data: stats } = useAgentStats(30);
 
   const handleCardClick = (card: KanbanCard) => {
@@ -124,15 +122,9 @@ export default function AgentPage() {
         </TabsList>
 
         <TabsContent value="board" className="space-y-4">
-          {/* Jobs Filter */}
-          <JobsFilterBar
-            selectedJobId={selectedJobId}
-            onJobSelect={setSelectedJobId}
-          />
-
           {/* Kanban Board */}
           <div>
-            <KanbanBoard onCardClick={handleCardClick} jobId={selectedJobId || undefined} />
+            <KanbanBoard onCardClick={handleCardClick} />
           </div>
         </TabsContent>
 
