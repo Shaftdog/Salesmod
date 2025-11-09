@@ -337,7 +337,7 @@ export function JobFormDialog({ open, onOpenChange }: JobFormDialogProps) {
                   />
 
                   <p className="text-xs text-muted-foreground">
-                    Available variables: {'{{'}}first_name{'}}'}, {'{{'}}last_name{'}}'}, {'{{'}}company_name{'}}'}}
+                    Available variables: {'{{first_name}}, {{last_name}}, {{company_name}}'}
                   </p>
                 </div>
               ))}
