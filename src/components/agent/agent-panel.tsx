@@ -20,13 +20,16 @@ import {
   useLatestRun,
   useKanbanCards,
   useTriggerRun,
+  useStopRun,
   useAgentSettings,
   useAgentStats,
 } from '@/hooks/use-agent';
-import { Play, Loader2, TrendingUp, Mail, Target, CheckCircle, MessageSquare, BarChart3 } from 'lucide-react';
+import { useActiveJobs } from '@/hooks/use-jobs';
+import { Play, StopCircle, Loader2, TrendingUp, Mail, Target, CheckCircle, MessageSquare, BarChart3, Briefcase, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { AgentChat } from './agent-chat';
+import Link from 'next/link';
 
 interface AgentPanelProps {
   open: boolean;
@@ -39,7 +42,11 @@ export function AgentPanel({ open, onOpenChange }: AgentPanelProps) {
   const { data: settings } = useAgentSettings();
   const { data: stats } = useAgentStats(30);
   const { data: upcomingCards } = useKanbanCards('suggested');
+  const { data: activeJobsData } = useActiveJobs();
   const triggerRun = useTriggerRun();
+  const stopRun = useStopRun();
+
+  const activeJobs = activeJobsData?.jobs || [];
 
   const handleTriggerRun = async () => {
     try {
@@ -51,6 +58,22 @@ export function AgentPanel({ open, onOpenChange }: AgentPanelProps) {
     } catch (error: any) {
       toast({
         title: 'Failed to Start',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleStopRun = async () => {
+    try {
+      await stopRun.mutateAsync();
+      toast({
+        title: 'Agent Stopped',
+        description: 'Agent work cycle has been cancelled',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Failed to Stop',
         description: error.message,
         variant: 'destructive',
       });
@@ -138,24 +161,45 @@ export function AgentPanel({ open, onOpenChange }: AgentPanelProps) {
               </CardContent>
             </Card>
 
-            {/* Trigger Run */}
-            <Button
-              onClick={handleTriggerRun}
-              disabled={triggerRun.isPending || latestRun?.status === 'running'}
-              className="w-full"
-            >
-              {triggerRun.isPending || latestRun?.status === 'running' ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Running...
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4 mr-2" />
-                  Start Agent Cycle
-                </>
-              )}
-            </Button>
+            {/* Trigger/Stop Run */}
+            {latestRun?.status === 'running' ? (
+              <Button
+                onClick={handleStopRun}
+                disabled={stopRun.isPending}
+                variant="destructive"
+                className="w-full"
+              >
+                {stopRun.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Stopping...
+                  </>
+                ) : (
+                  <>
+                    <StopCircle className="h-4 w-4 mr-2" />
+                    Stop Agent Cycle
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button
+                onClick={handleTriggerRun}
+                disabled={triggerRun.isPending}
+                className="w-full"
+              >
+                {triggerRun.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Starting...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4 mr-2" />
+                    Start Agent Cycle
+                  </>
+                )}
+              </Button>
+            )}
 
             <Separator />
 
@@ -239,6 +283,83 @@ export function AgentPanel({ open, onOpenChange }: AgentPanelProps) {
                 </CardContent>
               </Card>
             )}
+
+            {/* Active Jobs */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Briefcase className="h-4 w-4" />
+                    Active Jobs
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">{activeJobs.length}</Badge>
+                    <Button variant="ghost" size="sm" asChild>
+                      <Link href="/agent/jobs">
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    </Button>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {activeJobs.length > 0 ? (
+                  <div className="space-y-3">
+                    {activeJobs.slice(0, 3).map((job) => (
+                      <Link
+                        key={job.id}
+                        href={`/agent/jobs/${job.id}`}
+                        className="block text-sm border rounded-lg p-3 hover:bg-accent transition-colors"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="font-medium">{job.name}</p>
+                          <Badge variant="default" className="text-xs">
+                            {job.status}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                          <div>
+                            <span className="font-medium">{job.cards_executed}</span>
+                            <span className="text-[10px]">/{job.cards_created} cards</span>
+                          </div>
+                          <div>
+                            <Mail className="h-3 w-3 inline mr-1" />
+                            <span className="font-medium">{job.emails_sent}</span>
+                          </div>
+                          {job.errors_count > 0 && (
+                            <div className="text-red-500">
+                              <span className="font-medium">{job.errors_count}</span>
+                              <span className="text-[10px]"> errors</span>
+                            </div>
+                          )}
+                        </div>
+                      </Link>
+                    ))}
+                    {activeJobs.length > 3 && (
+                      <Button variant="outline" size="sm" className="w-full" asChild>
+                        <Link href="/agent/jobs">
+                          View all {activeJobs.length} jobs
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-muted-foreground mb-3">
+                      No active jobs
+                    </p>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href="/agent/jobs">
+                        <Briefcase className="h-4 w-4 mr-2" />
+                        Create Job
+                      </Link>
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Separator />
 
             {/* Upcoming Actions */}
             <Card>

@@ -250,10 +250,10 @@ export function useTriggerRun() {
   return useMutation({
     mutationFn: async (mode: 'auto' | 'review' = 'review') => {
       const supabase = createClient();
-      
+
       // Get the current session to include auth headers
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session) {
         throw new Error('Not authenticated');
       }
@@ -270,6 +270,46 @@ export function useTriggerRun() {
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to trigger agent run');
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agent-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban-cards'] });
+    },
+  });
+}
+
+// =============================================
+// MUTATION: Stop Agent Run
+// =============================================
+
+export function useStopRun() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const supabase = createClient();
+
+      // Get the current session to include auth headers
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch('/api/agent/run', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to stop agent run');
       }
 
       return response.json();

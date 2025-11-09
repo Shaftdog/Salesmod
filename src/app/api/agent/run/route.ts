@@ -99,4 +99,68 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * PATCH /api/agent/run
+ * Stop the currently running agent
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get the currently running agent run
+    const { data: runningRun, error: fetchError } = await supabase
+      .from('agent_runs')
+      .select('*')
+      .eq('org_id', user.id)
+      .eq('status', 'running')
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (fetchError || !runningRun) {
+      return NextResponse.json(
+        { error: 'No running agent found' },
+        { status: 404 }
+      );
+    }
+
+    // Update the run status to cancelled
+    const { data: updatedRun, error: updateError } = await supabase
+      .from('agent_runs')
+      .update({
+        status: 'cancelled',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', runningRun.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    console.log(`Stopped agent run ${runningRun.id} for user ${user.id}`);
+
+    return NextResponse.json({
+      success: true,
+      run: updatedRun,
+    });
+  } catch (error: any) {
+    console.error('Failed to stop agent:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to stop agent' },
+      { status: 500 }
+    );
+  }
+}
+
 
