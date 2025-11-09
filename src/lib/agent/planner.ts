@@ -120,8 +120,29 @@ Recent Activity (Last 7 Days):
 - Deals Advanced: ${signals.dealsAdvanced}
 `;
 
-  // Format relevant memories
-  const memoriesText = memories.slice(0, 10).map(m =>
+  // Separate card feedback from other memories
+  const cardFeedback = memories.filter(m => m.key.includes('rejection_') || m.key.includes('deletion_'));
+  const otherMemories = memories.filter(m => !m.key.includes('rejection_') && !m.key.includes('deletion_'));
+
+  // Format card rejection feedback
+  const feedbackText = cardFeedback.length > 0
+    ? cardFeedback.slice(0, 10).map(m => {
+        const content = typeof m.content === 'object' ? m.content : {};
+        return `- ${content.reason || 'Feedback'}: ${content.rule || 'No specific rule'} (Importance: ${(m.importance * 100).toFixed(0)}%)`;
+      }).join('\n')
+    : 'No previous rejection feedback';
+
+  // Extract avoidance rules
+  const avoidanceRules = cardFeedback
+    .filter(m => typeof m.content === 'object' && m.content.rule)
+    .map(m => `- ${m.content.rule}`)
+    .slice(0, 5);
+  const avoidanceRulesText = avoidanceRules.length > 0
+    ? avoidanceRules.join('\n')
+    : 'No specific avoidance rules';
+
+  // Format other relevant memories
+  const memoriesText = otherMemories.slice(0, 10).map(m =>
     `- ${m.key}: ${JSON.stringify(m.content).substring(0, 100)}...`
   ).join('\n');
 
@@ -180,31 +201,40 @@ ${ordersSummary}
 ## Recent Engagement Signals
 ${signalsText}
 
-## Relevant Memories & Context
-${memoriesText || 'No relevant memories'}
+## Card Rejection Feedback (Learn from Past Mistakes)
+${feedbackText}
+
+## Avoidance Rules (MUST Follow)
+${avoidanceRulesText}
+
+## Other Relevant Memories & Context
+${memoriesText || 'No other relevant memories'}
 
 ## Your Task
 Analyze the current situation and propose 3-7 high-impact actions to achieve the goals. Focus on:
 
-1. **Goal-Driven**: Prioritize actions that directly move the needle on behind-schedule goals
-2. **High-Value Clients**: Target clients with high RFM scores and recent engagement
-3. **Re-engagement**: Reach out to previously active clients who haven't been contacted recently (>10 days)
-4. **Nurture Pipeline**: Follow up on deals in progress, propose new opportunities
-5. **Smart Timing**: Avoid clients contacted in the last 3-5 days
-6. **Personalization**: Use client context to craft relevant, specific messages
-7. **Case Management**: Address high-priority or urgent support cases that need attention
-8. **Service Recovery**: Follow up with clients who have open complaints or quality concerns
+1. **Learn from Feedback**: CRITICAL - Review the "Card Rejection Feedback" and "Avoidance Rules" sections above. Do NOT create cards that will be rejected for the same reasons. Apply these learnings to all your recommendations.
+2. **Goal-Driven**: Prioritize actions that directly move the needle on behind-schedule goals
+3. **High-Value Clients**: Target clients with high RFM scores and recent engagement
+4. **Re-engagement**: Reach out to previously active clients who haven't been contacted recently (>10 days)
+5. **Nurture Pipeline**: Follow up on deals in progress, propose new opportunities
+6. **Smart Timing**: Avoid clients contacted in the last 3-5 days
+7. **Personalization**: Use client context to craft relevant, specific messages
+8. **Case Management**: Address high-priority or urgent support cases that need attention
+9. **Service Recovery**: Follow up with clients who have open complaints or quality concerns
+10. **Quality Over Quantity**: Better to create 3 excellent cards than 7 mediocre ones that will be rejected
 
 ## Action Types Available
 - **send_email**: Reach out via email (follow-ups, check-ins, proposals)
-- **research**: Gather intelligence about a client (market activity, portfolio changes, expansion plans)
-- **create_task**: Create a task for any action requiring human completion (calls, meetings, preparation, analysis, etc.)
+- **research**: AUTOMATED research about a client using web search and AI analysis. Use this to gather intelligence, find contact info, understand business context, market activity, expansion plans, etc. This executes automatically and saves results to the client's activity feed.
+- **create_task**: Create a task for manual human actions (calls, meetings, in-person visits, physical mail, manual data entry)
 - **follow_up**: Follow up on a previous interaction or order
 - **create_deal**: Create a new deal opportunity in the pipeline
 
 ## Important Notes
 - For calls or meetings: Use **create_task** to request the user schedule and conduct them
-- Only use actions that can be fully executed automatically (emails, research, deals)
+- For research needs (finding contacts, understanding business, market intel): Use **research** - it executes automatically via web search and AI
+- Only use **create_task** for actions that truly require human presence or manual work
 - Tasks are for actions that require human involvement
 
 ## Email Best Practices
@@ -212,7 +242,19 @@ Analyze the current situation and propose 3-7 high-impact actions to achieve the
 - Body should be professional, concise, personalized
 - Include clear CTA (call-to-action)
 - Reference recent context when available (orders, previous conversations)
-- Use HTML formatting: <p>, <strong>, <ul>, <li> tags
+- Use CLEAR FORMATTING:
+  * Separate paragraphs with double line breaks
+  * For lists, use "1. ", "2. ", "3. " at the start of lines
+  * Keep each list item on its own line
+  * Structure: Opening paragraph, numbered list (if applicable), closing paragraph
+  * Example format:
+    "Opening text.
+    
+    1. First point
+    2. Second point
+    3. Third point
+    
+    Closing text."
 
 ## Priority Guidelines
 - **High**: Direct goal impact, VIP clients, urgent timing
