@@ -400,6 +400,32 @@ export function useUpdateCardState() {
 }
 
 // =============================================
+// MUTATION: Update Card
+// =============================================
+
+export function useUpdateCard() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ cardId, updates }: { cardId: string; updates: Record<string, any> }) => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('kanban_cards')
+        .update(updates)
+        .eq('id', cardId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kanban-cards'] });
+    },
+  });
+}
+
+// =============================================
 // MUTATION: Delete Card
 // =============================================
 
