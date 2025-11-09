@@ -138,7 +138,7 @@ export async function PATCH(request: NextRequest) {
       .from('agent_runs')
       .update({
         status: 'cancelled',
-        completed_at: new Date().toISOString(),
+        ended_at: new Date().toISOString(),
       })
       .eq('id', runningRun.id)
       .select()
