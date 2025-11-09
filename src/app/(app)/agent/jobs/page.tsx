@@ -1,5 +1,5 @@
 'use client';
-
+// Jobs Management Page - Trigger deployment
 import { useState } from 'react';
 import Link from 'next/link';
 import { useJobs, useJobStatusColor } from '@/hooks/use-jobs';
