@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { runWorkBlock } from '@/lib/agent/orchestrator';
 
-export const maxDuration = 60; // 60 seconds for Vercel
+export const maxDuration = 180; // 3 minutes (Vercel Pro tier)
 
 /**
  * POST /api/agent/run
