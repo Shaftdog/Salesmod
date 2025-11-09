@@ -8,6 +8,7 @@ import { CardDetailSheet } from '@/components/agent/card-detail-sheet';
 import { AgentLearningDashboard } from '@/components/agent/learning-dashboard';
 import { RulesManagement } from '@/components/agent/rules-management';
 import { AutomationDashboard } from '@/components/agent/automation-dashboard';
+import { JobsFilterBar } from '@/components/agent/jobs-filter-bar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -17,6 +18,7 @@ import { Bot, BarChart3, Mail, Target, CheckCircle, Brain, Kanban, Settings, Zap
 export default function AgentPage() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isDraftSheetOpen, setIsDraftSheetOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const { data: stats } = useAgentStats(30);
@@ -122,9 +124,18 @@ export default function AgentPage() {
         </TabsList>
 
         <TabsContent value="board" className="space-y-4">
+          {/* Jobs Filter */}
+          <JobsFilterBar
+            selectedJobId={selectedJobId}
+            onJobSelect={setSelectedJobId}
+          />
+
           {/* Kanban Board */}
           <div>
-            <KanbanBoard onCardClick={handleCardClick} />
+            <KanbanBoard
+              onCardClick={handleCardClick}
+              jobId={selectedJobId || undefined}
+            />
           </div>
         </TabsContent>
 
