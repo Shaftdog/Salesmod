@@ -1,6 +1,26 @@
 // Transform database snake_case to TypeScript camelCase
 
-import type { Client, Order, User, Contact, Activity, Tag, ClientTag, Deal, Task, Case, CaseComment, PartyRole } from '@/lib/types'
+import type {
+  Client,
+  Order,
+  User,
+  Contact,
+  Activity,
+  Tag,
+  ClientTag,
+  Deal,
+  Task,
+  Case,
+  CaseComment,
+  PartyRole,
+  SkillType,
+  ServiceTerritory,
+  BookableResource,
+  ResourceSkill,
+  ResourceAvailability,
+  Equipment,
+  EquipmentAssignment
+} from '@/lib/types'
 
 export function transformClient(dbClient: any): Client {
   return {
@@ -275,3 +295,194 @@ export function transformPartyRole(dbRole: any): PartyRole {
   }
 }
 
+// =============================================
+// FIELD SERVICES TRANSFORMS
+// =============================================
+
+export function transformSkillType(dbSkill: any): SkillType {
+  return {
+    id: dbSkill.id,
+    name: dbSkill.name,
+    description: dbSkill.description,
+    category: dbSkill.category,
+    isRequired: dbSkill.is_required,
+    isActive: dbSkill.is_active,
+    metadata: dbSkill.metadata,
+    createdAt: dbSkill.created_at,
+    updatedAt: dbSkill.updated_at,
+  }
+}
+
+export function transformServiceTerritory(dbTerritory: any): ServiceTerritory {
+  return {
+    id: dbTerritory.id,
+    orgId: dbTerritory.org_id,
+    name: dbTerritory.name,
+    description: dbTerritory.description,
+    territoryType: dbTerritory.territory_type,
+    zipCodes: dbTerritory.zip_codes,
+    counties: dbTerritory.counties,
+    cities: dbTerritory.cities,
+    radiusMiles: dbTerritory.radius_miles,
+    centerLat: dbTerritory.center_lat,
+    centerLng: dbTerritory.center_lng,
+    boundaryPolygon: dbTerritory.boundary_polygon,
+    baseTravelTimeMinutes: dbTerritory.base_travel_time_minutes,
+    mileageRate: dbTerritory.mileage_rate,
+    travelFee: dbTerritory.travel_fee,
+    isActive: dbTerritory.is_active,
+    colorHex: dbTerritory.color_hex,
+    metadata: dbTerritory.metadata,
+    createdAt: dbTerritory.created_at,
+    updatedAt: dbTerritory.updated_at,
+  }
+}
+
+export function transformBookableResource(dbResource: any): BookableResource {
+  return {
+    id: dbResource.id,
+    resourceType: dbResource.resource_type,
+    employmentType: dbResource.employment_type,
+    isBookable: dbResource.is_bookable,
+    bookingBufferMinutes: dbResource.booking_buffer_minutes,
+    maxDailyAppointments: dbResource.max_daily_appointments,
+    maxWeeklyHours: dbResource.max_weekly_hours,
+    primaryTerritoryId: dbResource.primary_territory_id,
+    serviceTerritoryIds: dbResource.service_territory_ids,
+    hourlyRate: dbResource.hourly_rate,
+    overtimeRate: dbResource.overtime_rate,
+    perInspectionRate: dbResource.per_inspection_rate,
+    splitPercentage: dbResource.split_percentage,
+    assignedEquipmentIds: dbResource.assigned_equipment_ids,
+    licenseNumber: dbResource.license_number,
+    licenseState: dbResource.license_state,
+    licenseExpiry: dbResource.license_expiry,
+    errorsAndOmissionsCarrier: dbResource.errors_and_omissions_carrier,
+    errorsAndOmissionsExpiry: dbResource.errors_and_omissions_expiry,
+    errorsAndOmissionsAmount: dbResource.errors_and_omissions_amount,
+    emergencyContactName: dbResource.emergency_contact_name,
+    emergencyContactPhone: dbResource.emergency_contact_phone,
+    preferredContactMethod: dbResource.preferred_contact_method,
+    avgInspectionDurationMinutes: dbResource.avg_inspection_duration_minutes,
+    avgDriveTimeMinutes: dbResource.avg_drive_time_minutes,
+    completionRate: dbResource.completion_rate,
+    avgCustomerRating: dbResource.avg_customer_rating,
+    totalInspectionsCompleted: dbResource.total_inspections_completed,
+    defaultWorkingHours: dbResource.default_working_hours,
+    timezone: dbResource.timezone,
+    metadata: dbResource.metadata,
+    createdAt: dbResource.created_at,
+    updatedAt: dbResource.updated_at,
+    profile: dbResource.profiles ? transformUser(dbResource.profiles) : undefined,
+    primaryTerritory: dbResource.primary_territory ? transformServiceTerritory(dbResource.primary_territory) : undefined,
+    skills: dbResource.resource_skills ? dbResource.resource_skills.map(transformResourceSkill) : undefined,
+    availability: dbResource.resource_availability ? dbResource.resource_availability.map(transformResourceAvailability) : undefined,
+  }
+}
+
+export function transformResourceSkill(dbSkill: any): ResourceSkill {
+  return {
+    id: dbSkill.id,
+    resourceId: dbSkill.resource_id,
+    skillTypeId: dbSkill.skill_type_id,
+    proficiencyLevel: dbSkill.proficiency_level,
+    certificationNumber: dbSkill.certification_number,
+    certifiedDate: dbSkill.certified_date,
+    expiryDate: dbSkill.expiry_date,
+    issuingAuthority: dbSkill.issuing_authority,
+    isVerified: dbSkill.is_verified,
+    verifiedBy: dbSkill.verified_by,
+    verifiedAt: dbSkill.verified_at,
+    notes: dbSkill.notes,
+    createdAt: dbSkill.created_at,
+    updatedAt: dbSkill.updated_at,
+    skillType: dbSkill.skill_types ? transformSkillType(dbSkill.skill_types) : undefined,
+    resource: dbSkill.bookable_resources ? transformBookableResource(dbSkill.bookable_resources) : undefined,
+    verifier: dbSkill.verifier ? transformUser(dbSkill.verifier) : undefined,
+  }
+}
+
+export function transformResourceAvailability(dbAvailability: any): ResourceAvailability {
+  return {
+    id: dbAvailability.id,
+    resourceId: dbAvailability.resource_id,
+    availabilityType: dbAvailability.availability_type,
+    startDatetime: dbAvailability.start_datetime,
+    endDatetime: dbAvailability.end_datetime,
+    isAvailable: dbAvailability.is_available,
+    isRecurring: dbAvailability.is_recurring,
+    recurrenceRule: dbAvailability.recurrence_rule,
+    recurrenceEndDate: dbAvailability.recurrence_end_date,
+    reason: dbAvailability.reason,
+    notes: dbAvailability.notes,
+    isAllDay: dbAvailability.is_all_day,
+    status: dbAvailability.status,
+    approvedBy: dbAvailability.approved_by,
+    approvedAt: dbAvailability.approved_at,
+    createdBy: dbAvailability.created_by,
+    createdAt: dbAvailability.created_at,
+    updatedAt: dbAvailability.updated_at,
+    resource: dbAvailability.bookable_resources ? transformBookableResource(dbAvailability.bookable_resources) : undefined,
+    approver: dbAvailability.approver ? transformUser(dbAvailability.approver) : undefined,
+    creator: dbAvailability.creator ? transformUser(dbAvailability.creator) : undefined,
+  }
+}
+
+export function transformEquipment(dbEquipment: any): Equipment {
+  return {
+    id: dbEquipment.id,
+    orgId: dbEquipment.org_id,
+    name: dbEquipment.name,
+    equipmentType: dbEquipment.equipment_type,
+    serialNumber: dbEquipment.serial_number,
+    assetTag: dbEquipment.asset_tag,
+    make: dbEquipment.make,
+    model: dbEquipment.model,
+    purchaseDate: dbEquipment.purchase_date,
+    purchasePrice: dbEquipment.purchase_price,
+    currentValue: dbEquipment.current_value,
+    depreciationSchedule: dbEquipment.depreciation_schedule,
+    status: dbEquipment.status,
+    assignedTo: dbEquipment.assigned_to,
+    assignedDate: dbEquipment.assigned_date,
+    location: dbEquipment.location,
+    lastMaintenanceDate: dbEquipment.last_maintenance_date,
+    nextMaintenanceDate: dbEquipment.next_maintenance_date,
+    maintenanceIntervalDays: dbEquipment.maintenance_interval_days,
+    maintenanceNotes: dbEquipment.maintenance_notes,
+    warrantyExpiry: dbEquipment.warranty_expiry,
+    insurancePolicy: dbEquipment.insurance_policy,
+    insuranceExpiry: dbEquipment.insurance_expiry,
+    isActive: dbEquipment.is_active,
+    metadata: dbEquipment.metadata,
+    createdAt: dbEquipment.created_at,
+    updatedAt: dbEquipment.updated_at,
+    assignedResource: dbEquipment.assigned_resource ? transformBookableResource(dbEquipment.assigned_resource) : undefined,
+  }
+}
+
+export function transformEquipmentAssignment(dbAssignment: any): EquipmentAssignment {
+  return {
+    id: dbAssignment.id,
+    equipmentId: dbAssignment.equipment_id,
+    resourceId: dbAssignment.resource_id,
+    assignedDate: dbAssignment.assigned_date,
+    expectedReturnDate: dbAssignment.expected_return_date,
+    actualReturnDate: dbAssignment.actual_return_date,
+    conditionAtCheckout: dbAssignment.condition_at_checkout,
+    conditionAtReturn: dbAssignment.condition_at_return,
+    checkoutNotes: dbAssignment.checkout_notes,
+    returnNotes: dbAssignment.return_notes,
+    damageReported: dbAssignment.damage_reported,
+    damageDescription: dbAssignment.damage_description,
+    damageCost: dbAssignment.damage_cost,
+    assignedBy: dbAssignment.assigned_by,
+    returnedTo: dbAssignment.returned_to,
+    createdAt: dbAssignment.created_at,
+    updatedAt: dbAssignment.updated_at,
+    equipment: dbAssignment.equipment_catalog ? transformEquipment(dbAssignment.equipment_catalog) : undefined,
+    resource: dbAssignment.resource ? transformBookableResource(dbAssignment.resource) : undefined,
+    assigner: dbAssignment.assigner ? transformUser(dbAssignment.assigner) : undefined,
+    receiver: dbAssignment.receiver ? transformUser(dbAssignment.receiver) : undefined,
+  }
+}

@@ -489,3 +489,244 @@ export interface BackfillResult {
     data?: any;
   }>;
 }
+
+// =============================================
+// FIELD SERVICES MODULE
+// =============================================
+
+// Skill Types
+export const skillCategories = ['certification', 'property_type', 'specialization', 'software', 'equipment'] as const;
+export type SkillCategory = typeof skillCategories[number];
+
+export interface SkillType {
+  id: string;
+  name: string;
+  description?: string;
+  category?: SkillCategory;
+  isRequired: boolean;
+  isActive: boolean;
+  metadata?: any;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Service Territories
+export const territoryTypes = ['primary', 'secondary', 'extended'] as const;
+export type TerritoryType = typeof territoryTypes[number];
+
+export interface ServiceTerritory {
+  id: string;
+  orgId: string;
+  name: string;
+  description?: string;
+  territoryType: TerritoryType;
+  zipCodes?: string[];
+  counties?: string[];
+  cities?: string[];
+  radiusMiles?: number;
+  centerLat?: number;
+  centerLng?: number;
+  boundaryPolygon?: any; // GeoJSON
+  baseTravelTimeMinutes: number;
+  mileageRate: number;
+  travelFee: number;
+  isActive: boolean;
+  colorHex: string;
+  metadata?: any;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Bookable Resources
+export const resourceTypes = ['appraiser', 'equipment', 'vehicle', 'facility'] as const;
+export type ResourceType = typeof resourceTypes[number];
+
+export const employmentTypes = ['staff', 'contractor', 'vendor'] as const;
+export type EmploymentType = typeof employmentTypes[number];
+
+export interface WorkingHours {
+  enabled: boolean;
+  start: string; // HH:mm format
+  end: string;   // HH:mm format
+}
+
+export interface DefaultWorkingHours {
+  monday: WorkingHours;
+  tuesday: WorkingHours;
+  wednesday: WorkingHours;
+  thursday: WorkingHours;
+  friday: WorkingHours;
+  saturday: WorkingHours;
+  sunday: WorkingHours;
+}
+
+export interface BookableResource {
+  id: string;
+  resourceType: ResourceType;
+  employmentType?: EmploymentType;
+  isBookable: boolean;
+  bookingBufferMinutes: number;
+  maxDailyAppointments: number;
+  maxWeeklyHours: number;
+  primaryTerritoryId?: string;
+  serviceTerritoryIds?: string[];
+  hourlyRate?: number;
+  overtimeRate?: number;
+  perInspectionRate?: number;
+  splitPercentage?: number;
+  assignedEquipmentIds?: string[];
+  licenseNumber?: string;
+  licenseState?: string;
+  licenseExpiry?: string;
+  errorsAndOmissionsCarrier?: string;
+  errorsAndOmissionsExpiry?: string;
+  errorsAndOmissionsAmount?: number;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  preferredContactMethod: 'email' | 'sms' | 'phone';
+  avgInspectionDurationMinutes?: number;
+  avgDriveTimeMinutes?: number;
+  completionRate?: number;
+  avgCustomerRating?: number;
+  totalInspectionsCompleted: number;
+  defaultWorkingHours: DefaultWorkingHours;
+  timezone: string;
+  metadata?: any;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  profile?: User;
+  primaryTerritory?: ServiceTerritory;
+  skills?: ResourceSkill[];
+  availability?: ResourceAvailability[];
+}
+
+// Resource Skills
+export const proficiencyLevels = ['beginner', 'intermediate', 'advanced', 'expert'] as const;
+export type ProficiencyLevel = typeof proficiencyLevels[number];
+
+export interface ResourceSkill {
+  id: string;
+  resourceId: string;
+  skillTypeId: string;
+  proficiencyLevel: ProficiencyLevel;
+  certificationNumber?: string;
+  certifiedDate?: string;
+  expiryDate?: string;
+  issuingAuthority?: string;
+  isVerified: boolean;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  skillType?: SkillType;
+  resource?: BookableResource;
+  verifier?: User;
+}
+
+// Resource Availability
+export const availabilityTypes = ['working_hours', 'time_off', 'blocked', 'override'] as const;
+export type AvailabilityType = typeof availabilityTypes[number];
+
+export const availabilityStatuses = ['pending', 'approved', 'rejected'] as const;
+export type AvailabilityStatus = typeof availabilityStatuses[number];
+
+export interface ResourceAvailability {
+  id: string;
+  resourceId: string;
+  availabilityType: AvailabilityType;
+  startDatetime: string;
+  endDatetime: string;
+  isAvailable: boolean;
+  isRecurring: boolean;
+  recurrenceRule?: string;
+  recurrenceEndDate?: string;
+  reason?: string;
+  notes?: string;
+  isAllDay: boolean;
+  status: AvailabilityStatus;
+  approvedBy?: string;
+  approvedAt?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  resource?: BookableResource;
+  approver?: User;
+  creator?: User;
+}
+
+// Equipment Catalog
+export const equipmentTypes = ['camera', 'drone', 'measuring_device', 'laptop', 'tablet', 'vehicle', 'software_license', 'other'] as const;
+export type EquipmentType = typeof equipmentTypes[number];
+
+export const equipmentStatuses = ['available', 'in_use', 'maintenance', 'retired', 'lost', 'damaged'] as const;
+export type EquipmentStatus = typeof equipmentStatuses[number];
+
+export interface Equipment {
+  id: string;
+  orgId: string;
+  name: string;
+  equipmentType: EquipmentType;
+  serialNumber?: string;
+  assetTag?: string;
+  make?: string;
+  model?: string;
+  purchaseDate?: string;
+  purchasePrice?: number;
+  currentValue?: number;
+  depreciationSchedule?: string;
+  status: EquipmentStatus;
+  assignedTo?: string;
+  assignedDate?: string;
+  location?: string;
+  lastMaintenanceDate?: string;
+  nextMaintenanceDate?: string;
+  maintenanceIntervalDays?: number;
+  maintenanceNotes?: string;
+  warrantyExpiry?: string;
+  insurancePolicy?: string;
+  insuranceExpiry?: string;
+  isActive: boolean;
+  metadata?: any;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  assignedResource?: BookableResource;
+}
+
+// Equipment Assignments
+export const equipmentConditions = ['excellent', 'good', 'fair', 'poor'] as const;
+export type EquipmentCondition = typeof equipmentConditions[number];
+
+export interface EquipmentAssignment {
+  id: string;
+  equipmentId: string;
+  resourceId: string;
+  assignedDate: string;
+  expectedReturnDate?: string;
+  actualReturnDate?: string;
+  conditionAtCheckout?: EquipmentCondition;
+  conditionAtReturn?: EquipmentCondition;
+  checkoutNotes?: string;
+  returnNotes?: string;
+  damageReported: boolean;
+  damageDescription?: string;
+  damageCost?: number;
+  assignedBy: string;
+  returnedTo?: string;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  equipment?: Equipment;
+  resource?: BookableResource;
+  assigner?: User;
+  receiver?: User;
+}
