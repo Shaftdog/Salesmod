@@ -13,6 +13,162 @@ import {
 } from './computer-use';
 
 /**
+ * Format email body with proper HTML
+ * Converts plain text or poorly formatted text into proper HTML
+ */
+function formatEmailBody(body: string): string {
+  if (!body) return body;
+  
+  // If already has substantial HTML tags, return as-is
+  if (body.includes('<p>') && body.includes('</p>')) {
+    return body;
+  }
+  
+  // Step 1: Detect and format bullet/numbered lists with various patterns
+  // Pattern 1: "1. Item" or "• Item" style
+  const hasNumberedList = /\d+\.\s+[A-Z]/.test(body);
+  const hasBulletList = /[•\-\*]\s+[A-Z]/.test(body);
+  
+  // Pattern 2: "First bullet point", "Second bullet point" style
+  const hasWordedList = /(First|Second|Third|Fourth|Fifth)[\s\w]*:/gi.test(body);
+  
+  let formatted = body;
+  
+  // Convert "First bullet point:", "Second bullet point:" to proper list
+  if (hasWordedList) {
+    // Split on sentence patterns that indicate list items
+    const listPattern = /((?:First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:[\s\S]*?)(?=(?:First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:|$)/gi;
+    const listItems = body.match(listPattern);
+    
+    if (listItems && listItems.length > 1) {
+      // Find intro text before the list
+      const introMatch = body.match(/^([\s\S]*?)(?=First|Second|Third|Fourth|Fifth)/i);
+      let result = '';
+      
+      if (introMatch && introMatch[1].trim()) {
+        result += `<p>${introMatch[1].trim()}</p>`;
+      }
+      
+      result += '<ol>';
+      listItems.forEach(item => {
+        const cleanItem = item.replace(/^(First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:\s*/i, '').trim();
+        if (cleanItem) {
+          result += `<li>${cleanItem}</li>`;
+        }
+      });
+      result += '</ol>';
+      
+      // Find closing text after the list
+      const lastItem = listItems[listItems.length - 1];
+      const closingMatch = body.split(lastItem)[1];
+      if (closingMatch && closingMatch.trim()) {
+        result += `<p>${closingMatch.trim()}</p>`;
+      }
+      
+      return result;
+    }
+  }
+  
+  // Convert numbered lists (1. 2. 3. etc.)
+  if (hasNumberedList) {
+    const lines = body.split(/\.\s+(?=\d+\.|\w)/);
+    let result = '';
+    let inList = false;
+    
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (/^\d+\./.test(trimmed)) {
+        if (!inList) {
+          result += '<ol>';
+          inList = true;
+        }
+        const item = trimmed.replace(/^\d+\.\s*/, '');
+        result += `<li>${item}</li>`;
+      } else if (trimmed) {
+        if (inList) {
+          result += '</ol>';
+          inList = false;
+        }
+        result += `<p>${trimmed}</p>`;
+      }
+    });
+    
+    if (inList) result += '</ol>';
+    return result;
+  }
+  
+  // Convert bullet lists (• or - or *)
+  if (hasBulletList) {
+    const lines = body.split(/\n/);
+    let result = '';
+    let inList = false;
+    let currentParagraph = '';
+    
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (/^[•\-\*]\s+/.test(trimmed)) {
+        if (currentParagraph) {
+          result += `<p>${currentParagraph.trim()}</p>`;
+          currentParagraph = '';
+        }
+        if (!inList) {
+          result += '<ul>';
+          inList = true;
+        }
+        const item = trimmed.replace(/^[•\-\*]\s+/, '');
+        result += `<li>${item}</li>`;
+      } else if (trimmed) {
+        if (inList) {
+          result += '</ul>';
+          inList = false;
+        }
+        currentParagraph += (currentParagraph ? ' ' : '') + trimmed;
+      }
+    });
+    
+    if (currentParagraph) {
+      result += `<p>${currentParagraph.trim()}</p>`;
+    }
+    if (inList) result += '</ul>';
+    return result;
+  }
+  
+  // No lists detected - format as paragraphs
+  // Split by double line breaks first
+  const paragraphs = body.split(/\n\n+/);
+  if (paragraphs.length > 1) {
+    return paragraphs
+      .map(p => p.trim())
+      .filter(p => p.length > 0)
+      .map(p => `<p>${p.replace(/\n/g, ' ')}</p>`)
+      .join('');
+  }
+  
+  // Split by single line breaks and group as sentences
+  const sentences = body.split(/\.\s+/);
+  if (sentences.length > 3) {
+    // Group every 2-3 sentences into a paragraph
+    let result = '<p>';
+    sentences.forEach((sentence, idx) => {
+      result += sentence.trim();
+      if (!sentence.trim().endsWith('.')) result += '.';
+      
+      // Start new paragraph every 2-3 sentences
+      if ((idx + 1) % 2 === 0 && idx < sentences.length - 1) {
+        result += '</p><p>';
+      } else if (idx < sentences.length - 1) {
+        result += ' ';
+      }
+    });
+    result += '</p>';
+    return result;
+  }
+  
+  // Single paragraph - just wrap it
+  return `<p>${body}</p>`;
+}
+
+/**
  * Agent tools for conversational interaction
  */
 export const agentTools = {
@@ -239,7 +395,10 @@ export const agentTools = {
       // Build action payload
       let actionPayload: any = {};
       if (params.emailDraft) {
-        actionPayload = params.emailDraft;
+        actionPayload = {
+          ...params.emailDraft,
+          body: formatEmailBody(params.emailDraft.body),
+        };
         console.log('Creating card via chat with emailDraft:', {
           title: params.title,
           to: params.emailDraft.to,
@@ -670,7 +829,7 @@ export const agentTools = {
     execute: async (params: any) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return { error: 'Not authenticated' };
 
       // Get contact info first
@@ -700,6 +859,274 @@ export const agentTools = {
           id: contact.id,
           name: `${contact.first_name} ${contact.last_name}`,
           email: contact.email,
+        },
+      };
+    },
+  }),
+
+  /**
+   * Delete a client
+   */
+  deleteClient: tool({
+    description: 'Delete a client from the system. WARNING: This will also affect related contacts, orders, and activities. Use this when a client is no longer needed or was created by mistake.',
+    parameters: z.object({
+      clientId: z.string().describe('Client UUID to delete'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return { error: 'Not authenticated' };
+
+      // Get client info first
+      const { data: client, error: fetchError } = await supabase
+        .from('clients')
+        .select('id, company_name, email, primary_contact')
+        .eq('id', params.clientId)
+        .single();
+
+      if (fetchError || !client) {
+        return { error: 'Client not found' };
+      }
+
+      // Count related records
+      const { count: contactsCount } = await supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('client_id', params.clientId);
+
+      const { count: ordersCount } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('client_id', params.clientId);
+
+      // Delete the client (cascade should handle related records)
+      const { error: deleteError } = await supabase
+        .from('clients')
+        .delete()
+        .eq('id', params.clientId);
+
+      if (deleteError) {
+        return { error: deleteError.message };
+      }
+
+      return {
+        success: true,
+        deleted: {
+          id: client.id,
+          companyName: client.company_name,
+          email: client.email,
+          primaryContact: client.primary_contact,
+        },
+        relatedRecords: {
+          contacts: contactsCount || 0,
+          orders: ordersCount || 0,
+        },
+      };
+    },
+  }),
+
+  /**
+   * Delete a task/activity
+   */
+  deleteTask: tool({
+    description: 'Delete a task or activity. Use this when a task is no longer needed or was created by mistake.',
+    parameters: z.object({
+      taskId: z.string().describe('Task/Activity UUID to delete'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return { error: 'Not authenticated' };
+
+      // Get task info first
+      const { data: task, error: fetchError } = await supabase
+        .from('activities')
+        .select('id, activity_type, subject, status')
+        .eq('id', params.taskId)
+        .single();
+
+      if (fetchError || !task) {
+        return { error: 'Task not found' };
+      }
+
+      // Delete the task
+      const { error: deleteError } = await supabase
+        .from('activities')
+        .delete()
+        .eq('id', params.taskId);
+
+      if (deleteError) {
+        return { error: deleteError.message };
+      }
+
+      return {
+        success: true,
+        deleted: {
+          id: task.id,
+          type: task.activity_type,
+          subject: task.subject,
+          status: task.status,
+        },
+      };
+    },
+  }),
+
+  /**
+   * Delete an opportunity/deal
+   */
+  deleteOpportunity: tool({
+    description: 'Delete an opportunity or deal. Use this when a deal is no longer needed or was created by mistake.',
+    parameters: z.object({
+      opportunityId: z.string().describe('Opportunity/Deal UUID to delete'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return { error: 'Not authenticated' };
+
+      // Get opportunity info first
+      const { data: opportunity, error: fetchError } = await supabase
+        .from('deals')
+        .select('id, name, amount, stage, client_id, client:clients(company_name)')
+        .eq('id', params.opportunityId)
+        .single();
+
+      if (fetchError || !opportunity) {
+        return { error: 'Opportunity not found' };
+      }
+
+      // Delete the opportunity
+      const { error: deleteError } = await supabase
+        .from('deals')
+        .delete()
+        .eq('id', params.opportunityId);
+
+      if (deleteError) {
+        return { error: deleteError.message };
+      }
+
+      return {
+        success: true,
+        deleted: {
+          id: opportunity.id,
+          name: opportunity.name,
+          amount: opportunity.amount,
+          stage: opportunity.stage,
+          client: (opportunity.client as any)?.company_name || null,
+        },
+      };
+    },
+  }),
+
+  /**
+   * Delete an order
+   */
+  deleteOrder: tool({
+    description: 'Delete an order. WARNING: This may affect related properties and activities. Use this when an order is no longer needed or was created by mistake.',
+    parameters: z.object({
+      orderId: z.string().describe('Order UUID to delete'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return { error: 'Not authenticated' };
+
+      // Get order info first
+      const { data: order, error: fetchError } = await supabase
+        .from('orders')
+        .select('id, order_number, status, order_type, client_id, client:clients(company_name)')
+        .eq('id', params.orderId)
+        .single();
+
+      if (fetchError || !order) {
+        return { error: 'Order not found' };
+      }
+
+      // Count related properties
+      const { count: propertiesCount } = await supabase
+        .from('properties')
+        .select('*', { count: 'exact', head: true })
+        .eq('order_id', params.orderId);
+
+      // Delete the order
+      const { error: deleteError } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', params.orderId);
+
+      if (deleteError) {
+        return { error: deleteError.message };
+      }
+
+      return {
+        success: true,
+        deleted: {
+          id: order.id,
+          orderNumber: order.order_number,
+          status: order.status,
+          type: order.order_type,
+          client: (order.client as any)?.company_name || null,
+        },
+        relatedRecords: {
+          properties: propertiesCount || 0,
+        },
+      };
+    },
+  }),
+
+  /**
+   * Delete a property
+   */
+  deleteProperty: tool({
+    description: 'Delete a property. Use this when a property is no longer needed or was created by mistake.',
+    parameters: z.object({
+      propertyId: z.string().describe('Property UUID to delete'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return { error: 'Not authenticated' };
+
+      // Get property info first
+      const { data: property, error: fetchError } = await supabase
+        .from('properties')
+        .select('id, address, city, state, zip_code, property_type')
+        .eq('id', params.propertyId)
+        .single();
+
+      if (fetchError || !property) {
+        return { error: 'Property not found' };
+      }
+
+      // Delete the property
+      const { error: deleteError } = await supabase
+        .from('properties')
+        .delete()
+        .eq('id', params.propertyId);
+
+      if (deleteError) {
+        return { error: deleteError.message };
+      }
+
+      return {
+        success: true,
+        deleted: {
+          id: property.id,
+          address: property.address,
+          city: property.city,
+          state: property.state,
+          zipCode: property.zip_code,
+          propertyType: property.property_type,
         },
       };
     },
