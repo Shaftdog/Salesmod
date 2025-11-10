@@ -23,6 +23,7 @@ import {
   Users,
   MapPin,
   Shield,
+  Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/use-appraisers";
@@ -93,7 +94,7 @@ function Sidebar() {
               <Link
                 href="/agent"
                 className={cn("flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8 md:w-8",
-                    pathname.startsWith('/agent') && "bg-accent text-accent-foreground"
+                    pathname.startsWith('/agent') && !pathname.startsWith('/agent/jobs') && "bg-accent text-accent-foreground"
                 )}
               >
                 <Bot className="h-5 w-5" />
@@ -101,6 +102,20 @@ function Sidebar() {
               </Link>
             </TooltipTrigger>
             <TooltipContent side="right">AI Agent</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/agent/jobs"
+                className={cn("flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8 md:w-8",
+                    pathname.startsWith('/agent/jobs') && "bg-accent text-accent-foreground"
+                )}
+              >
+                <Calendar className="h-5 w-5" />
+                <span className="sr-only">Jobs</span>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">Jobs</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
