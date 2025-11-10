@@ -522,11 +522,82 @@ async function getTargetContacts(
   // Otherwise, use target_filter
   const filter = params.target_filter || input.target_filter;
   console.log(`[getTargetContacts] Using target_filter:`, JSON.stringify(filter));
-  
+
   if (!filter) {
     console.error('[getTargetContacts] No filter provided!');
     return [];
   }
+
+  // Check target type - default to 'contacts' for backwards compatibility
+  const targetType = params.target_type || 'contacts';
+  console.log(`[getTargetContacts] Target type: ${targetType}`);
+
+  // If targeting CLIENTS, query clients table directly
+  if (targetType === 'clients') {
+    console.log(`[getTargetContacts] Querying clients table`);
+
+    let clientQuery = supabase
+      .from('clients')
+      .select('id, company_name, client_type, is_active, email, primary_contact')
+      .not('email', 'is', null);
+
+    // Apply filters
+    if (filter.client_type) {
+      console.log(`[getTargetContacts] Filtering by client_type: ${filter.client_type}`);
+      clientQuery = clientQuery.eq('client_type', filter.client_type);
+    }
+    if (filter.is_active !== undefined) {
+      console.log(`[getTargetContacts] Filtering by is_active: ${filter.is_active}`);
+      clientQuery = clientQuery.eq('is_active', filter.is_active);
+    }
+    if (filter.active !== undefined) {
+      console.log(`[getTargetContacts] Filtering by active (compat): ${filter.active}`);
+      clientQuery = clientQuery.eq('is_active', filter.active);
+    }
+
+    // Exclude clients that already have cards
+    if (input.job_id) {
+      const { data: existingCards } = await supabase
+        .from('kanban_cards')
+        .select('client_id')
+        .eq('job_id', input.job_id)
+        .not('client_id', 'is', null);
+
+      if (existingCards && existingCards.length > 0) {
+        const excludedClientIds = existingCards.map((card: any) => card.client_id).filter(Boolean);
+        console.log(`[getTargetContacts] Excluding ${excludedClientIds.length} clients that already have cards`);
+
+        if (excludedClientIds.length > 0) {
+          clientQuery = clientQuery.not('id', 'in', `(${excludedClientIds.join(',')})`);
+        }
+      }
+    }
+
+    const batchSize = params.batch_size || 10;
+    clientQuery = clientQuery.limit(batchSize);
+
+    const { data: clients, error: clientError } = await clientQuery;
+
+    if (clientError) {
+      console.error('[getTargetContacts] Failed to fetch clients:', clientError);
+      return [];
+    }
+
+    console.log(`[getTargetContacts] Found ${clients?.length || 0} clients`);
+
+    // Convert clients to TargetContact format (using company email/name)
+    return (clients || []).map((client: any) => ({
+      id: client.id, // Using client_id as the "contact" id for client-level targeting
+      first_name: client.primary_contact || client.company_name, // Use company name as first name
+      last_name: '', // Empty last name for company targeting
+      email: client.email,
+      client_id: client.id,
+      company_name: client.company_name,
+    }));
+  }
+
+  // Otherwise, target CONTACTS (default behavior)
+  console.log(`[getTargetContacts] Querying contacts table`);
 
   let query = supabase
     .from('contacts')

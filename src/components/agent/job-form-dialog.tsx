@@ -28,6 +28,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { CreateJobRequestSchema } from '@/types/jobs';
 
@@ -53,6 +60,7 @@ export function JobFormDialog({ open, onOpenChange, job }: JobFormDialogProps) {
       name: '',
       description: '',
       params: {
+        target_type: 'contacts',
         target_group: 'all_clients',
         cadence: {
           day0: true,
@@ -204,6 +212,35 @@ export function JobFormDialog({ open, onOpenChange, job }: JobFormDialogProps) {
 
               <FormField
                 control={form.control}
+                name="params.target_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Target Type</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select target type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="contacts">
+                          Contacts - Target individual people
+                        </SelectItem>
+                        <SelectItem value="clients">
+                          Clients - Target companies
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Choose whether to target individual contacts or companies
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="params.target_group"
                 render={({ field }) => (
                   <FormItem>
@@ -212,7 +249,7 @@ export function JobFormDialog({ open, onOpenChange, job }: JobFormDialogProps) {
                       <Input placeholder="AMC" {...field} />
                     </FormControl>
                     <FormDescription>
-                      Client type or group to target (e.g., "AMC", "Lender", "all_clients")
+                      Filter name or description (e.g., "AMC", "Lender", "all_clients")
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

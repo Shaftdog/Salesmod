@@ -82,6 +82,7 @@ export type TargetFilter = z.infer<typeof TargetFilterSchema>;
 // Job parameters (stored in jobs.params JSONB)
 export const JobParamsSchema = z.object({
   // Target selection
+  target_type: z.enum(['clients', 'contacts']).default('contacts'), // Target clients or contacts
   target_group: z.string(), // e.g., "AMC", "all_clients", "custom"
   target_filter: TargetFilterSchema.optional(),
   target_contact_ids: z.array(z.string()).optional(), // Explicit list
