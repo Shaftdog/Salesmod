@@ -535,12 +535,12 @@ async function getTargetContacts(
       first_name,
       last_name,
       email,
+      primary_role_code,
       client_id,
       clients!contacts_client_id_fkey!inner(
         id,
         company_name,
         client_type,
-        primary_role_code,
         is_active
       )
     `)
@@ -552,14 +552,15 @@ async function getTargetContacts(
     query = query.eq('clients.client_type', filter.client_type);
   }
   if (filter.primary_role_code) {
-    console.log(`[getTargetContacts] Filtering by primary_role_code: ${filter.primary_role_code}`);
-    query = query.eq('clients.primary_role_code', filter.primary_role_code);
+    console.log(`[getTargetContacts] Filtering by contact primary_role_code: ${filter.primary_role_code}`);
+    // Filter on the CONTACT's primary_role_code, not the client's
+    query = query.eq('primary_role_code', filter.primary_role_code);
   }
   if (filter.is_active !== undefined) {
-    console.log(`[getTargetContacts] Filtering by is_active: ${filter.is_active}`);
+    console.log(`[getTargetContacts] Filtering by client is_active: ${filter.is_active}`);
     query = query.eq('clients.is_active', filter.is_active);
   }
-  
+
   // Backwards compatibility
   if (filter.active !== undefined) {
     console.log(`[getTargetContacts] Filtering by active (compat): ${filter.active}`);
