@@ -36,9 +36,217 @@ When working on appraisal logic:
 - Ensure proper comparable selection
 - Maintain audit trail
 
-## Agent System
+## Agent System (Application Architecture)
 - Orchestrator coordinates workflow
 - Context builder aggregates business data
 - Planner creates strategic action plans
 - Executor handles card execution
 - Tools provide chat interface capabilities
+
+## Claude Code Sub-Agents
+Use specialized sub-agents via the Task tool for focused expertise:
+
+### When to Use Sub-Agents
+- **appraisal-expert**: For USPAP compliance, valuation logic, adjustment calculations, Florida market analysis
+- **backend-architect**: For API design, database schema, Next.js architecture, scalability planning
+- **code-reviewer**: After completing significant code changes, before committing major features
+- **testing-specialist**: For test strategy, writing test suites, improving coverage
+- **security-auditor**: When handling auth, payments, sensitive data, or reviewing security
+- **frontend-specialist**: For React components, UI/UX, accessibility, responsive design
+- **documentation-writer**: For README updates, API docs, technical documentation
+- **database-architect**: For Prisma schema changes, query optimization, data modeling
+- **playwright-tester**: For automated browser testing after feature completion, never ask user to manually test
+- **debugger-specialist**: For bug reproduction, root cause analysis, and surgical fixes when tests fail
+
+### Agent Usage Guidelines
+- Use agents proactively when their expertise matches the task
+- Delegate to specialists rather than handling complex domain logic directly
+- For multi-faceted tasks, use multiple agents in sequence or parallel
+- Always use appraisal-expert when working on valuation or USPAP-related features
+
+## Three-Agent Development Workflow
+
+### Agent Responsibilities
+
+**Main Development Agent (YOU)**
+- Feature planning and implementation
+- Writing business logic
+- Creating new functionality
+- Moving project forward
+- Coordination between agents
+
+**Playwright Tester Agent**
+- Automated browser testing
+- Comprehensive test execution
+- Bug detection and reporting
+- Test evidence collection
+- Quality gatekeeping
+
+**Debugger Specialist Agent**
+- Bug reproduction and analysis
+- Root cause diagnosis
+- Surgical bug fixes
+- Fix verification
+- Issue resolution iteration
+
+### Standard Development Cycle
+
+```
+┌─────────────────┐
+│  Main Agent     │
+│  Builds Feature │
+└────────┬────────┘
+         │
+         ↓
+┌─────────────────────┐
+│ Playwright Tester   │
+│ Tests Feature       │
+└────────┬────────────┘
+         │
+    ┌────┴────┐
+    │         │
+    ↓         ↓
+   ✅ Pass    ❌ Fail
+    │         │
+    │         ↓
+    │    ┌──────────────────┐
+    │    │ Debugger Agent   │
+    │    │ Fixes Bugs       │
+    │    └────────┬─────────┘
+    │             │
+    │             ↓
+    │    ┌──────────────────┐
+    │    │ Tester Re-tests  │
+    │    └────────┬─────────┘
+    │             │
+    │        ┌────┴────┐
+    │        │         │
+    │        ↓         ↓
+    │     ✅ Pass    ❌ Fail
+    │        │         │
+    │        │         └──→ (Iterate)
+    │        │
+    └────────┴────→ ✅ Complete
+```
+
+### Development Process
+
+#### Step 1: Feature Development
+```
+# You (main agent) build the feature
+"Implement user registration with email validation"
+```
+
+#### Step 2: Automated Testing
+```
+# Delegate to playwright-tester
+Use Task tool with subagent_type: "playwright-tester"
+
+Prompt: "Test user registration:
+- Valid email submission
+- Invalid email rejection
+- Duplicate email handling
+- Success redirect
+
+App running at http://localhost:3000"
+```
+
+#### Step 3: Bug Resolution (if needed)
+```
+# Tester finds bugs, forwards to debugger
+Use Task tool with subagent_type: "debugger-specialist"
+
+Prompt: "Fix bugs from test report:
+
+Bug 1: Email validation not working
+- Expected: Invalid emails rejected
+- Actual: All emails accepted
+- Screenshot: [link]
+- Console: TypeError at line 45
+
+Bug 2: Duplicate email shows wrong error
+- Expected: 'Email already exists'
+- Actual: Generic 500 error"
+```
+
+#### Step 4: Re-verification
+```
+# Debugger fixes bugs, sends back to tester
+# Tester re-runs all tests
+# If pass → Report success
+# If fail → Back to debugger
+```
+
+### Agent Communication Flow
+
+- **Tester → Debugger**: Bug reports with evidence
+- **Debugger → Tester**: Fix confirmations for re-test
+- **Tester → Main**: Final pass/fail status
+- **Main → User**: Feature completion announcement
+
+### Rules for Main Agent
+
+1. **Never skip testing**: Every feature goes to playwright-tester
+2. **Don't debug yourself**: Let debugger agent handle test failures
+3. **Stay focused**: Keep building while other agents test/debug
+4. **Coordinate**: Ensure agents have info they need
+5. **Report accurately**: Only claim completion after tester confirms
+
+### Context Window Optimization
+
+- **Main Agent**: 100K tokens for development
+- **Tester Agent**: 100K tokens for test iterations
+- **Debugger Agent**: 100K tokens for debug loops
+- **Total Effective**: 300K tokens vs 100K single-agent
+
+### Parallel Work Pattern
+
+You can work on next feature while:
+- Playwright-tester verifies previous feature
+- Debugger-specialist fixes bugs from testing
+- Each agent uses separate context window
+
+### Example Session
+
+```
+10:00 AM - You build Feature A
+           "Build login form"
+
+10:20 AM - Delegate to tester
+           /agent playwright-tester "Test login form..."
+
+10:20 AM - You start Feature B (parallel work!)
+           "Build user dashboard"
+
+10:35 AM - Tester finds bugs in Feature A
+           Auto-delegates to debugger
+
+10:50 AM - You finish Feature B
+           /agent playwright-tester "Test dashboard..."
+
+10:55 AM - Debugger fixes Feature A bugs
+           Re-tests automatically
+
+11:00 AM - Tester confirms Feature A passing
+           "✅ Login form complete"
+
+11:15 AM - Tester confirms Feature B passing
+           "✅ Dashboard complete"
+
+11:15 AM - You report to user
+           "Completed: Login form and user dashboard, fully tested"
+```
+
+### Testing Delegation Protocol
+
+**CRITICAL: Never ask the user to manually test anything**
+
+When feature implementation is complete:
+- ✅ DO: Delegate to playwright-tester for automated verification
+- ✅ DO: Let debugger-specialist handle any failures
+- ✅ DO: Wait for final test results before claiming completion
+- ✅ DO: Work on next feature while testing/debugging happens
+- ❌ DON'T: Ask user to manually test
+- ❌ DON'T: Debug test failures yourself (delegate to debugger-specialist)
+- ❌ DON'T: Report feature complete without tester confirmation
+- ❌ DON'T: Move to next task until tests pass
