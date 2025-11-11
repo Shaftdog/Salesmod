@@ -55,9 +55,54 @@ Use specialized sub-agents via the Task tool for focused expertise:
 - **frontend-specialist**: For React components, UI/UX, accessibility, responsive design
 - **documentation-writer**: For README updates, API docs, technical documentation
 - **database-architect**: For Prisma schema changes, query optimization, data modeling
+- **playwright-tester**: For automated browser testing after feature completion, never ask user to manually test
 
 ### Agent Usage Guidelines
 - Use agents proactively when their expertise matches the task
 - Delegate to specialists rather than handling complex domain logic directly
 - For multi-faceted tasks, use multiple agents in sequence or parallel
 - Always use appraisal-expert when working on valuation or USPAP-related features
+
+## Development Workflow with Automated Testing
+
+### Standard Feature Development Process
+1. **Plan** - Understand requirements and design approach
+2. **Implement** - Write code following standards above
+3. **Unit Test** - Add test coverage for business logic
+4. **Auto-Test** - Delegate to playwright-tester agent for browser verification
+5. **Fix Issues** - Address any failures reported by playwright-tester
+6. **Re-test** - Delegate again until all tests pass
+7. **Complete** - Only report success to user after automated tests pass
+
+### Testing Delegation Protocol
+
+**CRITICAL: Never ask the user to manually test anything**
+
+When feature implementation is complete:
+- ✅ DO: Delegate to playwright-tester for automated verification
+- ✅ DO: Wait for test results before claiming completion
+- ✅ DO: Fix any issues found and re-delegate for testing
+- ✅ DO: Include test scenarios in delegation prompt
+- ❌ DON'T: Ask user to manually test
+- ❌ DON'T: Report feature complete without automated testing
+- ❌ DON'T: Move to next task until tests pass
+
+### Delegation Example
+
+```
+Use Task tool with subagent_type: "playwright-tester"
+
+Prompt: "Test the [feature name] with these scenarios:
+1. [Happy path scenario]
+2. [Error condition scenario]
+3. [Edge case scenario]
+
+Application is running at http://localhost:3000
+
+Provide detailed test report with pass/fail status, screenshots, and any bugs found with specific fix recommendations."
+```
+
+### Sub-Agent Responsibilities
+- **Main Development Agent**: Feature implementation, bug fixes, code review
+- **Playwright Tester Agent**: All browser-based verification, autonomous iteration on failures
+- **User**: Final acceptance only after automated tests confirm everything works
