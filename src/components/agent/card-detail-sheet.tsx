@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -12,8 +13,9 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { KanbanCard, useApproveCard, useExecuteCard, useRejectCard } from '@/hooks/use-agent';
-import { Send, Check, X, Loader2, AlertCircle, Calendar, DollarSign, Phone, FileSearch } from 'lucide-react';
+import { Send, Check, X, Loader2, AlertCircle, Calendar, DollarSign, Phone, FileSearch, MessageSquare, Bot } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { CardReviewChat } from './card-review-chat';
 
 /**
  * Format email body to handle both plain text and HTML
@@ -56,6 +58,7 @@ export function CardDetailSheet({ card, open, onOpenChange }: CardDetailSheetPro
   const approveCard = useApproveCard();
   const executeCard = useExecuteCard();
   const rejectCard = useRejectCard();
+  const [showReviewChat, setShowReviewChat] = useState(false);
 
   if (!card) {
     return null;
@@ -337,6 +340,51 @@ export function CardDetailSheet({ card, open, onOpenChange }: CardDetailSheetPro
                   </span>
                 </div>
               </div>
+            )}
+
+            {/* Review with AI Agent */}
+            {!isDone && !isBlocked && (
+              <>
+                <Separator />
+                <div>
+                  <Button
+                    variant={showReviewChat ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setShowReviewChat(!showReviewChat)}
+                    className="w-full"
+                  >
+                    <Bot className="h-4 w-4 mr-2" />
+                    {showReviewChat ? 'Hide' : 'Review with'} AI Agent
+                  </Button>
+                </div>
+
+                {showReviewChat && (
+                  <div className="border rounded-lg p-4 bg-blue-50/50">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Bot className="h-5 w-5 text-blue-600" />
+                      <h3 className="font-medium">Review with AI Agent</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Discuss improvements or store feedback for future runs
+                    </p>
+                    <CardReviewChat
+                      card={card}
+                      onCardRevised={() => {
+                        toast({
+                          title: 'Card Revised',
+                          description: 'A new version has been created',
+                        });
+                      }}
+                      onFeedbackStored={() => {
+                        toast({
+                          title: 'Feedback Stored',
+                          description: 'The agent will learn from this',
+                        });
+                      }}
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </ScrollArea>
