@@ -209,7 +209,7 @@ You can ask clarifying questions BEFORE taking action, but once the user confirm
     ];
 
     // Convert messages to Anthropic format
-    const anthropicMessages: Anthropic.MessageParam[] = messages.map(m => ({
+    const anthropicMessages: Anthropic.MessageParam[] = messages.map((m: { role: string; content: string }) => ({
       role: m.role === 'user' ? 'user' : 'assistant',
       content: m.content
     }));
