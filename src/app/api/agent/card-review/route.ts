@@ -46,9 +46,6 @@ export async function POST(request: Request) {
       timestamp: r.content?.timestamp,
     })) || [];
 
-    // Detect common patterns
-    const patternSummary = detectRejectionPatterns(rejectionPatterns);
-
     const systemPrompt = `You are an AI Account Manager helping the user review a rejected action card.
 
 ## CRITICAL: ALWAYS CALL TOOLS IMMEDIATELY - NO EXPLANATIONS FIRST
@@ -92,19 +89,12 @@ ${cardContext?.action_payload?.subject ? `## EMAIL DETAILS
 - **Subject**: ${cardContext.action_payload.subject}
 - **To**: ${cardContext.action_payload.to}` : ''}
 
-## REJECTION PATTERN ANALYSIS
-${patternSummary.totalRejections > 0 ? `
-**Total Rejections Analyzed**: ${patternSummary.totalRejections}
-**Recent Trend**: ${patternSummary.recentTrends}
+## REJECTION HISTORY
+${rejectionPatterns.length > 0 ? `
+**Total Previous Rejections**: ${rejectionPatterns.length}
 
-**Most Common Rejection Reasons**:
-${patternSummary.commonReasons.map((r, i) => `${i + 1}. ${r.reason} (${r.count} times)`).join('\n')}
-
-**Card Types with Issues**:
-${patternSummary.cardTypeIssues.map((c) => `- ${c.cardType}: ${c.count} rejections`).join('\n')}
-
-💡 **Proactive Insight**: Use this data to offer specific, data-driven suggestions to the user.
-` : 'No rejection patterns detected yet - this is the first feedback!'}
+💡 **Proactive Insight**: The user has provided feedback on ${rejectionPatterns.length} previous cards. Use this history to offer data-driven suggestions.
+` : 'No previous rejections - this is the first feedback!'}
 
 ## YOUR CAPABILITIES
 
