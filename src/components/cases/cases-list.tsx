@@ -4,9 +4,19 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { CaseCard } from "./case-card";
 import { CaseForm } from "./case-form";
-import { useCases, useCreateCase, useUpdateCase } from "@/hooks/use-cases";
+import { useCases, useCreateCase, useUpdateCase, useDeleteCase } from "@/hooks/use-cases";
 import { useClients } from "@/hooks/use-clients";
 import { useOrders } from "@/hooks/use-orders";
 import { useCurrentUser } from "@/hooks/use-appraisers";
@@ -14,6 +24,7 @@ import type { Case } from "@/lib/types";
 import { Plus, Search, Filter } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { caseStatuses, casePriorities, caseTypes } from "@/lib/types";
+import { useToast } from "@/hooks/use-toast";
 
 type CasesListProps = {
   clientId?: string;
@@ -23,6 +34,7 @@ type CasesListProps = {
 export function CasesList({ clientId, orderId }: CasesListProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCase, setEditingCase] = useState<Case | undefined>();
+  const [caseToDelete, setCaseToDelete] = useState<Case | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
@@ -35,6 +47,8 @@ export function CasesList({ clientId, orderId }: CasesListProps) {
   const { data: currentUser } = useCurrentUser();
   const createCase = useCreateCase();
   const updateCase = useUpdateCase();
+  const deleteCase = useDeleteCase();
+  const { toast } = useToast();
 
   // Debug logging
   console.log('[CasesList] clients count:', clients.length);
@@ -67,6 +81,26 @@ export function CasesList({ clientId, orderId }: CasesListProps) {
   const handleCloseForm = () => {
     setIsFormOpen(false);
     setEditingCase(undefined);
+  };
+
+  const handleDeleteCase = async () => {
+    if (!caseToDelete) return;
+
+    try {
+      await deleteCase.mutateAsync(caseToDelete.id);
+      toast({
+        title: 'Case Deleted',
+        description: `"${caseToDelete.subject}" has been deleted.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Delete Failed',
+        description: error.message || 'Failed to delete case',
+        variant: 'destructive',
+      });
+    } finally {
+      setCaseToDelete(null);
+    }
   };
 
   // Filter cases
@@ -183,7 +217,12 @@ export function CasesList({ clientId, orderId }: CasesListProps) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredCases.map((caseItem) => (
-            <CaseCard key={caseItem.id} case={caseItem} onEdit={handleEdit} />
+            <CaseCard
+              key={caseItem.id}
+              case={caseItem}
+              onEdit={handleEdit}
+              onDelete={setCaseToDelete}
+            />
           ))}
         </div>
       )}
@@ -198,6 +237,24 @@ export function CasesList({ clientId, orderId }: CasesListProps) {
         orders={orders}
         isLoading={createCase.isPending || updateCase.isPending}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!caseToDelete} onOpenChange={(open) => !open && setCaseToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Case?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{caseToDelete?.subject}&quot;? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteCase} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

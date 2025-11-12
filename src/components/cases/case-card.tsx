@@ -6,30 +6,31 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CaseStatusBadge, CasePriorityBadge } from "./case-status-badge";
 import type { Case } from "@/lib/types";
-import { Building2, FileText, User, Calendar, ExternalLink } from "lucide-react";
+import { Building2, FileText, User, Calendar, ExternalLink, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 type CaseCardProps = {
   case: Case;
   onEdit?: (caseItem: Case) => void;
+  onDelete?: (caseItem: Case) => void;
 };
 
-export function CaseCard({ case: caseItem, onEdit }: CaseCardProps) {
+export function CaseCard({ case: caseItem, onEdit, onDelete }: CaseCardProps) {
   // Helper function to format case type for display
   const formatCaseType = (type: string) => {
-    return type.split('_').map(word => 
+    return type.split('_').map(word =>
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
   };
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className="group hover:shadow-md transition-shadow relative">
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="space-y-1 flex-1">
             <div className="flex items-center gap-2">
               <CardTitle className="text-lg">
-                <Link 
+                <Link
                   href={`/cases/${caseItem.id}`}
                   className="hover:underline"
                 >
@@ -44,15 +45,30 @@ export function CaseCard({ case: caseItem, onEdit }: CaseCardProps) {
               {caseItem.description || "No description provided"}
             </CardDescription>
           </div>
-          {onEdit && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onEdit(caseItem)}
-            >
-              Edit
-            </Button>
-          )}
+          <div className="flex items-center gap-1">
+            {onEdit && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onEdit(caseItem)}
+              >
+                Edit
+              </Button>
+            )}
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 hover:text-red-600"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(caseItem);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent>
