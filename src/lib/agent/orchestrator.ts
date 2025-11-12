@@ -1,7 +1,165 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { buildContext } from './context-builder';
 import { generatePlan, validatePlan, ProposedAction } from './planner';
 import { executeCard, ExecutionResult } from './executor';
+import { planNextBatch, expandTaskToCards } from './job-planner';
+import { Job, JobTask } from '@/types/jobs';
+
+/**
+ * Format email body with proper HTML
+ * Converts plain text or poorly formatted text into proper HTML
+ */
+function formatEmailBody(body: string): string {
+  if (!body) return body;
+  
+  // If already has substantial HTML tags, return as-is
+  if (body.includes('<p>') && body.includes('</p>')) {
+    return body;
+  }
+  
+  // Step 1: Detect and format bullet/numbered lists with various patterns
+  // Pattern 1: "1. Item" or "• Item" style
+  const hasNumberedList = /\d+\.\s+[A-Z]/.test(body);
+  const hasBulletList = /[•\-\*]\s+[A-Z]/.test(body);
+  
+  // Pattern 2: "First bullet point", "Second bullet point" style
+  const hasWordedList = /(First|Second|Third|Fourth|Fifth)[\s\w]*:/gi.test(body);
+  
+  let formatted = body;
+  
+  // Convert "First bullet point:", "Second bullet point:" to proper list
+  if (hasWordedList) {
+    // Split on sentence patterns that indicate list items
+    const listPattern = /((?:First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:[\s\S]*?)(?=(?:First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:|$)/gi;
+    const listItems = body.match(listPattern);
+    
+    if (listItems && listItems.length > 1) {
+      // Find intro text before the list
+      const introMatch = body.match(/^([\s\S]*?)(?=First|Second|Third|Fourth|Fifth)/i);
+      let result = '';
+      
+      if (introMatch && introMatch[1].trim()) {
+        result += `<p>${introMatch[1].trim()}</p>`;
+      }
+      
+      result += '<ol>';
+      listItems.forEach(item => {
+        const cleanItem = item.replace(/^(First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:\s*/i, '').trim();
+        if (cleanItem) {
+          result += `<li>${cleanItem}</li>`;
+        }
+      });
+      result += '</ol>';
+      
+      // Find closing text after the list
+      const lastItem = listItems[listItems.length - 1];
+      const closingMatch = body.split(lastItem)[1];
+      if (closingMatch && closingMatch.trim()) {
+        result += `<p>${closingMatch.trim()}</p>`;
+      }
+      
+      return result;
+    }
+  }
+  
+  // Convert numbered lists (1. 2. 3. etc.)
+  if (hasNumberedList) {
+    const lines = body.split(/\.\s+(?=\d+\.|\w)/);
+    let result = '';
+    let inList = false;
+    
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (/^\d+\./.test(trimmed)) {
+        if (!inList) {
+          result += '<ol>';
+          inList = true;
+        }
+        const item = trimmed.replace(/^\d+\.\s*/, '');
+        result += `<li>${item}</li>`;
+      } else if (trimmed) {
+        if (inList) {
+          result += '</ol>';
+          inList = false;
+        }
+        result += `<p>${trimmed}</p>`;
+      }
+    });
+    
+    if (inList) result += '</ol>';
+    return result;
+  }
+  
+  // Convert bullet lists (• or - or *)
+  if (hasBulletList) {
+    const lines = body.split(/\n/);
+    let result = '';
+    let inList = false;
+    let currentParagraph = '';
+    
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (/^[•\-\*]\s+/.test(trimmed)) {
+        if (currentParagraph) {
+          result += `<p>${currentParagraph.trim()}</p>`;
+          currentParagraph = '';
+        }
+        if (!inList) {
+          result += '<ul>';
+          inList = true;
+        }
+        const item = trimmed.replace(/^[•\-\*]\s+/, '');
+        result += `<li>${item}</li>`;
+      } else if (trimmed) {
+        if (inList) {
+          result += '</ul>';
+          inList = false;
+        }
+        currentParagraph += (currentParagraph ? ' ' : '') + trimmed;
+      }
+    });
+    
+    if (currentParagraph) {
+      result += `<p>${currentParagraph.trim()}</p>`;
+    }
+    if (inList) result += '</ul>';
+    return result;
+  }
+  
+  // No lists detected - format as paragraphs
+  // Split by double line breaks first
+  const paragraphs = body.split(/\n\n+/);
+  if (paragraphs.length > 1) {
+    return paragraphs
+      .map(p => p.trim())
+      .filter(p => p.length > 0)
+      .map(p => `<p>${p.replace(/\n/g, ' ')}</p>`)
+      .join('');
+  }
+  
+  // Split by single line breaks and group as sentences
+  const sentences = body.split(/\.\s+/);
+  if (sentences.length > 3) {
+    // Group every 2-3 sentences into a paragraph
+    let result = '<p>';
+    sentences.forEach((sentence, idx) => {
+      result += sentence.trim();
+      if (!sentence.trim().endsWith('.')) result += '.';
+      
+      // Start new paragraph every 2-3 sentences
+      if ((idx + 1) % 2 === 0 && idx < sentences.length - 1) {
+        result += '</p><p>';
+      } else if (idx < sentences.length - 1) {
+        result += ' ';
+      }
+    });
+    result += '</p>';
+    return result;
+  }
+  
+  // Single paragraph - just wrap it
+  return `<p>${body}</p>`;
+}
 
 export interface AgentRun {
   id: string;
@@ -62,6 +220,11 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
     const approvedResults = await executeApprovedCards(orgId);
     executedCount = approvedResults.filter(r => r.success).length;
     console.log(`[${run.id}] Executed ${executedCount} of ${approvedResults.length} approved cards`);
+
+    // Step 0.5: Process active jobs (generate next batch of tasks/cards)
+    console.log(`[${run.id}] Processing active jobs...`);
+    const jobCardsCreated = await processActiveJobs(orgId, run.id);
+    console.log(`[${run.id}] Created ${jobCardsCreated} cards from jobs`);
 
     // Step 1: Build context
     console.log(`[${run.id}] Building context for org ${orgId}...`);
@@ -175,7 +338,7 @@ async function createKanbanCards(
       actionPayload = {
         to: action.emailDraft.to,
         subject: action.emailDraft.subject,
-        body: action.emailDraft.body,
+        body: formatEmailBody(action.emailDraft.body),
         replyTo: action.emailDraft.replyTo,
       };
       console.log('Creating card with emailDraft:', {
@@ -402,6 +565,194 @@ export async function cancelRun(runId: string): Promise<void> {
     })
     .eq('id', runId)
     .eq('status', 'running');
+}
+
+/**
+ * Process active jobs: generate next batch of tasks and expand to cards
+ */
+async function processActiveJobs(orgId: string, runId: string): Promise<number> {
+  const supabase = createServiceRoleClient();
+  let totalCardsCreated = 0;
+
+  // Get all running jobs for this org
+  const { data: activeJobs, error: jobsError } = await supabase
+    .from('jobs')
+    .select('*')
+    .eq('org_id', orgId)
+    .eq('status', 'running')
+    .order('created_at', { ascending: true });
+
+  if (jobsError || !activeJobs || activeJobs.length === 0) {
+    console.log('[Jobs] No active jobs to process');
+    return 0;
+  }
+
+  console.log(`[Jobs] Processing ${activeJobs.length} active jobs`);
+
+  for (const job of activeJobs as Job[]) {
+    try {
+      console.log(`[Jobs] Processing job: ${job.name} (${job.id})`);
+
+      // Update job to track this run
+      await supabase
+        .from('agent_runs')
+        .update({ job_id: job.id })
+        .eq('id', runId);
+
+      // Get current batch number (max batch for this job)
+      const { data: latestTask } = await supabase
+        .from('job_tasks')
+        .select('batch')
+        .eq('job_id', job.id)
+        .order('batch', { ascending: false })
+        .limit(1)
+        .single();
+
+      const currentBatch = latestTask?.batch || 0;
+
+      // Check if current batch is complete (all tasks done or skipped)
+      const { data: pendingTasks } = await supabase
+        .from('job_tasks')
+        .select('id')
+        .eq('job_id', job.id)
+        .eq('batch', currentBatch)
+        .in('status', ['pending', 'running']);
+
+      if (pendingTasks && pendingTasks.length > 0) {
+        console.log(`[Jobs] Job ${job.name} still has ${pendingTasks.length} pending tasks in batch ${currentBatch}, skipping`);
+        continue;
+      }
+
+      // Plan next batch
+      const { tasks: newTasks, batch_number } = await planNextBatch(job, currentBatch);
+
+      if (newTasks.length === 0) {
+        // No more work to do - mark job as succeeded
+        console.log(`[Jobs] Job ${job.name} has no more work, marking as succeeded`);
+        await supabase
+          .from('jobs')
+          .update({
+            status: 'succeeded',
+            finished_at: new Date().toISOString(),
+          })
+          .eq('id', job.id);
+        continue;
+      }
+
+      console.log(`[Jobs] Generated ${newTasks.length} tasks for batch ${batch_number}`);
+
+      // Insert new tasks
+      const { data: createdTasks, error: tasksError } = await supabase
+        .from('job_tasks')
+        .insert(newTasks)
+        .select();
+
+      if (tasksError) {
+        console.error(`[Jobs] Failed to create tasks for job ${job.name}:`, tasksError);
+        continue;
+      }
+
+      // Expand each task to cards
+      for (const task of (createdTasks as JobTask[])) {
+        try {
+          // Only expand tasks that create cards (not send_email which executes existing cards)
+          if (task.kind === 'send_email') {
+            continue;
+          }
+
+          console.log(`[Jobs] Expanding task ${task.id} (${task.kind})...`);
+          const { cards } = await expandTaskToCards(task, job);
+          console.log(`[Jobs] Task ${task.id} expanded to ${cards.length} cards`);
+
+          if (cards.length === 0) {
+            console.error(`[Jobs] Task ${task.id} (${task.kind}) expanded to 0 cards - marking as error`);
+            
+            // Mark task as error instead of leaving it pending
+            await supabase
+              .from('job_tasks')
+              .update({
+                status: 'error',
+                error_message: 'Expansion returned 0 cards - check target filter and contact query',
+                finished_at: new Date().toISOString(),
+              })
+              .eq('id', task.id);
+            
+            continue;
+          }
+
+          console.log(`[Jobs] Expanding task ${task.id} to ${cards.length} cards`);
+
+          // Insert cards with job_id and task_id
+          const { data: insertedCards, error: cardsError } = await supabase
+            .from('kanban_cards')
+            .insert(cards.map(card => ({ ...card, org_id: orgId, run_id: runId })))
+            .select('id');
+
+          if (cardsError) {
+            console.error(`[Jobs] Failed to create cards for task ${task.id}:`, cardsError);
+
+            // Mark task as error
+            await supabase
+              .from('job_tasks')
+              .update({
+                status: 'error',
+                error_message: cardsError.message,
+                finished_at: new Date().toISOString(),
+              })
+              .eq('id', task.id);
+          } else {
+            totalCardsCreated += cards.length;
+
+            // Mark task as done
+            await supabase
+              .from('job_tasks')
+              .update({
+                status: 'done',
+                output: {
+                  cards_created: cards.length,
+                  card_ids: (insertedCards || []).map((c: any) => c.id),
+                },
+                finished_at: new Date().toISOString(),
+              })
+              .eq('id', task.id);
+          }
+        } catch (taskError: any) {
+          console.error(`[Jobs] Error expanding task ${task.id}:`, taskError);
+
+          // Mark task as error
+          await supabase
+            .from('job_tasks')
+            .update({
+              status: 'error',
+              error_message: taskError.message,
+              finished_at: new Date().toISOString(),
+            })
+            .eq('id', task.id);
+        }
+      }
+
+      // Update job's last_run_at
+      await supabase
+        .from('jobs')
+        .update({ last_run_at: new Date().toISOString() })
+        .eq('id', job.id);
+
+    } catch (jobError: any) {
+      console.error(`[Jobs] Error processing job ${job.id}:`, jobError);
+
+      // Mark job as failed
+      await supabase
+        .from('jobs')
+        .update({
+          status: 'failed',
+          finished_at: new Date().toISOString(),
+        })
+        .eq('id', job.id);
+    }
+  }
+
+  console.log(`[Jobs] Created ${totalCardsCreated} cards from active jobs`);
+  return totalCardsCreated;
 }
 
 
