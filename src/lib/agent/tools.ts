@@ -281,9 +281,9 @@ export const agentTools = {
    */
   // @ts-ignore - AI SDK type mismatch in Vercel build
   createContact: tool({
-    description: 'Create a new contact for a client. Use this when user wants to add a person to their contact database or associate someone with a client.',
+    description: 'Create a new contact for a client. Use this when user wants to add a person to their contact database. You MUST have the client UUID - use searchClients first if you only have a company name.',
     parameters: z.object({
-      clientId: z.string().uuid().describe('Client UUID to associate contact with'),
+      clientId: z.string().uuid().describe('Client UUID to associate contact with (use searchClients to get this if you only have company name)'),
       firstName: z.string().min(1).describe('Contact first name'),
       lastName: z.string().min(1).describe('Contact last name'),
       email: z.string().email().optional().describe('Contact email address'),
