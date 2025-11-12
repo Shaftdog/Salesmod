@@ -337,7 +337,10 @@ export const agentTools = {
           phone,
           mobile,
           title,
+          department,
+          notes,
           is_primary,
+          primary_role_code,
           client:clients!contacts_client_id_fkey(
             id,
             company_name
@@ -360,7 +363,10 @@ export const agentTools = {
           phone: data.phone,
           mobile: data.mobile,
           title: data.title,
+          department: data.department,
+          notes: data.notes,
           isPrimary: data.is_primary,
+          primaryRoleCode: data.primary_role_code,
           client: {
             id: (data.client as any)?.id,
             name: (data.client as any)?.company_name,

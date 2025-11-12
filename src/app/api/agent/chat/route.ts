@@ -85,6 +85,7 @@ Your capabilities:
 - Log completed activities (calls, emails, meetings, notes) (createActivity)
 
 **Contact Management:**
+- Create new contacts for clients (createContact)
 - Delete contacts from the system (deleteContact)
 
 **Research & Web:**
