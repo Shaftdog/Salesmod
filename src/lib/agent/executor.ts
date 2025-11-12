@@ -270,9 +270,37 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
     source: payload.to ? 'payload' : (card.contact_id ? 'contact' : 'client'),
   });
 
-  // Check for email suppression
+  // Check for email suppression and bounce tags
   const contactId = card.contact_id;
   if (contactId) {
+    // Check for bounce tags
+    const { data: contact } = await supabase
+      .from('contacts')
+      .select('tags, first_name, last_name')
+      .eq('id', contactId)
+      .single();
+
+    if (contact?.tags) {
+      const tags = contact.tags || [];
+      if (tags.includes('email_bounced_hard')) {
+        return {
+          success: false,
+          cardId: card.id,
+          message: 'Email address bounced (hard bounce)',
+          error: `Cannot send email to ${contact.first_name} ${contact.last_name}: email address has permanently bounced`,
+        };
+      }
+      if (tags.includes('email_bounced_soft')) {
+        return {
+          success: false,
+          cardId: card.id,
+          message: 'Email address bounced (soft bounce)',
+          error: `Cannot send email to ${contact.first_name} ${contact.last_name}: email address has bounced multiple times`,
+        };
+      }
+    }
+
+    // Check suppression list
     const { data: suppression } = await supabase
       .from('email_suppressions')
       .select('*')
@@ -285,7 +313,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
         success: false,
         cardId: card.id,
         message: 'Email suppressed',
-        error: `Contact is suppressed due to: ${suppression.reason}`,
+        error: `Contact is suppressed due to: ${suppression.reason}${suppression.bounce_type ? ` (${suppression.bounce_type} bounce)` : ''}`,
       };
     }
   }

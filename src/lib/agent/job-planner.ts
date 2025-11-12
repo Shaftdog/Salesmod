@@ -611,6 +611,7 @@ async function getTargetContacts(
       email,
       primary_role_code,
       client_id,
+      tags,
       clients!contacts_client_id_fkey!inner(
         id,
         company_name,
@@ -684,6 +685,51 @@ async function getTargetContacts(
 
   console.log(`[getTargetContacts] Query returned ${contacts?.length || 0} contacts (${excludedContactIds.length} excluded)`);
 
+  // Filter out contacts with bounced email tags
+  const contactsWithoutBounces = (contacts || []).filter((c: any) => {
+    const tags = c.tags || [];
+    const hasBounceTag = tags.includes('email_bounced_hard') || tags.includes('email_bounced_soft');
+    if (hasBounceTag) {
+      console.log(`[getTargetContacts] Filtered out contact ${c.first_name} ${c.last_name} - has bounce tag`);
+      return false;
+    }
+    return true;
+  });
+
+  console.log(`[getTargetContacts] After bounce filtering: ${contactsWithoutBounces.length}/${contacts?.length || 0} contacts remaining`);
+
+  // Check email suppressions for remaining contacts
+  const contactIds = contactsWithoutBounces.map((c: any) => c.id);
+  let suppressedContactIds: string[] = [];
+
+  if (contactIds.length > 0) {
+    const { data: suppressions } = await supabase
+      .from('email_suppressions')
+      .select('contact_id')
+      .in('contact_id', contactIds)
+      .eq('org_id', orgId);
+
+    if (suppressions && suppressions.length > 0) {
+      suppressedContactIds = suppressions.map((s: any) => s.contact_id);
+      console.log(`[getTargetContacts] Found ${suppressedContactIds.length} suppressed contacts`);
+    }
+  }
+
+  // Filter out suppressed contacts
+  const contactsWithoutSuppressions = contactsWithoutBounces.filter((c: any) => {
+    const isSuppressed = suppressedContactIds.includes(c.id);
+    if (isSuppressed) {
+      console.log(`[getTargetContacts] Filtered out contact ${c.first_name} ${c.last_name} - suppressed`);
+      return false;
+    }
+    return true;
+  });
+
+  console.log(`[getTargetContacts] After suppression filtering: ${contactsWithoutSuppressions.length}/${contactsWithoutBounces.length} contacts remaining`);
+
+  // Use filtered contacts for further processing
+  const filteredByBounce = contactsWithoutSuppressions;
+
   // Fetch avoidance rules from agent_memories
   // Note: orgId is now passed as a parameter instead of from getUser()
   let avoidanceRules: any[] = [];
@@ -711,7 +757,7 @@ async function getTargetContacts(
   }
 
   // Filter contacts based on avoidance rules
-  const mappedContacts = (contacts || []).map((c: any) => ({
+  const mappedContacts = filteredByBounce.map((c: any) => ({
     id: c.id,
     first_name: c.first_name,
     last_name: c.last_name,
