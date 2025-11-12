@@ -278,9 +278,9 @@ async function expandDraftEmailTask(
 
   console.log(`[expandDraftEmailTask] Task ${task.id}: Getting target contacts...`);
   console.log(`[expandDraftEmailTask] Input:`, JSON.stringify(input));
-  
+
   // Get target contacts
-  const targets = await getTargetContacts(input, params, supabase);
+  const targets = await getTargetContacts(input, params, supabase, job.org_id);
   
   console.log(`[expandDraftEmailTask] Found ${targets.length} target contacts`);
 
@@ -381,7 +381,7 @@ async function expandCreateTaskTask(
   const input = task.input;
 
   // Get target contacts
-  const targets = await getTargetContacts(input, params, supabase);
+  const targets = await getTargetContacts(input, params, supabase, job.org_id);
 
   // Determine card state based on job settings
   let cardState: string;
@@ -482,7 +482,8 @@ async function expandCheckPortalTask(
 async function getTargetContacts(
   input: any,
   params: JobParams,
-  supabase: any
+  supabase: any,
+  orgId: string
 ): Promise<TargetContact[]> {
   console.log(`[getTargetContacts] Called with input:`, JSON.stringify(input));
   console.log(`[getTargetContacts] Params filter:`, JSON.stringify(params.target_filter));
@@ -503,6 +504,9 @@ async function getTargetContacts(
       `)
       .in('id', input.contact_ids)
       .not('email', 'is', null);
+
+    // TODO: Add org_id filter after migration is complete
+    // .eq('clients.org_id', orgId)
 
     if (error) {
       console.error('[getTargetContacts] Failed to fetch contacts by IDs:', error);
@@ -540,6 +544,9 @@ async function getTargetContacts(
       .from('clients')
       .select('id, company_name, client_type, is_active, email, primary_contact')
       .not('email', 'is', null);
+
+    // TODO: Add org_id filter after migration is complete
+    // .eq('org_id', orgId)
 
     // Apply filters
     if (filter.client_type) {
@@ -616,6 +623,9 @@ async function getTargetContacts(
       )
     `)
     .not('email', 'is', null);
+
+  // TODO: Add org_id filter after migration is complete
+  // .eq('clients.org_id', orgId)
 
   // Apply filters
   if (filter.client_type) {
