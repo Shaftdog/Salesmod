@@ -655,8 +655,23 @@ async function processActiveJobs(orgId: string, runId: string): Promise<number> 
       // Expand each task to cards
       for (const task of (createdTasks as JobTask[])) {
         try {
-          // Only expand tasks that create cards (not send_email which executes existing cards)
+          // Handle send_email tasks separately (they don't create cards)
           if (task.kind === 'send_email') {
+            console.log(`[Jobs] Marking send_email task ${task.id} as done (no cards to create)`);
+
+            // Mark task as done immediately since send_email tasks don't create cards
+            await supabase
+              .from('job_tasks')
+              .update({
+                status: 'done',
+                output: {
+                  cards_created: 0,
+                  note: 'send_email tasks execute existing cards, no new cards created',
+                },
+                finished_at: new Date().toISOString(),
+              })
+              .eq('id', task.id);
+
             continue;
           }
 
