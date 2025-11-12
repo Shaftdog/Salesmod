@@ -690,9 +690,7 @@ async function getTargetContacts(
   console.log(`[getTargetContacts] Query returned ${contacts?.length || 0} contacts (${excludedContactIds.length} excluded)`);
 
   // Fetch avoidance rules from agent_memories
-  const { data: { user } } = await supabase.auth.getUser();
-  const orgId = user?.id;
-
+  // Note: orgId is now passed as a parameter instead of from getUser()
   let avoidanceRules: any[] = [];
   if (orgId) {
     const { data: memories } = await supabase
