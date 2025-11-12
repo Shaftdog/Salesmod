@@ -69,8 +69,8 @@ export function AgentChat() {
     saveChatMessage.mutate({ role: 'user', content: userMessage.content });
 
     try {
-      console.log('[Chat] Sending request to /api/agent/chat-simple');
-      
+      console.log('[Chat] Sending request to /api/agent/chat');
+
       // Add a timeout to the fetch request
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
@@ -78,7 +78,7 @@ export function AgentChat() {
         controller.abort();
       }, 60000); // 60 second timeout
 
-      const response = await fetch('/api/agent/chat-simple', {
+      const response = await fetch('/api/agent/chat-direct', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -91,62 +91,36 @@ export function AgentChat() {
       }).finally(() => clearTimeout(timeoutId));
 
       console.log('[Chat] Response status:', response.status);
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('[Chat] Error response:', errorText);
         throw new Error(`Chat request failed: ${response.status} ${errorText.substring(0, 100)}`);
       }
 
-      // Read streaming response
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let assistantContent = '';
-      let assistantMessageId = Date.now().toString();
-      
-      // Add initial empty assistant message
+      // Direct API returns JSON, not a stream
+      const data = await response.json();
+      console.log('[Chat] Response data:', data);
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      const assistantContent = data.content || '';
+
+      // Add assistant message
       setMessages((prev) => [
         ...prev,
         {
-          id: assistantMessageId,
+          id: Date.now().toString(),
           role: 'assistant',
-          content: '',
+          content: assistantContent,
         },
       ]);
 
-      if (reader) {
-        let chunkCount = 0;
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            console.log('[Chat] Stream finished, total chunks:', chunkCount);
-            break;
-          }
-
-          const chunk = decoder.decode(value, { stream: true });
-          chunkCount++;
-          assistantContent += chunk;
-          
-          // Update assistant message in real-time
-          setMessages((prev) => {
-            return prev.map(m => 
-              m.id === assistantMessageId 
-                ? { ...m, content: assistantContent }
-                : m
-            );
-          });
-        }
-        
-        console.log('[Chat] Final content length:', assistantContent.length);
-        
-        // Save final assistant message to database
-        if (assistantContent) {
-          saveChatMessage.mutate({ role: 'assistant', content: assistantContent });
-        } else {
-          console.warn('[Chat] No content received from stream');
-        }
-      } else {
-        console.error('[Chat] No reader available');
+      // Save assistant message to database
+      if (assistantContent) {
+        saveChatMessage.mutate({ role: 'assistant', content: assistantContent });
       }
     } catch (err: any) {
       console.error('[Chat] Error:', err);

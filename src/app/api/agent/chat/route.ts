@@ -88,6 +88,20 @@ Your capabilities:
 - Create new contacts for clients (createContact)
 - Delete contacts from the system (deleteContact)
 
+**Database Creation:**
+- Create new clients/customers (createClient)
+- Create new contacts for clients (createContact)
+- Create new properties (createProperty)
+- Create new appraisal orders (createOrder)
+
+**Code & Development:**
+- Read files from the codebase (readFile)
+- Write new files or overwrite existing ones (writeFile)
+- Edit files by replacing specific text (editFile)
+- List files matching patterns (listFiles)
+- Search for code patterns across the codebase (searchCode)
+- Run shell commands, tests, and npm scripts (runCommand)
+
 **Research & Web:**
 - Search the web for company information (searchWeb)
 - Computer Use capabilities for visual research (if enabled):
@@ -124,12 +138,37 @@ CRITICAL: Never claim to "check" something without actually using a tool. If you
 Remember: You're helping achieve business goals. Be strategic and data-driven.`;
 
     // Stream response with tools
+    // Fixed: Changed from 'parameters' to 'inputSchema' in tool definitions
+    console.log('[Chat API] Starting streamText with maxSteps=5 and', Object.keys(agentTools).length, 'tools');
     const result = streamText({
       model: anthropic('claude-sonnet-4-5-20250929'),
       system: systemPrompt,
       messages,
       tools: agentTools,
+      maxSteps: 5, // Enable tool execution (up to 5 steps)
       temperature: 0.7,
+      onStepFinish: (step) => {
+        console.log('[Chat API] Step finished:', {
+          stepType: step.stepType,
+          toolCalls: step.toolCalls?.length || 0,
+          toolResults: step.toolResults?.length || 0,
+        });
+
+        // Log tool details
+        if (step.toolCalls && step.toolCalls.length > 0) {
+          step.toolCalls.forEach((call: any) => {
+            const argsStr = JSON.stringify(call.args) || 'undefined';
+            console.log('[Chat API] Tool called:', call.toolName, 'with args:', argsStr.substring(0, 200));
+          });
+        }
+
+        if (step.toolResults && step.toolResults.length > 0) {
+          step.toolResults.forEach((result: any) => {
+            const resultStr = JSON.stringify(result.result) || 'undefined';
+            console.log('[Chat API] Tool result:', result.toolName, '→', resultStr.substring(0, 200));
+          });
+        }
+      },
     });
 
     // Save conversation to memory asynchronously (don't await)

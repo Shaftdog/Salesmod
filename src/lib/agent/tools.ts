@@ -11,6 +11,12 @@ import {
   isComputerUseAvailable,
   getComputerUseStatus
 } from './computer-use';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 /**
  * Format email body with proper HTML
@@ -178,7 +184,7 @@ export const agentTools = {
   // @ts-ignore - AI SDK type mismatch in Vercel build
   searchClients: tool({
     description: 'Search for clients by name, email, or other criteria. Use this when user asks about specific clients or wants to find clients.',
-    parameters: z.object({
+    inputSchema: z.object({
       query: z.string().min(1).describe('Search term (company name, email, etc.)'),
     }),
     // @ts-ignore - AI SDK type mismatch
@@ -217,7 +223,7 @@ export const agentTools = {
   // @ts-ignore - AI SDK type mismatch in Vercel build
   searchContacts: tool({
     description: 'Search for individual contacts by name, email, title, or other criteria. Use this when user asks about specific people or wants to find contacts.',
-    parameters: z.object({
+    inputSchema: z.object({
       query: z.string().min(1).describe('Search term (first name, last name, email, title, etc.)'),
       clientId: z.string().optional().describe('Optional: filter by specific client UUID'),
     }),
@@ -282,7 +288,7 @@ export const agentTools = {
   // @ts-ignore - AI SDK type mismatch in Vercel build
   createContact: tool({
     description: 'Create a new contact for a client. Use this when user wants to add a person to their contact database. You MUST have the client UUID - use searchClients first if you only have a company name.',
-    parameters: z.object({
+    inputSchema: z.object({
       clientId: z.string().uuid().describe('Client UUID to associate contact with (use searchClients to get this if you only have company name)'),
       firstName: z.string().min(1).describe('Contact first name'),
       lastName: z.string().min(1).describe('Contact last name'),
@@ -381,7 +387,7 @@ export const agentTools = {
    */
   getGoals: tool({
     description: 'Get active goals and their current progress. Use this when user asks about goals, targets, or performance.',
-    parameters: z.object({}),
+    inputSchema: z.object({}),
     // @ts-ignore
     execute: async (): Promise<any> => {
       const supabase = await createClient();
@@ -447,7 +453,7 @@ export const agentTools = {
    */
   createCard: tool({
     description: 'Create a new action card on the Kanban board. Use this when user requests to create a task, draft an email, or propose an action. For calls/meetings, create a task instead. ClientId is optional - omit it for general strategic cards. IMPORTANT: For send_email type, you MUST include emailDraft with to, subject, and body. The rationale explains WHY, the emailDraft.body is the ACTUAL email message.',
-    parameters: z.object({
+    inputSchema: z.object({
       type: z.enum(['send_email', 'create_task', 'create_deal', 'follow_up', 'research']),
       clientId: z.string().optional().describe('UUID of the client (optional - omit for general strategic cards)'),
       title: z.string().describe('Brief title for the action'),
@@ -546,7 +552,7 @@ export const agentTools = {
    */
   deleteCard: tool({
     description: 'Delete one or more action cards from the Kanban board. Use this when user asks to delete, remove, or dismiss cards. Can match by ID, priority, type, or title.',
-    parameters: z.object({
+    inputSchema: z.object({
       cardId: z.string().optional().describe('Specific card UUID to delete'),
       priority: z.enum(['low', 'medium', 'high']).optional().describe('Delete all cards with this priority'),
       type: z.enum(['send_email', 'create_task', 'create_deal', 'follow_up', 'research']).optional().describe('Delete all cards of this type'),
@@ -643,7 +649,7 @@ export const agentTools = {
    */
   updateCard: tool({
     description: 'Update an existing action card. Use this to change priority, state, title, or move it to a different stage.',
-    parameters: z.object({
+    inputSchema: z.object({
       cardId: z.string().describe('Card UUID to update'),
       state: z.enum(['suggested', 'in_review', 'approved', 'rejected', 'completed']).optional().describe('New state for the card'),
       priority: z.enum(['low', 'medium', 'high']).optional().describe('New priority'),
@@ -687,7 +693,7 @@ export const agentTools = {
    */
   createCase: tool({
     description: 'Create a new support case or issue. Use this when user reports a problem, asks to track an issue, or needs help with something.',
-    parameters: z.object({
+    inputSchema: z.object({
       subject: z.string().describe('Brief subject/title of the case'),
       description: z.string().describe('Detailed description of the issue or request'),
       caseType: z.enum(['support', 'billing', 'quality_concern', 'complaint', 'service_request', 'technical', 'feedback', 'other']).describe('Type of case'),
@@ -756,7 +762,7 @@ export const agentTools = {
    */
   updateCase: tool({
     description: 'Update an existing case status, priority, or add resolution notes. Use this to manage case lifecycle.',
-    parameters: z.object({
+    inputSchema: z.object({
       caseId: z.string().describe('Case UUID or case number to update'),
       status: z.enum(['new', 'open', 'pending', 'in_progress', 'resolved', 'closed', 'reopened']).optional().describe('New status'),
       priority: z.enum(['low', 'normal', 'high', 'urgent', 'critical']).optional().describe('New priority'),
@@ -816,7 +822,7 @@ export const agentTools = {
    */
   deleteCase: tool({
     description: 'Delete a case. Use this when a case was created by mistake or is no longer needed.',
-    parameters: z.object({
+    inputSchema: z.object({
       caseId: z.string().describe('Case UUID or case number to delete'),
     }),
     // @ts-ignore
@@ -867,7 +873,7 @@ export const agentTools = {
    */
   createActivity: tool({
     description: 'Log a completed activity like a call, email, meeting, or note. Use this to record interactions with clients.',
-    parameters: z.object({
+    inputSchema: z.object({
       activityType: z.enum(['call', 'email', 'meeting', 'note', 'task']).describe('Type of activity'),
       subject: z.string().describe('Brief subject of the activity'),
       description: z.string().optional().describe('Detailed notes about the activity'),
@@ -922,7 +928,7 @@ export const agentTools = {
    */
   deleteContact: tool({
     description: 'Delete a contact from the system. Use this when a contact is no longer needed or was created by mistake.',
-    parameters: z.object({
+    inputSchema: z.object({
       contactId: z.string().describe('Contact UUID to delete'),
     }),
     // @ts-ignore
@@ -969,7 +975,7 @@ export const agentTools = {
    */
   deleteClient: tool({
     description: 'Delete a client from the system. WARNING: This will also affect related contacts, orders, and activities. Use this when a client is no longer needed or was created by mistake.',
-    parameters: z.object({
+    inputSchema: z.object({
       clientId: z.string().describe('Client UUID to delete'),
     }),
     // @ts-ignore
@@ -1032,7 +1038,7 @@ export const agentTools = {
    */
   deleteTask: tool({
     description: 'Delete a task or activity. Use this when a task is no longer needed or was created by mistake.',
-    parameters: z.object({
+    inputSchema: z.object({
       taskId: z.string().describe('Task/Activity UUID to delete'),
     }),
     // @ts-ignore
@@ -1080,7 +1086,7 @@ export const agentTools = {
    */
   deleteOpportunity: tool({
     description: 'Delete an opportunity or deal. Use this when a deal is no longer needed or was created by mistake.',
-    parameters: z.object({
+    inputSchema: z.object({
       opportunityId: z.string().describe('Opportunity/Deal UUID to delete'),
     }),
     // @ts-ignore
@@ -1129,7 +1135,7 @@ export const agentTools = {
    */
   deleteOrder: tool({
     description: 'Delete an order. WARNING: This may affect related properties and activities. Use this when an order is no longer needed or was created by mistake.',
-    parameters: z.object({
+    inputSchema: z.object({
       orderId: z.string().describe('Order UUID to delete'),
     }),
     // @ts-ignore
@@ -1187,7 +1193,7 @@ export const agentTools = {
    */
   deleteProperty: tool({
     description: 'Delete a property. Use this when a property is no longer needed or was created by mistake.',
-    parameters: z.object({
+    inputSchema: z.object({
       propertyId: z.string().describe('Property UUID to delete'),
     }),
     // @ts-ignore
@@ -1238,7 +1244,7 @@ export const agentTools = {
   // @ts-ignore - AI SDK type mismatch in Vercel build
   searchKnowledge: tool({
     description: 'Search the knowledge base for relevant information about clients, activities, notes, or past interactions. Use this to find specific information.',
-    parameters: z.object({
+    inputSchema: z.object({
       query: z.string().describe('What to search for'),
       limit: z.number().optional().default(5).describe('Maximum results to return'),
     }),
@@ -1269,7 +1275,7 @@ export const agentTools = {
   // @ts-ignore - AI SDK type mismatch in Vercel build
   getClientActivity: tool({
     description: 'Get recent activity and interaction history for a specific client.',
-    parameters: z.object({
+    inputSchema: z.object({
       clientId: z.string().describe('Client UUID'),
       limit: z.number().optional().default(10),
     }),
@@ -1310,7 +1316,7 @@ export const agentTools = {
   // @ts-ignore - AI SDK type mismatch in Vercel build
   getPendingCards: tool({
     description: 'Get pending action cards that need review or approval. Use when user asks "what\'s pending?" or "what needs my attention?"',
-    parameters: z.object({
+    inputSchema: z.object({
       state: z.enum(['suggested', 'in_review', 'approved']).optional(),
     }),
     // @ts-ignore - AI SDK type mismatch
@@ -1361,7 +1367,7 @@ export const agentTools = {
   // @ts-ignore - AI SDK type mismatch in Vercel build
   getAllCards: tool({
     description: 'Get all current Kanban cards across all states (suggested, in_review, approved, rejected, completed). Use this to see the complete current state of the Kanban board or when user asks "what cards do we have?" or "show me all cards".',
-    parameters: z.object({
+    inputSchema: z.object({
       includeCompleted: z.boolean().optional().default(false).describe('Include completed and rejected cards'),
       limit: z.number().optional().default(50).describe('Maximum number of cards to return'),
     }),
@@ -1426,7 +1432,7 @@ export const agentTools = {
   // @ts-ignore - AI SDK type mismatch in Vercel build
   getRunHistory: tool({
     description: 'Get recent agent run history and performance metrics.',
-    parameters: z.object({
+    inputSchema: z.object({
       limit: z.number().optional().default(5),
     }),
     // @ts-ignore - AI SDK type mismatch
@@ -1460,7 +1466,7 @@ export const agentTools = {
   // @ts-ignore - AI SDK type mismatch in Vercel build
   searchWeb: tool({
     description: 'Search the internet for information about companies, people, news, or any topic. Use this when the user asks you to search for something or when you need external information not available in the database.',
-    parameters: z.object({
+    inputSchema: z.object({
       query: z.string().describe('Search query - what to look up on the internet'),
       maxResults: z.number().optional().default(5).describe('Maximum number of results to return'),
     }),
@@ -1504,7 +1510,7 @@ export const agentTools = {
   // @ts-ignore - AI SDK type mismatch in Vercel build
   computerUseTask: tool({
     description: 'Execute a computer use task for visual research. Use this for: browsing websites visually, extracting data from web pages, competitive research, or any task requiring actual web browsing. This is more expensive and slower than APIs, so only use when necessary.',
-    parameters: z.object({
+    inputSchema: z.object({
       instruction: z.string().describe('Detailed instruction for what to do (e.g., "Go to competitor.com and extract all pricing information")'),
       maxSteps: z.number().optional().default(15).describe('Maximum steps to execute (default: 15)'),
     }),
@@ -1550,7 +1556,7 @@ export const agentTools = {
   // @ts-ignore - AI SDK type mismatch in Vercel build
   researchCompetitorPricing: tool({
     description: 'Research competitor pricing by visiting their website and extracting pricing information. Returns structured pricing data.',
-    parameters: z.object({
+    inputSchema: z.object({
       competitorUrl: z.string().describe('URL of the competitor website'),
     }),
     // @ts-ignore - AI SDK type mismatch
@@ -1583,7 +1589,7 @@ export const agentTools = {
   // @ts-ignore - AI SDK type mismatch in Vercel build
   deepCompanyResearch: tool({
     description: 'Perform deep research on a company by browsing their website and gathering information. Returns a comprehensive report.',
-    parameters: z.object({
+    inputSchema: z.object({
       companyName: z.string().describe('Name of the company to research'),
       companyWebsite: z.string().optional().describe('Company website URL (optional, will search if not provided)'),
     }),
@@ -1621,7 +1627,7 @@ export const agentTools = {
    */
   checkComputerUseStatus: tool({
     description: 'Check if Computer Use capabilities are available and properly configured.',
-    parameters: z.object({}),
+    inputSchema: z.object({}),
     // @ts-ignore
     execute: async () => {
       const status = getComputerUseStatus();
@@ -1633,6 +1639,441 @@ export const agentTools = {
           ? 'Computer Use is available and ready to use'
           : `Computer Use is not available: ${status.reason}`,
       };
+    },
+  }),
+
+  /**
+   * Create a new client
+   */
+  createClient: tool({
+    description: 'Create a new client/customer in the system. Use this when the user wants to add a new company or organization as a client.',
+    inputSchema: z.object({
+      companyName: z.string().min(1).describe('Company or organization name'),
+      primaryContact: z.string().min(1).describe('Name of the primary contact person'),
+      email: z.string().email().describe('Primary email address'),
+      phone: z.string().min(1).describe('Primary phone number'),
+      address: z.string().min(1).describe('Physical address'),
+      billingAddress: z.string().optional().describe('Billing address (defaults to physical address if not provided)'),
+      paymentTerms: z.number().optional().describe('Payment terms in days (default: 30)'),
+      preferredTurnaround: z.number().optional().describe('Preferred turnaround time in days'),
+      specialRequirements: z.string().optional().describe('Any special requirements or notes'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return { error: 'Not authenticated' };
+
+      const { data, error } = await supabase
+        .from('clients')
+        .insert({
+          company_name: params.companyName,
+          primary_contact: params.primaryContact,
+          email: params.email,
+          phone: params.phone,
+          address: params.address,
+          billing_address: params.billingAddress || params.address,
+          payment_terms: params.paymentTerms || 30,
+          preferred_turnaround: params.preferredTurnaround,
+          special_requirements: params.specialRequirements,
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (error) return { error: error.message };
+
+      return {
+        success: true,
+        client: {
+          id: data.id,
+          companyName: data.company_name,
+          email: data.email,
+          primaryContact: data.primary_contact,
+        },
+      };
+    },
+  }),
+
+  /**
+   * Create a new property
+   */
+  createProperty: tool({
+    description: 'Create a new property in the system. Properties represent physical buildings/locations.',
+    inputSchema: z.object({
+      addressLine1: z.string().min(1).describe('Street address (e.g., "123 Main St")'),
+      addressLine2: z.string().optional().describe('Unit, suite, or apartment number'),
+      city: z.string().min(1).describe('City name'),
+      state: z.string().length(2).describe('Two-letter state code (e.g., "CA", "FL")'),
+      postalCode: z.string().describe('ZIP code (5 or 9 digits)'),
+      propertyType: z.enum(['single_family', 'condo', 'multi_family', 'commercial', 'land', 'manufactured']).describe('Type of property'),
+      apn: z.string().optional().describe('Assessor Parcel Number'),
+      yearBuilt: z.number().optional().describe('Year the property was built'),
+      gla: z.number().optional().describe('Gross Living Area in square feet'),
+      lotSize: z.number().optional().describe('Lot size in square feet or acres'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return { error: 'Not authenticated' };
+
+      // Create addr_hash for deduplication
+      const addrHash = `${params.addressLine1.toUpperCase()}|${params.city.toUpperCase()}|${params.state.toUpperCase()}|${params.postalCode.substring(0, 5)}`;
+
+      const { data, error} = await supabase
+        .from('properties')
+        .insert({
+          org_id: user.id,
+          address_line1: params.addressLine1,
+          address_line2: params.addressLine2,
+          city: params.city,
+          state: params.state.toUpperCase(),
+          postal_code: params.postalCode,
+          property_type: params.propertyType,
+          apn: params.apn,
+          year_built: params.yearBuilt,
+          gla: params.gla,
+          lot_size: params.lotSize,
+          addr_hash: addrHash,
+        })
+        .select()
+        .single();
+
+      if (error) return { error: error.message };
+
+      return {
+        success: true,
+        property: {
+          id: data.id,
+          address: `${data.address_line1}, ${data.city}, ${data.state} ${data.postal_code}`,
+          type: data.property_type,
+        },
+      };
+    },
+  }),
+
+  /**
+   * Create a new order
+   */
+  createOrder: tool({
+    description: 'Create a new appraisal order in the system. Orders represent work requests from clients.',
+    inputSchema: z.object({
+      clientId: z.string().uuid().describe('UUID of the client placing the order'),
+      orderNumber: z.string().min(1).describe('Unique order number/reference'),
+      propertyAddress: z.string().min(1).describe('Property address'),
+      propertyCity: z.string().optional().describe('Property city'),
+      propertyState: z.string().optional().describe('Property state'),
+      propertyZip: z.string().optional().describe('Property ZIP code'),
+      propertyType: z.string().min(1).describe('Type of property (e.g., "Single Family", "Condo")'),
+      orderType: z.string().min(1).describe('Type of appraisal order'),
+      borrowerName: z.string().optional().describe('Name of the borrower'),
+      dueDate: z.string().optional().describe('Due date in ISO format (YYYY-MM-DD)'),
+      feeAmount: z.number().optional().describe('Fee amount for this order'),
+      priority: z.enum(['low', 'normal', 'high', 'urgent']).optional().describe('Order priority'),
+      notes: z.string().optional().describe('Additional notes or instructions'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return { error: 'Not authenticated' };
+
+      const { data, error } = await supabase
+        .from('orders')
+        .insert({
+          org_id: user.id,
+          client_id: params.clientId,
+          order_number: params.orderNumber,
+          property_address: params.propertyAddress,
+          property_city: params.propertyCity,
+          property_state: params.propertyState,
+          property_zip: params.propertyZip,
+          property_type: params.propertyType,
+          order_type: params.orderType,
+          borrower_name: params.borrowerName,
+          due_date: params.dueDate,
+          fee_amount: params.feeAmount,
+          priority: params.priority || 'normal',
+          status: 'pending',
+          notes: params.notes,
+          created_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (error) return { error: error.message };
+
+      return {
+        success: true,
+        order: {
+          id: data.id,
+          orderNumber: data.order_number,
+          propertyAddress: data.property_address,
+          status: data.status,
+        },
+      };
+    },
+  }),
+
+  /**
+   * Read a file from the codebase
+   */
+  readFile: tool({
+    description: 'Read the contents of a file from the codebase. Use this to examine existing code, configuration files, or any text-based files.',
+    inputSchema: z.object({
+      filePath: z.string().min(1).describe('Relative path from project root (e.g., "src/app/page.tsx")'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      try {
+        const projectRoot = process.cwd();
+        const fullPath = path.join(projectRoot, params.filePath);
+
+        // Security: ensure we're not reading outside project
+        if (!fullPath.startsWith(projectRoot)) {
+          return { error: 'Access denied: path outside project root' };
+        }
+
+        const content = await fs.readFile(fullPath, 'utf-8');
+        const lines = content.split('\n');
+
+        return {
+          success: true,
+          filePath: params.filePath,
+          content,
+          lineCount: lines.length,
+          size: Buffer.byteLength(content, 'utf-8'),
+        };
+      } catch (error: any) {
+        return { error: error.message };
+      }
+    },
+  }),
+
+  /**
+   * Write a file to the codebase
+   */
+  writeFile: tool({
+    description: 'Create a new file or overwrite an existing file in the codebase. Use this to create new code files, configs, or documentation.',
+    inputSchema: z.object({
+      filePath: z.string().min(1).describe('Relative path from project root (e.g., "src/utils/helper.ts")'),
+      content: z.string().describe('The complete file content to write'),
+      createDirs: z.boolean().optional().describe('Create parent directories if they don\'t exist (default: true)'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      try {
+        const projectRoot = process.cwd();
+        const fullPath = path.join(projectRoot, params.filePath);
+
+        // Security: ensure we're not writing outside project
+        if (!fullPath.startsWith(projectRoot)) {
+          return { error: 'Access denied: path outside project root' };
+        }
+
+        // Create parent directories if needed
+        if (params.createDirs !== false) {
+          await fs.mkdir(path.dirname(fullPath), { recursive: true });
+        }
+
+        await fs.writeFile(fullPath, params.content, 'utf-8');
+
+        return {
+          success: true,
+          filePath: params.filePath,
+          size: Buffer.byteLength(params.content, 'utf-8'),
+          message: `File written successfully: ${params.filePath}`,
+        };
+      } catch (error: any) {
+        return { error: error.message };
+      }
+    },
+  }),
+
+  /**
+   * Edit a file by replacing text
+   */
+  editFile: tool({
+    description: 'Edit an existing file by replacing specific text. Use this to make targeted changes to code without rewriting the entire file.',
+    inputSchema: z.object({
+      filePath: z.string().min(1).describe('Relative path from project root'),
+      oldText: z.string().min(1).describe('The exact text to find and replace'),
+      newText: z.string().describe('The new text to replace it with'),
+      replaceAll: z.boolean().optional().describe('Replace all occurrences (default: false, replaces only first)'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      try {
+        const projectRoot = process.cwd();
+        const fullPath = path.join(projectRoot, params.filePath);
+
+        // Security: ensure we're not editing outside project
+        if (!fullPath.startsWith(projectRoot)) {
+          return { error: 'Access denied: path outside project root' };
+        }
+
+        const content = await fs.readFile(fullPath, 'utf-8');
+
+        // Check if old text exists
+        if (!content.includes(params.oldText)) {
+          return { error: `Text not found in file: "${params.oldText.substring(0, 50)}..."` };
+        }
+
+        // Replace text
+        const newContent = params.replaceAll
+          ? content.split(params.oldText).join(params.newText)
+          : content.replace(params.oldText, params.newText);
+
+        await fs.writeFile(fullPath, newContent, 'utf-8');
+
+        return {
+          success: true,
+          filePath: params.filePath,
+          replacements: params.replaceAll
+            ? content.split(params.oldText).length - 1
+            : 1,
+          message: `File edited successfully: ${params.filePath}`,
+        };
+      } catch (error: any) {
+        return { error: error.message };
+      }
+    },
+  }),
+
+  /**
+   * List files matching a pattern
+   */
+  listFiles: tool({
+    description: 'List files in the codebase matching a glob pattern. Use this to explore the project structure or find specific files.',
+    inputSchema: z.object({
+      pattern: z.string().min(1).describe('Glob pattern (e.g., "src/**/*.tsx", "*.json")'),
+      maxResults: z.number().optional().describe('Maximum number of results to return (default: 50)'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      try {
+        const { stdout } = await execAsync(
+          `find . -type f -path "./${params.pattern}" | head -n ${params.maxResults || 50}`,
+          { cwd: process.cwd(), maxBuffer: 1024 * 1024 }
+        );
+
+        const files = stdout
+          .trim()
+          .split('\n')
+          .filter(f => f)
+          .map(f => f.replace(/^\.\//, ''));
+
+        return {
+          success: true,
+          pattern: params.pattern,
+          files,
+          count: files.length,
+        };
+      } catch (error: any) {
+        return { error: error.message };
+      }
+    },
+  }),
+
+  /**
+   * Search for code patterns
+   */
+  searchCode: tool({
+    description: 'Search for text or code patterns across the codebase using grep. Use this to find where specific functions, classes, or patterns are used.',
+    inputSchema: z.object({
+      searchTerm: z.string().min(1).describe('Text or regex pattern to search for'),
+      filePattern: z.string().optional().describe('Limit search to files matching pattern (e.g., "*.ts", "src/**/*.tsx")'),
+      maxResults: z.number().optional().describe('Maximum number of results (default: 20)'),
+      caseSensitive: z.boolean().optional().describe('Case sensitive search (default: false)'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      try {
+        const caseFlag = params.caseSensitive ? '' : '-i';
+        const filePattern = params.filePattern || '*';
+        const maxResults = params.maxResults || 20;
+
+        const { stdout } = await execAsync(
+          `grep -r ${caseFlag} -n "${params.searchTerm}" --include="${filePattern}" . | head -n ${maxResults}`,
+          { cwd: process.cwd(), maxBuffer: 1024 * 1024 }
+        );
+
+        const results = stdout
+          .trim()
+          .split('\n')
+          .filter(line => line)
+          .map(line => {
+            const match = line.match(/^\.\/([^:]+):(\d+):(.*)$/);
+            if (match) {
+              return {
+                file: match[1],
+                line: parseInt(match[2]),
+                content: match[3].trim(),
+              };
+            }
+            return null;
+          })
+          .filter(r => r !== null);
+
+        return {
+          success: true,
+          searchTerm: params.searchTerm,
+          results,
+          count: results.length,
+        };
+      } catch (error: any) {
+        // grep returns error code 1 if no matches found
+        if (error.code === 1) {
+          return {
+            success: true,
+            searchTerm: params.searchTerm,
+            results: [],
+            count: 0,
+          };
+        }
+        return { error: error.message };
+      }
+    },
+  }),
+
+  /**
+   * Run a shell command
+   */
+  runCommand: tool({
+    description: 'Execute a shell command in the project directory. Use this to run tests, build commands, npm scripts, git operations, etc. Be careful with destructive commands.',
+    inputSchema: z.object({
+      command: z.string().min(1).describe('Shell command to execute (e.g., "npm test", "git status")'),
+      timeout: z.number().optional().describe('Timeout in milliseconds (default: 30000)'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      try {
+        const { stdout, stderr } = await execAsync(params.command, {
+          cwd: process.cwd(),
+          timeout: params.timeout || 30000,
+          maxBuffer: 1024 * 1024 * 5, // 5MB
+        });
+
+        return {
+          success: true,
+          command: params.command,
+          stdout: stdout || '(empty)',
+          stderr: stderr || '(empty)',
+        };
+      } catch (error: any) {
+        return {
+          success: false,
+          command: params.command,
+          error: error.message,
+          stdout: error.stdout || '',
+          stderr: error.stderr || '',
+          exitCode: error.code,
+        };
+      }
     },
   }),
 };
