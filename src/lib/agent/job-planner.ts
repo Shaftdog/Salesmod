@@ -500,13 +500,11 @@ async function getTargetContacts(
         last_name,
         email,
         client_id,
-        clients!contacts_client_id_fkey!inner(company_name)
+        clients!contacts_client_id_fkey!inner(company_name, org_id)
       `)
       .in('id', input.contact_ids)
+      .eq('clients.org_id', orgId)
       .not('email', 'is', null);
-
-    // TODO: Add org_id filter after migration is complete
-    // .eq('clients.org_id', orgId)
 
     if (error) {
       console.error('[getTargetContacts] Failed to fetch contacts by IDs:', error);
@@ -542,11 +540,9 @@ async function getTargetContacts(
 
     let clientQuery = supabase
       .from('clients')
-      .select('id, company_name, client_type, is_active, email, primary_contact')
+      .select('id, company_name, client_type, is_active, email, primary_contact, org_id')
+      .eq('org_id', orgId)
       .not('email', 'is', null);
-
-    // TODO: Add org_id filter after migration is complete
-    // .eq('org_id', orgId)
 
     // Apply filters
     if (filter.client_type) {
@@ -619,13 +615,12 @@ async function getTargetContacts(
         id,
         company_name,
         client_type,
-        is_active
+        is_active,
+        org_id
       )
     `)
+    .eq('clients.org_id', orgId)
     .not('email', 'is', null);
-
-  // TODO: Add org_id filter after migration is complete
-  // .eq('clients.org_id', orgId)
 
   // Apply filters
   if (filter.client_type) {
