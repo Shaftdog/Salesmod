@@ -214,58 +214,144 @@ You can ask clarifying questions BEFORE taking action, but once the user confirm
       content: m.content
     }));
 
-    // Create streaming response
-    const stream = await anthropicClient.messages.stream({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 1500,
-      temperature: 0.2,
-      system: systemPrompt,
-      messages: anthropicMessages,
-      tools,
-    });
-
-    // Handle tool calls
-    stream.on('message', async (message) => {
-      if (message.stop_reason === 'tool_use') {
-        for (const content of message.content) {
-          if (content.type === 'tool_use' && content.name === 'storeRejectionFeedback') {
-            const input = content.input as { reason: string; rule?: string };
-            try {
-              await supabase.from('agent_memories').insert({
-                org_id: user.id,
-                scope: 'card_feedback',
-                key: `rejection_${cardContext?.type}_${Date.now()}`,
-                content: {
-                  type: 'rejection_feedback',
-                  card_id: cardId,
-                  reason: input.reason,
-                  rule: input.rule,
-                  timestamp: new Date().toISOString(),
-                },
-                importance: 0.9,
-                last_used_at: new Date().toISOString(),
-              });
-              console.log('[CardReview] Feedback stored successfully');
-            } catch (error) {
-              console.error('[CardReview] Error storing feedback:', error);
-            }
-          }
-        }
-      }
-    });
+    // Create streaming response with proper tool handling
+    let conversationMessages = [...anthropicMessages];
+    let toolCallsDetected = false;
 
     // Convert Anthropic stream to web stream
     const encoder = new TextEncoder();
     const webStream = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of stream) {
-            if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-              controller.enqueue(encoder.encode(chunk.delta.text));
+          let currentToolUseId: string | null = null;
+          let currentToolName: string | null = null;
+
+          while (true) {
+            const stream = await anthropicClient.messages.stream({
+              model: 'claude-sonnet-4-5-20250929',
+              max_tokens: 1500,
+              temperature: 0.2,
+              system: systemPrompt,
+              messages: conversationMessages,
+              tools,
+            });
+
+            let assistantMessage = '';
+            let toolUses: any[] = [];
+
+            for await (const chunk of stream) {
+              if (chunk.type === 'content_block_start') {
+                if (chunk.content_block.type === 'tool_use') {
+                  currentToolUseId = chunk.content_block.id;
+                  currentToolName = chunk.content_block.name;
+                  toolCallsDetected = true;
+                }
+              } else if (chunk.type === 'content_block_delta') {
+                if (chunk.delta.type === 'text_delta') {
+                  assistantMessage += chunk.delta.text;
+                  controller.enqueue(encoder.encode(chunk.delta.text));
+                } else if (chunk.delta.type === 'input_json_delta' && currentToolUseId) {
+                  // Accumulate tool input
+                  if (!toolUses.find(t => t.id === currentToolUseId)) {
+                    toolUses.push({
+                      id: currentToolUseId,
+                      name: currentToolName,
+                      input_json: chunk.delta.partial_json || ''
+                    });
+                  } else {
+                    const tool = toolUses.find(t => t.id === currentToolUseId);
+                    if (tool) {
+                      tool.input_json += chunk.delta.partial_json || '';
+                    }
+                  }
+                }
+              } else if (chunk.type === 'message_stop') {
+                // Handle tool calls if any
+                if (toolUses.length > 0) {
+                  const toolResults = [];
+
+                  for (const toolUse of toolUses) {
+                    if (toolUse.name === 'storeRejectionFeedback') {
+                      try {
+                        const input = JSON.parse(toolUse.input_json) as { reason: string; rule?: string };
+
+                        await supabase.from('agent_memories').insert({
+                          org_id: user.id,
+                          scope: 'card_feedback',
+                          key: `rejection_${cardContext?.type}_${Date.now()}`,
+                          content: {
+                            type: 'rejection_feedback',
+                            card_id: cardId,
+                            reason: input.reason,
+                            rule: input.rule,
+                            timestamp: new Date().toISOString(),
+                          },
+                          importance: 0.9,
+                          last_used_at: new Date().toISOString(),
+                        });
+
+                        console.log('[CardReview] Feedback stored successfully');
+
+                        toolResults.push({
+                          type: 'tool_result' as const,
+                          tool_use_id: toolUse.id,
+                          content: 'Feedback stored successfully'
+                        });
+
+                        // Send confirmation to user
+                        const confirmMsg = '\n\n✓ Feedback stored successfully';
+                        controller.enqueue(encoder.encode(confirmMsg));
+
+                      } catch (error) {
+                        console.error('[CardReview] Error storing feedback:', error);
+                        toolResults.push({
+                          type: 'tool_result' as const,
+                          tool_use_id: toolUse.id,
+                          content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                          is_error: true
+                        });
+                      }
+                    }
+                  }
+
+                  // If we had tool calls, continue conversation with results
+                  if (toolResults.length > 0) {
+                    conversationMessages.push({
+                      role: 'assistant',
+                      content: [
+                        ...toolUses.map(t => ({
+                          type: 'tool_use' as const,
+                          id: t.id,
+                          name: t.name,
+                          input: JSON.parse(t.input_json)
+                        }))
+                      ]
+                    });
+
+                    conversationMessages.push({
+                      role: 'user',
+                      content: toolResults
+                    });
+
+                    // Continue the loop for follow-up
+                    continue;
+                  }
+                }
+
+                // No more tool calls, we're done
+                break;
+              }
+            }
+
+            // If no tool calls were made, we're done
+            if (toolUses.length === 0) {
+              break;
             }
           }
+
           controller.close();
         } catch (error) {
+          console.error('[CardReview] Stream error:', error);
           controller.error(error);
         }
       }
