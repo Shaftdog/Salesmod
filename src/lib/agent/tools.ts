@@ -277,6 +277,100 @@ export const agentTools = {
   }),
 
   /**
+   * Create a new contact
+   */
+  // @ts-ignore - AI SDK type mismatch in Vercel build
+  createContact: tool({
+    description: 'Create a new contact for a client. Use this when user wants to add a person to their contact database or associate someone with a client.',
+    parameters: z.object({
+      clientId: z.string().uuid().describe('Client UUID to associate contact with'),
+      firstName: z.string().min(1).describe('Contact first name'),
+      lastName: z.string().min(1).describe('Contact last name'),
+      email: z.string().email().optional().describe('Contact email address'),
+      phone: z.string().optional().describe('Office phone number'),
+      mobile: z.string().optional().describe('Mobile phone number'),
+      title: z.string().optional().describe('Job title'),
+      department: z.string().optional().describe('Department'),
+      isPrimary: z.boolean().optional().default(false).describe('Is this the primary contact?'),
+      primaryRoleCode: z.string().optional().describe('Primary role code'),
+      notes: z.string().optional().describe('Additional notes'),
+    }),
+    // @ts-ignore - AI SDK type mismatch
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return { error: 'Not authenticated' };
+
+      // Verify client exists and user has access to it
+      const { data: client, error: clientError } = await supabase
+        .from('clients')
+        .select('id, company_name')
+        .eq('id', params.clientId)
+        .single();
+
+      if (clientError || !client) {
+        return { error: 'Client not found or access denied' };
+      }
+
+      // Create contact
+      const { data, error } = await supabase
+        .from('contacts')
+        .insert({
+          client_id: params.clientId,
+          first_name: params.firstName,
+          last_name: params.lastName,
+          email: params.email || null,
+          phone: params.phone || null,
+          mobile: params.mobile || null,
+          title: params.title || null,
+          department: params.department || null,
+          is_primary: params.isPrimary || false,
+          primary_role_code: params.primaryRoleCode || null,
+          notes: params.notes || null,
+        })
+        .select(`
+          id,
+          first_name,
+          last_name,
+          email,
+          phone,
+          mobile,
+          title,
+          is_primary,
+          client:clients!contacts_client_id_fkey(
+            id,
+            company_name
+          )
+        `)
+        .single();
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      return {
+        success: true,
+        contact: {
+          id: data.id,
+          name: `${data.first_name} ${data.last_name}`,
+          firstName: data.first_name,
+          lastName: data.last_name,
+          email: data.email,
+          phone: data.phone,
+          mobile: data.mobile,
+          title: data.title,
+          isPrimary: data.is_primary,
+          client: {
+            id: (data.client as any)?.id,
+            name: (data.client as any)?.company_name,
+          },
+        },
+      };
+    },
+  }),
+
+  /**
    * Get current goals and progress
    */
   getGoals: tool({
