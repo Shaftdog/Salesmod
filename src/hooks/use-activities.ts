@@ -17,21 +17,50 @@ export function useActivities(clientId?: string) {
           client:clients(*),
           contact:contacts(*),
           order:orders(*),
+          deal:deals(*),
           creator:profiles!activities_created_by_fkey(*),
           assignee:profiles!activities_assigned_to_fkey(*)
         `)
         .order('created_at', { ascending: false })
-      
+
       if (clientId) {
         query = query.eq('client_id', clientId)
       }
-      
+
       const { data, error } = await query
-      
+
       if (error) throw error
       return (data || []).map(transformActivity)
     },
     enabled: !clientId || !!clientId,
+    staleTime: 1000 * 60, // 1 minute
+  })
+}
+
+export function useDealActivities(dealId?: string) {
+  const supabase = createClient()
+
+  return useQuery({
+    queryKey: ['activities', 'deal', dealId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('activities')
+        .select(`
+          *,
+          client:clients(*),
+          contact:contacts(*),
+          order:orders(*),
+          deal:deals(*),
+          creator:profiles!activities_created_by_fkey(*),
+          assignee:profiles!activities_assigned_to_fkey(*)
+        `)
+        .eq('deal_id', dealId)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      return (data || []).map(transformActivity)
+    },
+    enabled: !!dealId,
     staleTime: 1000 * 60, // 1 minute
   })
 }
@@ -49,12 +78,13 @@ export function useActivity(id: string) {
           client:clients(*),
           contact:contacts(*),
           order:orders(*),
+          deal:deals(*),
           creator:profiles!activities_created_by_fkey(*),
           assignee:profiles!activities_assigned_to_fkey(*)
         `)
         .eq('id', id)
         .single()
-      
+
       if (error) throw error
       return transformActivity(data)
     },
@@ -77,11 +107,12 @@ export function useCreateActivity() {
           client:clients(*),
           contact:contacts(*),
           order:orders(*),
+          deal:deals(*),
           creator:profiles!activities_created_by_fkey(*),
           assignee:profiles!activities_assigned_to_fkey(*)
         `)
         .single()
-      
+
       if (error) throw error
       return transformActivity(data)
     },
@@ -89,6 +120,9 @@ export function useCreateActivity() {
       queryClient.invalidateQueries({ queryKey: ['activities'] })
       if (data.clientId) {
         queryClient.invalidateQueries({ queryKey: ['activities', 'client', data.clientId] })
+      }
+      if (data.dealId) {
+        queryClient.invalidateQueries({ queryKey: ['activities', 'deal', data.dealId] })
       }
       toast({
         title: "Activity Logged",
@@ -122,11 +156,12 @@ export function useUpdateActivity() {
           client:clients(*),
           contact:contacts(*),
           order:orders(*),
+          deal:deals(*),
           creator:profiles!activities_created_by_fkey(*),
           assignee:profiles!activities_assigned_to_fkey(*)
         `)
         .single()
-      
+
       if (error) throw error
       return transformActivity(data)
     },
@@ -135,6 +170,9 @@ export function useUpdateActivity() {
       queryClient.invalidateQueries({ queryKey: ['activities', data.id] })
       if (data.clientId) {
         queryClient.invalidateQueries({ queryKey: ['activities', 'client', data.clientId] })
+      }
+      if (data.dealId) {
+        queryClient.invalidateQueries({ queryKey: ['activities', 'deal', data.dealId] })
       }
       toast({
         title: "Activity Updated",

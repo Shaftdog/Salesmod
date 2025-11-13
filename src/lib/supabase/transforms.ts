@@ -137,6 +137,7 @@ export function transformActivity(dbActivity: any): Activity {
     clientId: dbActivity.client_id,
     contactId: dbActivity.contact_id,
     orderId: dbActivity.order_id,
+    dealId: dbActivity.deal_id,
     activityType: dbActivity.activity_type,
     subject: dbActivity.subject,
     description: dbActivity.description,
@@ -152,6 +153,7 @@ export function transformActivity(dbActivity: any): Activity {
     client: dbActivity.client ? transformClient(dbActivity.client) : undefined,
     contact: dbActivity.contact ? transformContact(dbActivity.contact) : undefined,
     order: dbActivity.order ? transformOrder(dbActivity.order) : undefined,
+    deal: dbActivity.deal ? transformDeal(dbActivity.deal) : undefined,
     creator: dbActivity.creator ? transformUser(dbActivity.creator) : undefined,
     assignee: dbActivity.assignee ? transformUser(dbActivity.assignee) : undefined,
   }

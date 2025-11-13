@@ -218,6 +218,7 @@ export interface Activity {
   clientId?: string;
   contactId?: string;
   orderId?: string;
+  dealId?: string;
   activityType: ActivityType;
   subject: string;
   description?: string;
@@ -230,11 +231,12 @@ export interface Activity {
   assignedTo?: string;
   createdAt: string;
   updatedAt: string;
-  
+
   // Relations
   client?: Client;
   contact?: Contact;
   order?: Order;
+  deal?: Deal;
   creator?: User;
   assignee?: User;
 }
