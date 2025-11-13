@@ -1,13 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useDeal } from "@/hooks/use-deals";
+import { useDeal, useUpdateDeal } from "@/hooks/use-deals";
 import { useDealActivities } from "@/hooks/use-activities";
+import { useClients } from "@/hooks/use-clients";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DealActivityTimeline } from "@/components/activities/deal-activity-timeline";
+import { DealForm } from "@/components/deals/deal-form";
 import {
   ArrowLeft,
   DollarSign,
@@ -21,6 +24,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/utils";
+import { toast } from "sonner";
 
 const stageColors: Record<string, string> = {
   lead: "bg-gray-100 text-gray-800 border-gray-300",
@@ -44,9 +48,25 @@ export default function DealDetailPage() {
   const params = useParams();
   const router = useRouter();
   const dealId = params?.id as string;
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const { data: deal, isLoading: dealLoading } = useDeal(dealId);
   const { data: activities = [], isLoading: activitiesLoading } = useDealActivities(dealId);
+  const { clients, isLoading: clientsLoading } = useClients();
+  const updateDeal = useUpdateDeal();
+
+  const handleUpdateDeal = async (data: any) => {
+    try {
+      await updateDeal.mutateAsync({
+        id: dealId,
+        ...data,
+      });
+      toast.success("Deal updated successfully");
+      setIsEditDialogOpen(false);
+    } catch (error) {
+      toast.error("Failed to update deal");
+    }
+  };
 
   if (dealLoading) {
     return (
@@ -94,12 +114,22 @@ export default function DealDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
             <Edit className="mr-2 h-4 w-4" />
             Edit Deal
           </Button>
         </div>
       </div>
+
+      {/* Edit Deal Dialog */}
+      <DealForm
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        onSubmit={handleUpdateDeal}
+        clients={clients}
+        deal={deal}
+        isLoading={updateDeal.isPending}
+      />
 
       {/* Deal Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

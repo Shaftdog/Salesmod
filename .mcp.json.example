@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "vercel": {
+      "command": "node",
+      "args": [
+        "/Users/YOUR_USERNAME/.mcp-servers/mcp-vercel/build/index.js"
+      ],
+      "env": {
+        "VERCEL_API_TOKEN": "your-vercel-api-token-here"
+      }
+    }
+  }
+}

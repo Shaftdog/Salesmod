@@ -40,6 +40,63 @@ next-env.d.ts
 .genkit/*
 .env*
 
+# MCP configuration (contains API tokens)
+.mcp.json
+
 # firebase
 firebase-debug.log
 firestore-debug.log
+
+# Ephemeral documentation (status reports, progress updates)
+*-COMPLETE.md
+*-STATUS.md
+*-FIX.md
+*-FIX-*.md
+*-SUMMARY.md
+*-REPORT.md
+*-FIXED.md
+*-READY.md
+
+# Debug and diagnostic scripts (temporary utilities)
+check-*.js
+check-*.py
+check-*.sql
+test-*.js
+test-*.py
+test-*.sql
+test-*.sh
+diagnose-*.sql
+diagnose-*.py
+verify-*.js
+verify-*.py
+apply-*.js
+apply-*.py
+fix-*.js
+fix-*.py
+run-*.js
+enable-*.js
+trigger-*.js
+trigger-*.sh
+clear-*.py
+reset-*.py
+recreate-*.py
+start-*.py
+trace-*.py
+execute-*.js
+example-*.sql
+*.pyc
+__pycache__/
+
+# Test outputs and reports
+/playwright-report/
+/test-results/
+/e2e/*.png
+/e2e/*.webm
+
+# Editor directories
+.cursor/
+.vscode/settings.json
+
+# Temporary files
+debug-*.png
+test-structure.txt
