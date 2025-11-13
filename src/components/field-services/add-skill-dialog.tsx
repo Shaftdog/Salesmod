@@ -101,7 +101,7 @@ export function AddSkillDialog({
                       </div>
                     </SelectItem>
                   ))}
-                </ScrollContent>
+                </ScrollArea>
               </SelectContent>
             </Select>
             {selectedSkill?.description && (
