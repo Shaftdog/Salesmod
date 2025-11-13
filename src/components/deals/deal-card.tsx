@@ -5,6 +5,7 @@ import type { Deal } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 import { Calendar, DollarSign, TrendingUp, MoreHorizontal, Edit, Trash2 } from "lucide-react";
 import { format } from "date-fns";
+import { useRouter } from "next/navigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,10 +30,19 @@ type DealCardProps = {
 };
 
 export function DealCard({ deal, onEdit, onDelete, onStageChange }: DealCardProps) {
+  const router = useRouter();
   const weightedValue = deal.value ? (deal.value * deal.probability) / 100 : 0;
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't navigate if clicking on the dropdown menu
+    if ((e.target as HTMLElement).closest('[role="button"]')) {
+      return;
+    }
+    router.push(`/deals/${deal.id}`);
+  };
+
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={handleCardClick}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex-1">
@@ -41,20 +51,25 @@ export function DealCard({ deal, onEdit, onDelete, onStageChange }: DealCardProp
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {onEdit && (
-                <DropdownMenuItem onClick={() => onEdit(deal)}>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(deal); }}>
                   <Edit className="mr-2 h-4 w-4" />
                   Edit
                 </DropdownMenuItem>
               )}
               {onDelete && (
-                <DropdownMenuItem 
-                  onClick={() => onDelete(deal)}
+                <DropdownMenuItem
+                  onClick={(e) => { e.stopPropagation(); onDelete(deal); }}
                   className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
