@@ -730,3 +730,157 @@ export interface EquipmentAssignment {
   assigner?: User;
   receiver?: User;
 }
+
+// =============================================
+// PHASE 2: SCHEDULING & DISPATCH
+// =============================================
+
+// Bookings
+export const bookingTypes = ['inspection', 'follow_up', 'reinspection', 'consultation', 'maintenance', 'training', 'other'] as const;
+export type BookingType = typeof bookingTypes[number];
+
+export const bookingStatuses = ['requested', 'scheduled', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show', 'rescheduled'] as const;
+export type BookingStatus = typeof bookingStatuses[number];
+
+export interface Booking {
+  id: string;
+  orgId: string;
+  orderId?: string;
+  resourceId: string;
+  territoryId?: string;
+  bookingNumber: string;
+  bookingType: BookingType;
+  scheduledStart: string;
+  scheduledEnd: string;
+  actualStart?: string;
+  actualEnd?: string;
+  durationMinutes?: number;
+  actualDurationMinutes?: number;
+  status: BookingStatus;
+  propertyAddress: string;
+  propertyCity?: string;
+  propertyState?: string;
+  propertyZip?: string;
+  latitude?: number;
+  longitude?: number;
+  accessInstructions?: string;
+  specialInstructions?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  estimatedTravelTimeMinutes?: number;
+  actualTravelTimeMinutes?: number;
+  estimatedMileage?: number;
+  actualMileage?: number;
+  routeData?: any;
+  originalBookingId?: string;
+  rescheduledBookingId?: string;
+  rescheduleReason?: string;
+  rescheduleCount: number;
+  cancelledAt?: string;
+  cancelledBy?: string;
+  cancellationReason?: string;
+  completedAt?: string;
+  completionNotes?: string;
+  customerSignature?: string;
+  customerRating?: number;
+  customerFeedback?: string;
+  confirmationSentAt?: string;
+  reminderSentAt?: string;
+  reminderCount: number;
+  assignedBy?: string;
+  assignedAt?: string;
+  autoAssigned: boolean;
+  metadata?: any;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  order?: Order;
+  resource?: BookableResource;
+  territory?: ServiceTerritory;
+  assigner?: User;
+  canceller?: User;
+  originalBooking?: Booking;
+  rescheduledBooking?: Booking;
+}
+
+// Booking Conflicts
+export const conflictTypes = ['time_overlap', 'travel_time', 'double_booked', 'capacity_exceeded', 'territory_mismatch', 'skill_missing'] as const;
+export type ConflictType = typeof conflictTypes[number];
+
+export const conflictSeverities = ['info', 'warning', 'error'] as const;
+export type ConflictSeverity = typeof conflictSeverities[number];
+
+export interface BookingConflict {
+  id: string;
+  bookingId1: string;
+  bookingId2: string;
+  conflictType: ConflictType;
+  severity: ConflictSeverity;
+  overlapMinutes?: number;
+  requiredTravelMinutes?: number;
+  details?: any;
+  resolved: boolean;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  resolutionNotes?: string;
+  createdAt: string;
+
+  // Relations
+  booking1?: Booking;
+  booking2?: Booking;
+  resolver?: User;
+}
+
+// Time Entries
+export const timeEntryTypes = ['clock_in', 'clock_out', 'break_start', 'break_end', 'travel_start', 'travel_end'] as const;
+export type TimeEntryType = typeof timeEntryTypes[number];
+
+export interface TimeEntry {
+  id: string;
+  bookingId: string;
+  resourceId: string;
+  entryType: TimeEntryType;
+  timestamp: string;
+  latitude?: number;
+  longitude?: number;
+  locationAccuracyMeters?: number;
+  deviceType?: string;
+  deviceId?: string;
+  ipAddress?: string;
+  notes?: string;
+  metadata?: any;
+  createdAt: string;
+
+  // Relations
+  booking?: Booking;
+  resource?: BookableResource;
+}
+
+// Route Plans
+export const routeOptimizationStatuses = ['pending', 'optimizing', 'optimized', 'failed'] as const;
+export type RouteOptimizationStatus = typeof routeOptimizationStatuses[number];
+
+export interface RoutePlan {
+  id: string;
+  resourceId: string;
+  planDate: string;
+  optimizationStatus: RouteOptimizationStatus;
+  optimizedAt?: string;
+  totalDistanceMiles?: number;
+  totalDriveTimeMinutes?: number;
+  totalOnSiteTimeMinutes?: number;
+  totalBreaksMinutes?: number;
+  bookingIds?: string[];
+  waypoints?: any;
+  routePolyline?: string;
+  routeData?: any;
+  metadata?: any;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  resource?: BookableResource;
+  bookings?: Booking[];
+}

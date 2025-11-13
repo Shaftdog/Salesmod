@@ -19,7 +19,11 @@ import type {
   ResourceSkill,
   ResourceAvailability,
   Equipment,
-  EquipmentAssignment
+  EquipmentAssignment,
+  Booking,
+  BookingConflict,
+  TimeEntry,
+  RoutePlan
 } from '@/lib/types'
 
 export function transformClient(dbClient: any): Client {
@@ -484,5 +488,137 @@ export function transformEquipmentAssignment(dbAssignment: any): EquipmentAssign
     resource: dbAssignment.resource ? transformBookableResource(dbAssignment.resource) : undefined,
     assigner: dbAssignment.assigner ? transformUser(dbAssignment.assigner) : undefined,
     receiver: dbAssignment.receiver ? transformUser(dbAssignment.receiver) : undefined,
+  }
+}
+
+// =============================================
+// PHASE 2: SCHEDULING & DISPATCH TRANSFORMS
+// =============================================
+
+export function transformBooking(dbBooking: any): Booking {
+  return {
+    id: dbBooking.id,
+    orgId: dbBooking.org_id,
+    orderId: dbBooking.order_id,
+    resourceId: dbBooking.resource_id,
+    territoryId: dbBooking.territory_id,
+    bookingNumber: dbBooking.booking_number,
+    bookingType: dbBooking.booking_type,
+    scheduledStart: dbBooking.scheduled_start,
+    scheduledEnd: dbBooking.scheduled_end,
+    actualStart: dbBooking.actual_start,
+    actualEnd: dbBooking.actual_end,
+    durationMinutes: dbBooking.duration_minutes,
+    actualDurationMinutes: dbBooking.actual_duration_minutes,
+    status: dbBooking.status,
+    propertyAddress: dbBooking.property_address,
+    propertyCity: dbBooking.property_city,
+    propertyState: dbBooking.property_state,
+    propertyZip: dbBooking.property_zip,
+    latitude: dbBooking.latitude,
+    longitude: dbBooking.longitude,
+    accessInstructions: dbBooking.access_instructions,
+    specialInstructions: dbBooking.special_instructions,
+    contactName: dbBooking.contact_name,
+    contactPhone: dbBooking.contact_phone,
+    contactEmail: dbBooking.contact_email,
+    estimatedTravelTimeMinutes: dbBooking.estimated_travel_time_minutes,
+    actualTravelTimeMinutes: dbBooking.actual_travel_time_minutes,
+    estimatedMileage: dbBooking.estimated_mileage,
+    actualMileage: dbBooking.actual_mileage,
+    routeData: dbBooking.route_data,
+    originalBookingId: dbBooking.original_booking_id,
+    rescheduledBookingId: dbBooking.rescheduled_booking_id,
+    rescheduleReason: dbBooking.reschedule_reason,
+    rescheduleCount: dbBooking.reschedule_count,
+    cancelledAt: dbBooking.cancelled_at,
+    cancelledBy: dbBooking.cancelled_by,
+    cancellationReason: dbBooking.cancellation_reason,
+    completedAt: dbBooking.completed_at,
+    completionNotes: dbBooking.completion_notes,
+    customerSignature: dbBooking.customer_signature,
+    customerRating: dbBooking.customer_rating,
+    customerFeedback: dbBooking.customer_feedback,
+    confirmationSentAt: dbBooking.confirmation_sent_at,
+    reminderSentAt: dbBooking.reminder_sent_at,
+    reminderCount: dbBooking.reminder_count,
+    assignedBy: dbBooking.assigned_by,
+    assignedAt: dbBooking.assigned_at,
+    autoAssigned: dbBooking.auto_assigned,
+    metadata: dbBooking.metadata,
+    createdAt: dbBooking.created_at,
+    updatedAt: dbBooking.updated_at,
+    order: dbBooking.orders ? transformOrder(dbBooking.orders) : undefined,
+    resource: dbBooking.bookable_resources ? transformBookableResource(dbBooking.bookable_resources) : undefined,
+    territory: dbBooking.service_territories ? transformServiceTerritory(dbBooking.service_territories) : undefined,
+    assigner: dbBooking.assigner ? transformUser(dbBooking.assigner) : undefined,
+    canceller: dbBooking.canceller ? transformUser(dbBooking.canceller) : undefined,
+    originalBooking: dbBooking.original_booking ? transformBooking(dbBooking.original_booking) : undefined,
+    rescheduledBooking: dbBooking.rescheduled_booking ? transformBooking(dbBooking.rescheduled_booking) : undefined,
+  }
+}
+
+export function transformBookingConflict(dbConflict: any): BookingConflict {
+  return {
+    id: dbConflict.id,
+    bookingId1: dbConflict.booking_id_1,
+    bookingId2: dbConflict.booking_id_2,
+    conflictType: dbConflict.conflict_type,
+    severity: dbConflict.severity,
+    overlapMinutes: dbConflict.overlap_minutes,
+    requiredTravelMinutes: dbConflict.required_travel_minutes,
+    details: dbConflict.details,
+    resolved: dbConflict.resolved,
+    resolvedAt: dbConflict.resolved_at,
+    resolvedBy: dbConflict.resolved_by,
+    resolutionNotes: dbConflict.resolution_notes,
+    createdAt: dbConflict.created_at,
+    booking1: dbConflict.booking_1 ? transformBooking(dbConflict.booking_1) : undefined,
+    booking2: dbConflict.booking_2 ? transformBooking(dbConflict.booking_2) : undefined,
+    resolver: dbConflict.resolver ? transformUser(dbConflict.resolver) : undefined,
+  }
+}
+
+export function transformTimeEntry(dbEntry: any): TimeEntry {
+  return {
+    id: dbEntry.id,
+    bookingId: dbEntry.booking_id,
+    resourceId: dbEntry.resource_id,
+    entryType: dbEntry.entry_type,
+    timestamp: dbEntry.timestamp,
+    latitude: dbEntry.latitude,
+    longitude: dbEntry.longitude,
+    locationAccuracyMeters: dbEntry.location_accuracy_meters,
+    deviceType: dbEntry.device_type,
+    deviceId: dbEntry.device_id,
+    ipAddress: dbEntry.ip_address,
+    notes: dbEntry.notes,
+    metadata: dbEntry.metadata,
+    createdAt: dbEntry.created_at,
+    booking: dbEntry.bookings ? transformBooking(dbEntry.bookings) : undefined,
+    resource: dbEntry.bookable_resources ? transformBookableResource(dbEntry.bookable_resources) : undefined,
+  }
+}
+
+export function transformRoutePlan(dbPlan: any): RoutePlan {
+  return {
+    id: dbPlan.id,
+    resourceId: dbPlan.resource_id,
+    planDate: dbPlan.plan_date,
+    optimizationStatus: dbPlan.optimization_status,
+    optimizedAt: dbPlan.optimized_at,
+    totalDistanceMiles: dbPlan.total_distance_miles,
+    totalDriveTimeMinutes: dbPlan.total_drive_time_minutes,
+    totalOnSiteTimeMinutes: dbPlan.total_on_site_time_minutes,
+    totalBreaksMinutes: dbPlan.total_breaks_minutes,
+    bookingIds: dbPlan.booking_ids,
+    waypoints: dbPlan.waypoints,
+    routePolyline: dbPlan.route_polyline,
+    routeData: dbPlan.route_data,
+    metadata: dbPlan.metadata,
+    createdAt: dbPlan.created_at,
+    updatedAt: dbPlan.updated_at,
+    resource: dbPlan.bookable_resources ? transformBookableResource(dbPlan.bookable_resources) : undefined,
+    bookings: dbPlan.bookings ? dbPlan.bookings.map(transformBooking) : undefined,
   }
 }
