@@ -57,9 +57,20 @@ export default function DealDetailPage() {
 
   const handleUpdateDeal = async (data: any) => {
     try {
+      // Transform camelCase to snake_case for database
+      const dbData = {
+        title: data.title,
+        description: data.description,
+        client_id: data.clientId,
+        value: data.value,
+        probability: data.probability,
+        stage: data.stage,
+        expected_close_date: data.expectedCloseDate?.toISOString(),
+      };
+
       await updateDeal.mutateAsync({
         id: dealId,
-        ...data,
+        ...dbData,
       });
       toast.success("Deal updated successfully");
       setIsEditDialogOpen(false);
