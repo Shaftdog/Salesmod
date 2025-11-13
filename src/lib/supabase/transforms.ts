@@ -122,6 +122,7 @@ export function transformContact(dbContact: any): Contact {
     isPrimary: dbContact.is_primary,
     department: dbContact.department,
     notes: dbContact.notes,
+    tags: dbContact.tags || [],
     primaryRoleCode: dbContact.primary_role_code,
     createdAt: dbContact.created_at,
     updatedAt: dbContact.updated_at,

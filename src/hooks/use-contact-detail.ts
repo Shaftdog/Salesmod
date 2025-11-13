@@ -11,6 +11,7 @@ export interface ContactWithCompany {
   title: string | null;
   department: string | null;
   notes: string | null;
+  tags?: string[];
   is_primary: boolean;
   client_id: string | null;
   primary_role_code?: string | null;

@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Contact } from "@/lib/types";
-import { Mail, Phone, Smartphone, Edit, Trash2, Star } from "lucide-react";
+import { Mail, Phone, Smartphone, Edit, Trash2, Star, AlertTriangle, AlertCircle } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,18 +19,32 @@ type ContactCardProps = {
 
 export function ContactCard({ contact, onEdit, onDelete }: ContactCardProps) {
   const fullName = `${contact.firstName} ${contact.lastName}`;
+  const hasHardBounce = contact.tags?.includes('email_bounced_hard');
+  const hasSoftBounce = contact.tags?.includes('email_bounced_soft');
 
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="pt-6">
         <div className="flex items-start justify-between">
           <div className="flex-1 space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h4 className="font-semibold">{fullName}</h4>
               {contact.isPrimary && (
                 <Badge variant="secondary" className="gap-1">
                   <Star className="h-3 w-3 fill-current" />
                   Primary
+                </Badge>
+              )}
+              {hasHardBounce && (
+                <Badge variant="destructive" className="gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  Hard Bounce
+                </Badge>
+              )}
+              {hasSoftBounce && !hasHardBounce && (
+                <Badge variant="outline" className="gap-1 text-orange-600 border-orange-600">
+                  <AlertTriangle className="h-3 w-3" />
+                  Soft Bounce
                 </Badge>
               )}
             </div>

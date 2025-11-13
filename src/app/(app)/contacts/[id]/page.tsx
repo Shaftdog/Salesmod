@@ -14,19 +14,21 @@ import { CompanyHistoryTimeline } from "@/components/contacts/company-history-ti
 import { TransferCompanyDialog } from "@/components/contacts/transfer-company-dialog";
 import { ContactForm } from "@/components/contacts/contact-form";
 import { RoleBadge } from "@/components/shared/role-badge";
-import { 
+import {
   ArrowLeft,
-  Mail, 
-  Phone, 
-  Smartphone, 
-  Building2, 
+  Mail,
+  Phone,
+  Smartphone,
+  Building2,
   Edit,
   Star,
   Briefcase,
   Calendar,
   Package,
   Target,
-  MessageSquare
+  MessageSquare,
+  AlertCircle,
+  AlertTriangle
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -70,6 +72,8 @@ export default function ContactDetailPage() {
   }
 
   const fullName = `${contact.first_name} ${contact.last_name}`;
+  const hasHardBounce = contact.tags?.includes('email_bounced_hard');
+  const hasSoftBounce = contact.tags?.includes('email_bounced_soft');
 
   const handleEdit = async (data: any) => {
     try {
@@ -121,7 +125,7 @@ export default function ContactDetailPage() {
               </Button>
             </Link>
             <div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-3xl font-bold tracking-tight">{fullName}</h1>
                 {contact.is_primary && (
                   <Badge variant="secondary" className="gap-1">
@@ -129,9 +133,21 @@ export default function ContactDetailPage() {
                     Primary Contact
                   </Badge>
                 )}
-                <RoleBadge 
-                  code={contact.primary_role_code} 
-                  label={contact.role?.label} 
+                {hasHardBounce && (
+                  <Badge variant="destructive" className="gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    Hard Bounce
+                  </Badge>
+                )}
+                {hasSoftBounce && !hasHardBounce && (
+                  <Badge variant="outline" className="gap-1 text-orange-600 border-orange-600">
+                    <AlertTriangle className="h-3 w-3" />
+                    Soft Bounce
+                  </Badge>
+                )}
+                <RoleBadge
+                  code={contact.primary_role_code}
+                  label={contact.role?.label}
                 />
               </div>
               {contact.title && (

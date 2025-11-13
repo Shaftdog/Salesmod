@@ -187,10 +187,11 @@ export interface Contact {
   isPrimary: boolean;
   department?: string;
   notes?: string;
+  tags?: string[];
   primaryRoleCode?: PartyRoleCode | null;
   createdAt: string;
   updatedAt: string;
-  
+
   // Relations
   client?: Client;
   role?: PartyRole;
