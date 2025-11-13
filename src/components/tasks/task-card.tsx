@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Task } from "@/lib/types";
-import { Calendar, User, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Calendar, User, AlertCircle, CheckCircle2, Trash2 } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -25,16 +25,17 @@ type TaskCardProps = {
   task: Task;
   onComplete?: (task: Task) => void;
   onEdit?: (task: Task) => void;
+  onDelete?: (task: Task) => void;
   showClient?: boolean;
 };
 
-export function TaskCard({ task, onComplete, onEdit, showClient = true }: TaskCardProps) {
+export function TaskCard({ task, onComplete, onEdit, onDelete, showClient = true }: TaskCardProps) {
   const isOverdue = task.dueDate && isPast(new Date(task.dueDate)) && task.status !== 'completed';
   const isDueToday = task.dueDate && isToday(new Date(task.dueDate));
 
   return (
     <Card className={cn(
-      "hover:shadow-md transition-shadow cursor-pointer",
+      "group hover:shadow-md transition-shadow cursor-pointer relative",
       task.status === 'completed' && "opacity-60"
     )} onClick={() => onEdit?.(task)}>
       <CardContent className="pt-4">
@@ -50,7 +51,7 @@ export function TaskCard({ task, onComplete, onEdit, showClient = true }: TaskCa
           {task.status === 'completed' && (
             <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
           )}
-          
+
           <div className="flex-1 space-y-2">
             <div>
               <h4 className={cn(
@@ -98,6 +99,21 @@ export function TaskCard({ task, onComplete, onEdit, showClient = true }: TaskCa
               )}
             </div>
           </div>
+
+          {/* Delete button - appears on hover */}
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(task);
+              }}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

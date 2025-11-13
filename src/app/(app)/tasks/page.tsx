@@ -25,6 +25,7 @@ export default function TasksPage() {
   const { mutateAsync: createTask, isPending: isCreating } = useCreateTask();
   const { mutateAsync: updateTask, isPending: isUpdating } = useUpdateTask();
   const { mutateAsync: completeTask } = useCompleteTask();
+  const { mutateAsync: deleteTask } = useDeleteTask();
 
   const filteredTasks = allTasks.filter(task => {
     if (statusFilter === "active") {
@@ -51,6 +52,12 @@ export default function TasksPage() {
 
   const handleComplete = async (task: any) => {
     await completeTask(task.id);
+  };
+
+  const handleDelete = async (task: any) => {
+    if (confirm(`Are you sure you want to delete "${task.title}"?`)) {
+      await deleteTask(task.id);
+    }
   };
 
   const handleSubmit = async (data: any) => {
@@ -130,6 +137,7 @@ export default function TasksPage() {
                     task={task}
                     onComplete={handleComplete}
                     onEdit={handleEdit}
+                    onDelete={handleDelete}
                   />
                 ))
               )}
