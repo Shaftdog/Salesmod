@@ -72,19 +72,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify both clients exist and belong to user's org
-    const { data: winner } = await supabase
+    const { data: winner, error: winnerError } = await supabase
       .from('clients')
       .select('id, org_id')
       .eq('id', winnerId)
       .single();
 
-    const { data: loser } = await supabase
+    const { data: loser, error: loserError } = await supabase
       .from('clients')
       .select('id, org_id')
       .eq('id', loserId)
       .single();
 
-    if (!winner || !loser) {
+    if (winnerError || loserError || !winner || !loser) {
       return NextResponse.json(
         { error: 'One or both clients not found' },
         { status: 404 }

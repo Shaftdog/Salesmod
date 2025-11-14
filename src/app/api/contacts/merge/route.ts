@@ -72,27 +72,34 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify both contacts exist and belong to user's org
-    const { data: winner } = await supabase
+    const { data: winner, error: winnerError } = await supabase
       .from('contacts')
       .select('id, client_id, clients!inner(org_id)')
       .eq('id', winnerId)
       .single();
 
-    const { data: loser } = await supabase
+    const { data: loser, error: loserError } = await supabase
       .from('contacts')
       .select('id, client_id, clients!inner(org_id)')
       .eq('id', loserId)
       .single();
 
-    if (!winner || !loser) {
+    if (winnerError || loserError || !winner || !loser) {
       return NextResponse.json(
         { error: 'One or both contacts not found' },
         { status: 404 }
       );
     }
 
-    // Check org access
-    if ((winner as any).clients?.org_id !== user.id || (loser as any).clients?.org_id !== user.id) {
+    // Check org access - safely access nested client data
+    const winnerOrgId = winner.clients && typeof winner.clients === 'object' && 'org_id' in winner.clients
+      ? (winner.clients as { org_id: string }).org_id
+      : null;
+    const loserOrgId = loser.clients && typeof loser.clients === 'object' && 'org_id' in loser.clients
+      ? (loser.clients as { org_id: string }).org_id
+      : null;
+
+    if (winnerOrgId !== user.id || loserOrgId !== user.id) {
       return NextResponse.json(
         { error: 'Unauthorized access to contacts' },
         { status: 403 }
