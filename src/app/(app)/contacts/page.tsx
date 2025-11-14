@@ -4,17 +4,19 @@ import { useState, useMemo } from "react";
 import { useContacts } from "@/hooks/use-contacts";
 import { ContactCard } from "@/components/contacts/contact-card";
 import { ContactForm } from "@/components/contacts/contact-form";
+import { MergeContactsDialog } from "@/components/contacts/merge-contacts-dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  PlusCircle, 
-  Search, 
-  Users, 
-  Building2, 
+import {
+  PlusCircle,
+  Search,
+  Users,
+  Building2,
   Mail,
-  Phone 
+  Phone,
+  Combine
 } from "lucide-react";
 import { useCreateContact, useUpdateContact, useDeleteContact } from "@/hooks/use-contacts";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +29,7 @@ export default function ContactsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   
   const { data: contacts, isLoading } = useContacts();
@@ -163,6 +166,10 @@ export default function ContactsPage() {
             Manage all your business contacts across clients
           </p>
         </div>
+        <Button onClick={() => setShowMergeDialog(true)} variant="outline">
+          <Combine className="h-4 w-4 mr-2" />
+          Find Duplicates
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -308,6 +315,12 @@ export default function ContactsPage() {
         onSubmit={handleSubmit}
         contact={editingContact || undefined}
         isLoading={isCreating || isUpdating}
+      />
+
+      {/* Merge Contacts Dialog */}
+      <MergeContactsDialog
+        open={showMergeDialog}
+        onOpenChange={setShowMergeDialog}
       />
     </div>
   );
