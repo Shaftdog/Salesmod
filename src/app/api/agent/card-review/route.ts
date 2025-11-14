@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { anthropicTools } from '@/lib/agent/anthropic-tool-registry';
+import { executeAnthropicTool } from '@/lib/agent/anthropic-tool-executor';
 
 // Ensure Node.js runtime for Anthropic SDK streaming
 export const runtime = 'nodejs';
@@ -46,7 +48,7 @@ export async function POST(request: Request) {
       timestamp: r.content?.timestamp,
     })) || [];
 
-    const systemPrompt = `You are an AI Account Manager helping the user review a rejected action card.
+    const systemPrompt = `You are an AI Account Manager helping the user review a rejected action card. You have comprehensive access to all business data and specialized card review tools.
 
 ## CRITICAL: ALWAYS CALL TOOLS IMMEDIATELY - NO EXPLANATIONS FIRST
 
@@ -96,60 +98,32 @@ ${rejectionPatterns.length > 0 ? `
 💡 **Proactive Insight**: The user has provided feedback on ${rejectionPatterns.length} previous cards. Use this history to offer data-driven suggestions.
 ` : 'No previous rejections - this is the first feedback!'}
 
-## YOUR CAPABILITIES
+## YOUR COMPREHENSIVE CAPABILITIES
 
-You have the following tools available:
+### Card Review Specialized Tools:
+1. **storeRejectionFeedback** - Save user's feedback about rejected cards
+2. **reviseCard** - Create improved version of cards with user changes
+3. **detectPatternAndSuggest** - Analyze rejection patterns across cards
+4. **analyzeRejectionTrends** - Generate trend reports of rejections
+5. **researchContact** - Gather contact context and interaction history
+6. **suggestSmartRule** 🎯 - Auto-suggest rules from rejection reasons
+7. **detectSimilarFeedback** - Find duplicate/similar feedback
+8. **findSimilarCards** - Find other cards with same issues
+9. **batchApplyFeedback** - Apply feedback to multiple cards at once
 
-1. **storeRejectionFeedback** - Save user's feedback about why this card was rejected
-   - Creates a permanent memory for the agent to learn from
-   - Can include rules to avoid similar cards in the future
+### Full Database Access:
+- **searchClients**, **createClient**, **deleteClient**
+- **searchContacts**, **createContact**, **deleteContact**
+- **createProperty**, **deleteProperty**
+- **createOrder**, **deleteOrder**
+- **getAllCards**, **getPendingCards**, **createCard**, **updateCard**, **deleteCard**
+- **deleteOpportunity**, **createActivity**, **deleteTask**
+- **getClientActivity**
 
-2. **reviseCard** - Create an improved version of this card based on user feedback
-   - Accepts changes to subject, body, or other fields
-   - Creates a new suggested card with improvements
-   - Marks the original card as superseded
-
-3. **deleteCard** - Delete this card entirely if it's not needed
-
-4. **detectPatternAndSuggest** - Analyze rejection patterns and suggest improvements
-   - Detects common issues across multiple rejections
-   - Provides actionable recommendations
-
-5. **analyzeRejectionTrends** - Generate a trend report of recent rejections
-   - Shows temporal patterns and category breakdowns
-   - Helps identify systematic issues
-
-6. **researchContact** - Research a contact to gather additional context
-   - Fetches interaction history and past communications
-   - Useful before revising cards to ensure personalization
-   - Stores research findings for future reference
-
-## PHASE 4: INTELLIGENT AUTOMATION TOOLS
-
-7. **suggestSmartRule** - 🎯 MOST IMPORTANT - Use FIRST when user provides feedback
-   - Automatically analyzes rejection reason
-   - Suggests specific, actionable rules without user having to write them
-   - Detects patterns: placeholder names, email domains, timing, quality issues
-   - Checks for similar existing rules to avoid duplicates
-   - Returns ready-to-use rule with regex patterns
-
-8. **detectSimilarFeedback** - Check if similar feedback already exists
-   - Prevents duplicate/redundant feedback storage
-   - Uses keyword matching for similarity detection
-   - Suggests merging similar rules
-   - Shows up to 5 most similar feedback items
-
-9. **findSimilarCards** - Find other pending cards with the same issue
-   - Scans all suggested cards for similar problems
-   - Supports: placeholder names, email domains, timing, targeting, content quality
-   - Returns up to 20 similar cards for batch review
-   - Enables efficient batch operations
-
-10. **batchApplyFeedback** - Apply feedback to multiple cards at once
-    - Process up to 20 cards in one operation
-    - Can reject or delete multiple cards
-    - Stores feedback once for entire batch
-    - High importance rating (0.95) for batch feedback
+### Code & Development:
+- **readFile**, **writeFile**, **editFile** - Full file system access
+- **listFiles**, **searchCode** - Code exploration
+- **runCommand** - Execute shell commands, tests, builds
 
 ## CONVERSATION FLOW (Enhanced with Phase 4)
 
@@ -181,32 +155,10 @@ Be conversational, empathetic, and data-driven. When you identify patterns or op
 
 You can ask clarifying questions BEFORE taking action, but once the user confirms or requests an action, CALL THE TOOL IMMEDIATELY.`;
 
-    // Use native Anthropic SDK - bypassing broken Vercel AI SDK
+    // Use native Anthropic SDK with comprehensive tool registry
     const anthropicClient = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY!,
     });
-
-    // Define tools in native Anthropic format
-    const tools: Anthropic.Tool[] = [
-      {
-        name: 'storeRejectionFeedback',
-        description: 'Store user feedback about why a card was rejected. Use this when the user provides feedback about rejecting a card or suggests a rule.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            reason: {
-              type: 'string',
-              description: 'Why the user rejected the card'
-            },
-            rule: {
-              type: 'string',
-              description: 'Optional rule to avoid similar cards in the future'
-            }
-          },
-          required: ['reason']
-        }
-      }
-    ];
 
     // Convert messages to Anthropic format
     const anthropicMessages: Anthropic.MessageParam[] = messages.map((m: { role: string; content: string }) => ({
@@ -233,7 +185,7 @@ You can ask clarifying questions BEFORE taking action, but once the user confirm
               temperature: 0.2,
               system: systemPrompt,
               messages: conversationMessages,
-              tools,
+              tools: anthropicTools,
             });
 
             let assistantMessage = '';
@@ -271,46 +223,34 @@ You can ask clarifying questions BEFORE taking action, but once the user confirm
                   const toolResults = [];
 
                   for (const toolUse of toolUses) {
-                    if (toolUse.name === 'storeRejectionFeedback') {
-                      try {
-                        const input = JSON.parse(toolUse.input_json) as { reason: string; rule?: string };
+                    try {
+                      const input = JSON.parse(toolUse.input_json);
 
-                        await supabase.from('agent_memories').insert({
-                          org_id: user.id,
-                          scope: 'card_feedback',
-                          key: `rejection_${cardContext?.type}_${Date.now()}`,
-                          content: {
-                            type: 'rejection_feedback',
-                            card_id: cardId,
-                            reason: input.reason,
-                            rule: input.rule,
-                            timestamp: new Date().toISOString(),
-                          },
-                          importance: 0.9,
-                          last_used_at: new Date().toISOString(),
-                        });
+                      // Execute tool using comprehensive executor
+                      const result = await executeAnthropicTool(toolUse.name, input, user.id);
 
-                        console.log('[CardReview] Feedback stored successfully');
+                      console.log(`[CardReview] Tool executed: ${toolUse.name}`, result);
 
-                        toolResults.push({
-                          type: 'tool_result' as const,
-                          tool_use_id: toolUse.id,
-                          content: 'Feedback stored successfully'
-                        });
+                      toolResults.push({
+                        type: 'tool_result' as const,
+                        tool_use_id: toolUse.id,
+                        content: JSON.stringify(result)
+                      });
 
-                        // Send confirmation to user
-                        const confirmMsg = '\n\n✓ Feedback stored successfully';
+                      // Send confirmation to user for successful operations
+                      if (result.success) {
+                        const confirmMsg = `\n\n✓ ${result.message || 'Operation completed successfully'}`;
                         controller.enqueue(encoder.encode(confirmMsg));
-
-                      } catch (error) {
-                        console.error('[CardReview] Error storing feedback:', error);
-                        toolResults.push({
-                          type: 'tool_result' as const,
-                          tool_use_id: toolUse.id,
-                          content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                          is_error: true
-                        });
                       }
+
+                    } catch (error) {
+                      console.error(`[CardReview] Error executing tool ${toolUse.name}:`, error);
+                      toolResults.push({
+                        type: 'tool_result' as const,
+                        tool_use_id: toolUse.id,
+                        content: JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+                        is_error: true
+                      });
                     }
                   }
 
