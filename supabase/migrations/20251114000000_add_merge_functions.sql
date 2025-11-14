@@ -34,6 +34,7 @@ CREATE INDEX IF NOT EXISTS idx_merge_audit_date ON public.merge_audit(merged_at 
 ALTER TABLE public.merge_audit ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Users can view audit records for their organization
+DROP POLICY IF EXISTS select_merge_audit ON public.merge_audit;
 CREATE POLICY select_merge_audit ON public.merge_audit
   FOR SELECT
   USING (org_id = auth.uid());
@@ -409,9 +410,8 @@ BEGIN
     domain = COALESCE(v_winner.domain, v_loser.domain),
     phone = COALESCE(v_winner.phone, v_loser.phone),
     address = COALESCE(v_winner.address, v_loser.address),
-    city = COALESCE(v_winner.city, v_loser.city),
-    state = COALESCE(v_winner.state, v_loser.state),
-    zip = COALESCE(v_winner.zip, v_loser.zip),
+    billing_address = COALESCE(v_winner.billing_address, v_loser.billing_address),
+    email = COALESCE(v_winner.email, v_loser.email),
     updated_at = NOW()
   WHERE id = p_winner_id;
 
