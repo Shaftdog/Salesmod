@@ -1,10 +1,11 @@
 
 "use client";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, Combine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { ClientsList } from "@/components/clients/clients-list";
+import { MergeClientsDialog } from "@/components/clients/merge-clients-dialog";
 import { Input } from "@/components/ui/input";
 import { useSearch } from "@/contexts/search-context";
 import { useEffect, useRef, useState, useMemo } from "react";
@@ -14,6 +15,7 @@ import { RoleFilter } from "@/components/shared/role-filter";
 export default function ClientsPage() {
     const { searchTerm, setSearchTerm } = useSearch();
     const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+    const [showMergeDialog, setShowMergeDialog] = useState(false);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const { clients, isLoading } = useClients();
 
@@ -56,10 +58,16 @@ export default function ClientsPage() {
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
-                    <RoleFilter 
-                      selectedRoles={selectedRoles} 
-                      onChange={setSelectedRoles} 
+                    <RoleFilter
+                      selectedRoles={selectedRoles}
+                      onChange={setSelectedRoles}
                     />
+                    <Button onClick={() => setShowMergeDialog(true)} size="sm" variant="outline" className="gap-1">
+                        <Combine className="h-3.5 w-3.5" />
+                        <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                            Find Duplicates
+                        </span>
+                    </Button>
                     <Button asChild size="sm" className="gap-1">
                         <Link href="/clients/new">
                             <PlusCircle className="h-3.5 w-3.5" />
@@ -73,6 +81,12 @@ export default function ClientsPage() {
             <CardContent>
                 <ClientsList clients={filteredClients} isLoading={isLoading} />
             </CardContent>
+
+            {/* Merge Clients Dialog */}
+            <MergeClientsDialog
+                open={showMergeDialog}
+                onOpenChange={setShowMergeDialog}
+            />
         </Card>
     );
 }
