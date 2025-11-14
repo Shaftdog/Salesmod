@@ -1359,7 +1359,7 @@ export async function executeAnthropicTool(
       const keywords = reason
         .toLowerCase()
         .split(/\s+/)
-        .filter(w => w.length > 3);
+        .filter((w: string) => w.length > 3);
 
       const { data: similarFeedback } = await supabase
         .from('agent_memories')
@@ -1380,7 +1380,7 @@ export async function executeAnthropicTool(
       // Calculate similarity scores
       const scored = similarFeedback.map((fb: any) => {
         const fbReason = (fb.content?.reason || '').toLowerCase();
-        const matches = keywords.filter(k => fbReason.includes(k)).length;
+        const matches = keywords.filter((k: string) => fbReason.includes(k)).length;
         return {
           feedback: {
             id: fb.id,
