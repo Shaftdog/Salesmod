@@ -522,6 +522,9 @@ BEGIN
   WHERE (cl1.org_id = p_org_id OR cl2.org_id = p_org_id)
     AND c1.email IS NOT NULL
     AND c1.email != ''
+    -- Exclude system placeholders from client names
+    AND cl1.company_name NOT LIKE '[%'
+    AND cl2.company_name NOT LIKE '[%'
 
   UNION ALL
 
@@ -544,6 +547,8 @@ BEGIN
     AND c1.id < c2.id
   JOIN public.clients cl ON c1.client_id = cl.id
   WHERE cl.org_id = p_org_id
+    -- Exclude system placeholders from client names
+    AND cl.company_name NOT LIKE '[%'
     AND similarity(
       lower(c1.first_name || ' ' || c1.last_name),
       lower(c2.first_name || ' ' || c2.last_name)
@@ -591,6 +596,9 @@ BEGIN
   WHERE (cl1.org_id = p_org_id OR cl2.org_id = p_org_id)
     AND cl1.domain IS NOT NULL
     AND cl1.domain != ''
+    -- Exclude system placeholders (names starting with '[')
+    AND cl1.company_name NOT LIKE '[%'
+    AND cl2.company_name NOT LIKE '[%'
 
   UNION ALL
 
@@ -612,6 +620,9 @@ BEGIN
     cl1.org_id = cl2.org_id
     AND cl1.id < cl2.id
   WHERE cl1.org_id = p_org_id
+    -- Exclude system placeholders (names starting with '[')
+    AND cl1.company_name NOT LIKE '[%'
+    AND cl2.company_name NOT LIKE '[%'
     AND similarity(
       lower(cl1.company_name),
       lower(cl2.company_name)
