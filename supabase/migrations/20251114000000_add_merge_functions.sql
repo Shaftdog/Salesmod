@@ -4,12 +4,54 @@
 -- =============================================
 
 -- =============================================
+-- 0. Audit Table for USPAP Compliance
+-- =============================================
+
+/**
+ * Audit table for tracking merge operations
+ * Required for USPAP compliance and data integrity tracking
+ */
+CREATE TABLE IF NOT EXISTS public.merge_audit (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  merge_type TEXT NOT NULL CHECK (merge_type IN ('contact', 'client')),
+  winner_id UUID NOT NULL,
+  loser_id UUID NOT NULL,
+  loser_data JSONB NOT NULL, -- Snapshot of deleted record before merge
+  merged_by UUID REFERENCES auth.users(id),
+  merged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  counts JSONB, -- Counts of updated records (activities, orders, etc.)
+  org_id UUID NOT NULL, -- Organization for filtering and security
+  CONSTRAINT unique_merge_operation UNIQUE (merge_type, winner_id, loser_id, merged_at)
+);
+
+-- Index for querying audit history
+CREATE INDEX IF NOT EXISTS idx_merge_audit_winner ON public.merge_audit(merge_type, winner_id);
+CREATE INDEX IF NOT EXISTS idx_merge_audit_loser ON public.merge_audit(merge_type, loser_id);
+CREATE INDEX IF NOT EXISTS idx_merge_audit_org ON public.merge_audit(org_id);
+CREATE INDEX IF NOT EXISTS idx_merge_audit_date ON public.merge_audit(merged_at DESC);
+
+-- Enable RLS on audit table
+ALTER TABLE public.merge_audit ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can view audit records for their organization
+CREATE POLICY select_merge_audit ON public.merge_audit
+  FOR SELECT
+  USING (org_id = auth.uid());
+
+COMMENT ON TABLE public.merge_audit IS 'Audit trail for contact and client merge operations (USPAP compliance)';
+
+-- =============================================
 -- 1. Contact Merge Function
 -- =============================================
 
 /**
  * Merge two contacts into one canonical contact
  * Re-links all dependent records from loser to winner, then deletes loser
+ *
+ * TRANSACTION NOTE: This function is automatically wrapped in a transaction by PostgreSQL.
+ * If any error occurs during execution, all changes will be rolled back automatically.
+ *
+ * SECURITY NOTE: Validates that both contacts belong to the same organization before merging.
  *
  * @param p_winner_id - Contact ID to keep
  * @param p_loser_id - Contact ID to delete
@@ -40,9 +82,18 @@ BEGIN
     RAISE EXCEPTION 'Cannot merge contact with itself';
   END IF;
 
-  -- Get both contacts
-  SELECT * INTO v_winner FROM public.contacts WHERE id = p_winner_id;
-  SELECT * INTO v_loser FROM public.contacts WHERE id = p_loser_id;
+  -- Get both contacts with their organization IDs
+  SELECT c.*, cl.org_id
+  INTO v_winner
+  FROM public.contacts c
+  JOIN public.clients cl ON c.client_id = cl.id
+  WHERE c.id = p_winner_id;
+
+  SELECT c.*, cl.org_id
+  INTO v_loser
+  FROM public.contacts c
+  JOIN public.clients cl ON c.client_id = cl.id
+  WHERE c.id = p_loser_id;
 
   IF v_winner IS NULL THEN
     RAISE EXCEPTION 'Winner contact not found: %', p_winner_id;
@@ -50,6 +101,12 @@ BEGIN
 
   IF v_loser IS NULL THEN
     RAISE EXCEPTION 'Loser contact not found: %', p_loser_id;
+  END IF;
+
+  -- SECURITY: Verify both contacts belong to the same organization
+  IF v_winner.org_id != v_loser.org_id THEN
+    RAISE EXCEPTION 'Cannot merge contacts from different organizations (winner org: %, loser org: %)',
+      v_winner.org_id, v_loser.org_id;
   END IF;
 
   -- =============================================
@@ -168,6 +225,39 @@ BEGIN
   WHERE id = p_winner_id;
 
   -- =============================================
+  -- Log audit record before deletion (USPAP compliance)
+  -- =============================================
+
+  INSERT INTO public.merge_audit (
+    merge_type,
+    winner_id,
+    loser_id,
+    loser_data,
+    merged_by,
+    merged_at,
+    counts,
+    org_id
+  ) VALUES (
+    'contact',
+    p_winner_id,
+    p_loser_id,
+    to_jsonb(v_loser),
+    auth.uid(), -- Current user performing the merge
+    NOW(),
+    jsonb_build_object(
+      'activities', v_activities_count,
+      'email_suppressions', v_suppressions_count,
+      'email_notifications', v_notifications_count,
+      'kanban_cards', v_cards_count,
+      'deals', v_deals_count,
+      'tasks', v_tasks_count,
+      'cases', v_cases_count,
+      'company_history', v_company_history_count
+    ),
+    v_winner.org_id
+  );
+
+  -- =============================================
   -- Delete loser contact
   -- =============================================
 
@@ -206,6 +296,11 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
  * Merge two clients (companies) into one canonical client
  * Transfers all contacts, orders, and related records from loser to winner
  *
+ * TRANSACTION NOTE: This function is automatically wrapped in a transaction by PostgreSQL.
+ * If any error occurs during execution, all changes will be rolled back automatically.
+ *
+ * SECURITY NOTE: Validates that both clients belong to the same organization before merging.
+ *
  * @param p_winner_id - Client ID to keep
  * @param p_loser_id - Client ID to delete
  * @returns JSONB with merge results and counts
@@ -243,6 +338,12 @@ BEGIN
 
   IF v_loser IS NULL THEN
     RAISE EXCEPTION 'Loser client not found: %', p_loser_id;
+  END IF;
+
+  -- SECURITY: Verify both clients belong to the same organization
+  IF v_winner.org_id != v_loser.org_id THEN
+    RAISE EXCEPTION 'Cannot merge clients from different organizations (winner org: %, loser org: %)',
+      v_winner.org_id, v_loser.org_id;
   END IF;
 
   -- =============================================
@@ -313,6 +414,39 @@ BEGIN
     zip = COALESCE(v_winner.zip, v_loser.zip),
     updated_at = NOW()
   WHERE id = p_winner_id;
+
+  -- =============================================
+  -- Log audit record before deletion (USPAP compliance)
+  -- =============================================
+
+  INSERT INTO public.merge_audit (
+    merge_type,
+    winner_id,
+    loser_id,
+    loser_data,
+    merged_by,
+    merged_at,
+    counts,
+    org_id
+  ) VALUES (
+    'client',
+    p_winner_id,
+    p_loser_id,
+    to_jsonb(v_loser),
+    auth.uid(), -- Current user performing the merge
+    NOW(),
+    jsonb_build_object(
+      'contacts', v_contacts_count,
+      'company_history', v_company_history_count,
+      'orders', v_orders_count,
+      'properties', v_properties_count,
+      'activities', v_activities_count,
+      'deals', v_deals_count,
+      'tasks', v_tasks_count,
+      'cases', v_cases_count
+    ),
+    v_winner.org_id
+  );
 
   -- =============================================
   -- Delete loser client
@@ -489,7 +623,38 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- =============================================
--- 4. Comments
+-- 4. Performance Indexes
+-- =============================================
+
+-- Enable trigram extension for similarity searches
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- Index for clients company name similarity search
+-- Used by find_duplicate_clients for fast similarity() lookups
+CREATE INDEX IF NOT EXISTS idx_clients_company_name_trgm
+  ON public.clients USING gin(lower(company_name) gin_trgm_ops);
+
+-- Index for clients domain lookup
+-- Used by find_duplicate_clients for exact domain matching
+CREATE INDEX IF NOT EXISTS idx_clients_domain_lower
+  ON public.clients(lower(domain))
+  WHERE domain IS NOT NULL AND domain != '';
+
+-- Index for contacts name similarity search
+-- Used by find_duplicate_contacts for fast similarity() lookups
+CREATE INDEX IF NOT EXISTS idx_contacts_name_trgm
+  ON public.contacts USING gin(
+    lower(first_name || ' ' || last_name) gin_trgm_ops
+  );
+
+-- Index for contacts email lookup
+-- Used by find_duplicate_contacts for exact email matching
+CREATE INDEX IF NOT EXISTS idx_contacts_email_lower
+  ON public.contacts(lower(email))
+  WHERE email IS NOT NULL AND email != '';
+
+-- =============================================
+-- 5. Comments
 -- =============================================
 
 COMMENT ON FUNCTION public.merge_contacts IS 'Merges two contacts into one, re-linking all dependent records and preserving history';

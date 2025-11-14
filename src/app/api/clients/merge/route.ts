@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { mergeClients, findDuplicateClients } from '@/lib/clients-merge';
+import { z } from 'zod';
+
+// Validation schemas
+const mergeClientsSchema = z.object({
+  winnerId: z.string().uuid('Invalid winner ID format'),
+  loserId: z.string().uuid('Invalid loser ID format')
+}).refine(data => data.winnerId !== data.loserId, {
+  message: 'Cannot merge client with itself'
+});
+
+const limitSchema = z.number().int().min(1).max(100);
 
 /**
  * GET /api/clients/merge
@@ -19,7 +30,11 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const rawLimit = parseInt(searchParams.get('limit') || '50');
+
+    // Validate and clamp limit
+    const limitResult = limitSchema.safeParse(rawLimit);
+    const limit = limitResult.success ? limitResult.data : 50;
 
     const duplicates = await findDuplicateClients(supabase, user.id, limit);
 
@@ -54,22 +69,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { winnerId, loserId } = body;
 
-    // Validate inputs
-    if (!winnerId || !loserId) {
+    // Validate inputs with Zod
+    const validationResult = mergeClientsSchema.safeParse(body);
+    if (!validationResult.success) {
       return NextResponse.json(
-        { error: 'Missing required fields: winnerId, loserId' },
+        { error: validationResult.error.errors[0].message },
         { status: 400 }
       );
     }
 
-    if (winnerId === loserId) {
-      return NextResponse.json(
-        { error: 'Cannot merge client with itself' },
-        { status: 400 }
-      );
-    }
+    const { winnerId, loserId } = validationResult.data;
 
     // Verify both clients exist and belong to user's org
     const { data: winner, error: winnerError } = await supabase
