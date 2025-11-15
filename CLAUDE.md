@@ -250,3 +250,111 @@ When feature implementation is complete:
 - ❌ DON'T: Debug test failures yourself (delegate to debugger-specialist)
 - ❌ DON'T: Report feature complete without tester confirmation
 - ❌ DON'T: Move to next task until tests pass
+
+---
+
+## Documentation Organization
+
+### Documentation Structure
+
+All detailed documentation lives under `docs/` in an organized hierarchy:
+
+```
+docs/
+├── index.md                   # Central documentation index
+├── getting-started/           # Setup and quickstart guides
+├── architecture/              # System design and data model
+├── features/                  # Feature documentation by category
+│   ├── agents/               # AI agent system
+│   ├── chat/                 # Chat interface
+│   ├── cards-kanban/         # Kanban boards
+│   ├── properties/           # Property management
+│   ├── case-management/      # Case workflows
+│   ├── contacts/             # Contact management
+│   ├── admin-panel/          # Admin features
+│   └── other/                # Additional features
+├── operations/                # Database, imports, deployment
+│   ├── database-migrations/  # Migration guides
+│   ├── data-imports/         # Import procedures
+│   └── production-deployment/ # Production ops
+├── testing/                   # Test guides and results
+├── history/                   # Historical docs
+│   ├── phases/               # Development phases
+│   ├── completion-summaries/ # Milestone reports
+│   └── status/               # Progress updates
+├── troubleshooting/          # Bug fixes and solutions
+└── meta/                      # Documentation about docs
+```
+
+### Root Documentation Files
+
+Three files remain in the root as entry points:
+
+1. **README.md** - High-level project overview and quick start
+2. **PROJECT-SUMMARY.md** - Executive summary with links to details
+3. **CLAUDE.md** - Instructions for Claude Code (this file)
+
+**These files should NOT contain detailed content.** They should link to docs/ for details.
+
+### Documentation Conventions
+
+**When adding or updating documentation:**
+
+1. **Placement** - Put detailed content under `docs/` in the appropriate category
+2. **Status Metadata** - Add YAML frontmatter to all docs:
+   ```yaml
+   ---
+   status: current    # or "legacy" for historical docs
+   last_verified: 2025-11-15
+   updated_by: Claude Code
+   ---
+   ```
+3. **Linking** - Link from root files (README.md, etc.) rather than duplicating content
+4. **Index Updates** - Update `docs/index.md` when adding new major sections
+5. **Historical Docs** - Mark outdated docs as `status: legacy` rather than deleting them
+
+**Current vs Legacy:**
+- `status: current` = Active, maintained documentation
+- `status: legacy` = Historical reference, may be outdated
+
+### Documentation Maintenance Instructions
+
+**When reorganizing or adding documentation:**
+
+1. **Create new docs in the appropriate `docs/` subfolder**
+   - Feature docs → `docs/features/<category>/`
+   - Setup guides → `docs/getting-started/`
+   - Operations → `docs/operations/<subcategory>/`
+   - Troubleshooting → `docs/troubleshooting/`
+
+2. **Use git mv when moving existing files** to preserve history:
+   ```bash
+   git mv OLD-FILE.md docs/features/agents/
+   ```
+
+3. **Add frontmatter to all documentation files:**
+   ```yaml
+   ---
+   status: current
+   last_verified: YYYY-MM-DD
+   updated_by: Claude Code
+   ---
+   ```
+
+4. **Update docs/index.md** if adding new categories or major sections
+
+5. **Keep root files lean** - README.md and PROJECT-SUMMARY.md should link to docs/, not duplicate content
+
+### Finding Documentation
+
+**For users:**
+- Start with [docs/index.md](docs/index.md) for complete navigation
+- Check [docs/troubleshooting/](docs/troubleshooting/) for common issues
+- Browse by feature in [docs/features/](docs/features/)
+
+**For Claude Code:**
+- Read relevant docs from `docs/` before starting tasks
+- Update docs when implementing features
+- Mark docs as `status: legacy` when they become outdated
+- Always check `last_verified` dates to assess doc freshness
+
