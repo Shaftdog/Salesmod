@@ -64,6 +64,7 @@
     "date-fns": "^3.6.0",
     "dotenv": "^17.2.3",
     "embla-carousel-react": "^8.6.0",
+    "googleapis": "^144.0.0",
     "lucide-react": "^0.475.0",
     "next": "15.3.3",
     "openai": "^6.3.0",
