@@ -1,39 +1,59 @@
-# AppraiseTrack
+# Salesmod
 
-> **Order Management System for Appraisal Companies**
+> **Appraisal Workflow Management System**
 
-A modern, full-featured order management system built with Next.js 15, Supabase, and AI-powered appraiser assignment.
+A modern, full-featured appraisal management system with AI agents, CRM, case management, and automated workflows. Built with Next.js 15, Supabase, and AI integration.
 
 ![Next.js](https://img.shields.io/badge/Next.js-15.3-black?logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)
 ![Supabase](https://img.shields.io/badge/Supabase-Latest-green?logo=supabase)
 ![Vercel](https://img.shields.io/badge/Deploy-Vercel-black?logo=vercel)
 
-## ✨ Features
+## ✨ Key Features
 
-- 📊 **Dashboard** - Real-time stats and metrics
-- 📋 **Order Management** - Comprehensive order tracking with filtering, sorting, and search
-- 🧙‍♂️ **AI-Powered Assignment** - Intelligent appraiser suggestion using OpenAI/Anthropic
-- 👥 **Client Management** - Track clients and their orders
-- 🔐 **Authentication** - Secure auth with Supabase Auth
-- 🎨 **Modern UI** - Beautiful, responsive interface with shadcn/ui
-- 🔄 **Real-time Updates** - Live data synchronization with Supabase
-- 📱 **Mobile Responsive** - Works seamlessly on all devices
+- 🤖 **AI Agent System** - Automated workflow orchestration with intelligent agents
+- 💬 **Chat Interface** - Conversational UI with RAG (Retrieval Augmented Generation)
+- 📋 **Order Management** - Complete order tracking with kanban boards
+- 🏢 **Case Management** - Structured case workflow management
+- 👥 **CRM** - Client relationship management with contacts and activities
+- 🏠 **Property Management** - Property and unit tracking
+- 📊 **Admin Panel** - Administrative controls and monitoring
+- 🎯 **Goals System** - Goal tracking and progress monitoring
+- 📧 **Email Integration** - Automated email workflows
+- 🔐 **Authentication** - Secure auth with Supabase and RBAC
 
 ## 🏗️ Tech Stack
 
 - **Framework:** Next.js 15 with App Router
-- **Language:** TypeScript
-- **Database:** Supabase (PostgreSQL)
-- **Auth:** Supabase Auth
+- **Language:** TypeScript (Strict Mode)
+- **Database:** Supabase (PostgreSQL) with Row Level Security
+- **Auth:** Supabase Auth with RBAC
 - **AI:** Vercel AI SDK with OpenAI/Anthropic
 - **Styling:** Tailwind CSS
 - **UI Components:** shadcn/ui + Radix UI
 - **State Management:** TanStack React Query
 - **Form Handling:** React Hook Form + Zod
+- **Testing:** Playwright for E2E, Vitest for unit tests
 - **Deployment:** Vercel
 
-## 🚀 Getting Started
+## 📚 Documentation
+
+**Full documentation is organized in the [`docs/`](docs/index.md) directory:**
+
+- **[Documentation Index](docs/index.md)** - Complete documentation navigation
+- **[Getting Started](docs/getting-started/SETUP-STEPS.md)** - Setup and installation guide
+- **[Architecture](docs/architecture/)** - System design and data model
+- **[Features](docs/features/)** - Feature documentation by category
+  - [Agents](docs/features/agents/) - AI agent system
+  - [Chat](docs/features/chat/) - Chat interface with RAG
+  - [Properties](docs/features/properties/) - Property management
+  - [Case Management](docs/features/case-management/) - Case workflows
+  - [And more...](docs/features/)
+- **[Operations](docs/operations/)** - Database, imports, and deployment
+- **[Testing](docs/testing/TESTING-GUIDE.md)** - Testing guides and results
+- **[Troubleshooting](docs/troubleshooting/)** - Common issues and solutions
+
+## 🚀 Quick Start
 
 ### Prerequisites
 
@@ -41,119 +61,75 @@ A modern, full-featured order management system built with Next.js 15, Supabase,
 - A Supabase account ([supabase.com](https://supabase.com))
 - An OpenAI or Anthropic API key (for AI features)
 
-### 1. Clone the Repository
+### Installation
 
 ```bash
+# Clone the repository
 git clone <your-repo-url>
 cd Salesmod
+
+# Install dependencies
 npm install
-```
 
-### 2. Set Up Supabase
+# Set up environment variables
+cp .env.example .env.local
+# Edit .env.local with your Supabase and AI API keys
 
-1. Create a new project at [supabase.com](https://supabase.com)
-2. Go to your project's SQL Editor
-3. Run the migration script from `supabase-migration.sql`
-4. Get your project URL and anon key from Settings > API
+# Run database migrations
+# See docs/operations/database-migrations/ for details
 
-### 3. Configure Environment Variables
-
-Create a `.env.local` file in the root directory:
-
-```bash
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-
-# AI Services (choose one or both)
-OPENAI_API_KEY=your_openai_api_key
-# OR
-ANTHROPIC_API_KEY=your_anthropic_api_key
-```
-
-### 4. Run the Development Server
-
-```bash
+# Start development server
 npm run dev
 ```
 
 Open [http://localhost:9002](http://localhost:9002) in your browser.
 
-### 5. Create Your First User
-
-1. Navigate to the login page
-2. Click "Sign Up"
-3. Enter your details
-4. Check your email for verification (Supabase will send it)
-5. Sign in and start using the app!
+**For detailed setup instructions, see [docs/getting-started/SETUP-STEPS.md](docs/getting-started/SETUP-STEPS.md)**
 
 ## 📁 Project Structure
 
 ```
-src/
-├── app/                      # Next.js App Router
-│   ├── (app)/               # Protected app routes
-│   │   ├── dashboard/       # Dashboard page
-│   │   ├── orders/          # Order management
-│   │   └── clients/         # Client management
-│   ├── api/                 # API routes
-│   │   └── suggest-appraiser/  # AI suggestion endpoint
-│   ├── login/               # Auth page
-│   └── layout.tsx           # Root layout
-├── components/              # React components
-│   ├── auth/               # Auth components
-│   ├── clients/            # Client components
-│   ├── layout/             # Layout components
-│   ├── orders/             # Order components
-│   └── ui/                 # shadcn/ui components
-├── hooks/                   # Custom React hooks
-│   ├── use-orders.ts       # Order data hooks
-│   ├── use-clients.ts      # Client data hooks
-│   └── use-appraisers.ts   # Appraiser data hooks
-├── lib/                     # Utilities and helpers
-│   ├── supabase/           # Supabase client configs
-│   ├── types.ts            # TypeScript types
-│   └── utils.ts            # Helper functions
-└── contexts/                # React contexts
+Salesmod/
+├── docs/                     # 📚 Complete documentation
+│   ├── features/            # Feature-specific docs
+│   ├── operations/          # Ops, deployment, migrations
+│   ├── testing/             # Test guides and results
+│   └── troubleshooting/     # Common issues and fixes
+├── src/
+│   ├── app/                 # Next.js App Router
+│   │   ├── (app)/          # Protected app routes
+│   │   ├── api/            # API routes
+│   │   └── login/          # Auth pages
+│   ├── components/          # React components
+│   ├── hooks/              # Custom React hooks
+│   ├── lib/                # Utilities and helpers
+│   └── contexts/           # React contexts
+├── e2e/                     # Playwright E2E tests
+├── tests/                   # Unit and integration tests
+└── supabase/               # Supabase migrations
 ```
 
 ## 🗄️ Database Schema
 
-The application uses the following main tables:
+The application uses Supabase (PostgreSQL) with comprehensive Row Level Security:
 
-- **profiles** - User profiles (extends Supabase auth.users)
-- **clients** - Client companies and contacts
-- **orders** - Appraisal orders with full details
-- **order_history** - Audit trail of order changes
-- **order_documents** - File attachments
-- **order_notes** - Notes and communications
+**Core Tables:**
+- `profiles` - User accounts and settings
+- `clients` - Client companies
+- `contacts` - Client contacts with party roles
+- `properties` - Properties and units
+- `orders` - Appraisal orders
+- `cases` - Case management workflows
+- `agent_cards` - AI agent task cards
 
-See `supabase-migration.sql` for the complete schema with Row Level Security policies.
-
-## 🔐 Authentication
-
-The app uses Supabase Auth with:
-- Email/password authentication
-- Automatic profile creation on signup
-- Protected routes with middleware
-- Row Level Security on all tables
-
-## 🤖 AI Features
-
-The AI appraiser suggestion feature considers:
-- Geographic coverage (matches property location)
-- Current workload (selects least busy)
-- Appraiser rating (prioritizes higher rated)
-- Order priority (assigns experienced appraisers to rush orders)
-
-To use a different AI provider, update the model in `/api/suggest-appraiser/route.ts`.
+**See [docs/architecture/](docs/architecture/) for complete schema documentation.**
 
 ## 🚢 Deployment
 
 ### Deploy to Vercel
 
 1. Push your code to GitHub
-2. Import the project in Vercel
+2. Import the project in [Vercel](https://vercel.com)
 3. Add environment variables:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -161,6 +137,8 @@ To use a different AI provider, update the model in `/api/suggest-appraiser/rout
 4. Deploy!
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone)
+
+**For production deployment checklist, see [docs/operations/production-deployment/](docs/operations/production-deployment/)**
 
 ## 📝 Available Scripts
 
@@ -170,6 +148,8 @@ npm run build        # Build for production
 npm run start        # Start production server
 npm run lint         # Run ESLint
 npm run typecheck    # Run TypeScript compiler check
+npm run test         # Run unit tests
+npm run test:e2e     # Run Playwright E2E tests
 ```
 
 ## 🎨 Design System
@@ -191,9 +171,10 @@ This project is licensed under the MIT License.
 ## 🆘 Support
 
 If you encounter any issues:
-1. Check the [Supabase docs](https://supabase.com/docs)
-2. Review the [Next.js docs](https://nextjs.org/docs)
-3. Open an issue on GitHub
+1. Check the [docs/troubleshooting/](docs/troubleshooting/) directory
+2. Review the [Supabase docs](https://supabase.com/docs)
+3. Review the [Next.js docs](https://nextjs.org/docs)
+4. Open an issue on GitHub
 
 ## 🙏 Acknowledgments
 
@@ -205,3 +186,5 @@ If you encounter any issues:
 ---
 
 **Made with ❤️ for the appraisal industry**
+
+For more information, see [PROJECT-SUMMARY.md](PROJECT-SUMMARY.md) or browse the [complete documentation](docs/index.md).
