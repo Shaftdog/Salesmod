@@ -280,6 +280,24 @@ export class GmailService {
   }
 
   /**
+   * Archives a message (removes from inbox)
+   */
+  async archive(messageId: string): Promise<void> {
+    try {
+      await this.gmail.users.messages.modify({
+        userId: 'me',
+        id: messageId,
+        requestBody: {
+          removeLabelIds: ['INBOX'],
+        },
+      });
+    } catch (error) {
+      console.error(`Error archiving message ${messageId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Gets the watch history ID for incremental sync
    */
   async getHistoryId(): Promise<string | null> {

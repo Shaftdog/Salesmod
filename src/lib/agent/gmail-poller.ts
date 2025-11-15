@@ -221,9 +221,50 @@ async function processMessage(
     `Created ${cardResult.type} card (${cardResult.state}) for message ${message.id}`
   );
 
-  // 5. If needs escalation, send auto-reply
+  // 5. Manage Gmail inbox (label, mark read, archive)
+  await manageGmailInbox(orgId, message, classification, cardResult);
+
+  // 6. If needs escalation, send auto-reply
   if (classification.category === 'ESCALATE' || classification.shouldEscalate) {
     await sendEscalationAutoReply(orgId, message);
+  }
+}
+
+/**
+ * Manages Gmail inbox after processing email
+ * - Auto-responded: Mark read, label, archive
+ * - Escalated: Label by category, keep in inbox
+ */
+async function manageGmailInbox(
+  orgId: string,
+  message: GmailMessage,
+  classification: any,
+  cardResult: any
+): Promise<void> {
+  try {
+    const { GmailService } = await import('@/lib/gmail/gmail-service');
+    const gmailService = await GmailService.create(orgId);
+
+    const category = classification.category;
+    const isAutoExecuted = cardResult.autoExecute;
+
+    // Always add category label for organization
+    const labelName = `Salesmod/${category}`;
+    await gmailService.addLabel(message.id, labelName);
+
+    // If auto-executed (auto-responded), clean up inbox
+    if (isAutoExecuted) {
+      await gmailService.markAsRead(message.id);
+      await gmailService.addLabel(message.id, 'Salesmod/Auto-Responded');
+      await gmailService.archive(message.id);
+      console.log(`✓ Auto-responded email archived: ${message.id}`);
+    } else {
+      // Escalated to human - keep in inbox for attention
+      console.log(`⚠ Email kept in inbox for human review: ${message.id} (${category})`);
+    }
+  } catch (error) {
+    console.error('Error managing Gmail inbox:', error);
+    // Don't throw - inbox management is optional, don't block card creation
   }
 }
 

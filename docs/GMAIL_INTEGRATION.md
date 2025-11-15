@@ -9,6 +9,23 @@ The Gmail integration replaces Lindy.ai for email classification and routing. Al
 2. Classified using Claude Sonnet 4.5 (11 categories)
 3. Converted into kanban cards
 4. Auto-responded (if confidence ≥ 95%) or escalated to humans
+5. Organized in Gmail with labels, read status, and archiving
+
+## Inbox Management
+
+The agent automatically manages your Gmail inbox to keep it clean:
+
+**Auto-Responded Emails:**
+- ✅ Marked as read
+- 🏷️ Labeled: `Salesmod/[CATEGORY]` and `Salesmod/Auto-Responded`
+- 📦 Archived (removed from inbox)
+- Clean inbox, all processed emails still accessible via labels
+
+**Escalated Emails (Need Human Review):**
+- 📨 Kept in inbox (unread)
+- 🏷️ Labeled: `Salesmod/[CATEGORY]` (e.g., `Salesmod/CASE`, `Salesmod/ESCALATE`)
+- ⚠️ Requires your attention
+- Visible in both Gmail and Salesmod kanban
 
 ## Architecture
 
@@ -31,6 +48,7 @@ Gmail Inbox → Poller → Classifier → Card Generator → Executor → Respon
    - Sends replies via Gmail API
    - Manages thread history
    - Handles attachments
+   - Inbox management (labels, read status, archiving)
 
 3. **Email Classifier** (`src/lib/agent/email-classifier.ts`)
    - Uses Claude Sonnet 4.5
