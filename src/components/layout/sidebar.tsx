@@ -49,11 +49,11 @@ function Sidebar() {
 
   return (
     <aside className="fixed inset-y-0 left-0 z-10 hidden w-60 flex-col border-r bg-background sm:flex">
-      <nav className="flex flex-col gap-2 px-3 py-5">
-        {/* Logo/Brand */}
+      {/* Logo - Fixed at top */}
+      <div className="flex-shrink-0 px-3 py-5">
         <Link
           href="/dashboard"
-          className="mb-4 flex items-center gap-2 rounded-lg px-3 py-2 text-lg font-semibold"
+          className="flex items-center gap-2 rounded-lg px-3 py-2 text-lg font-semibold"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -71,7 +71,10 @@ function Sidebar() {
           </svg>
           <span>AppraiseTrack</span>
         </Link>
+      </div>
 
+      {/* Scrollable Navigation - Middle */}
+      <nav className="flex-1 overflow-y-auto px-3 py-2">
         {/* System Items */}
         <div className="mb-2 space-y-1">
           {systemItems.map((item) => (
@@ -136,8 +139,8 @@ function Sidebar() {
         </div>
       </nav>
 
-      {/* Bottom Section - AI & System */}
-      <nav className="mt-auto flex flex-col gap-2 border-t px-3 py-5">
+      {/* Bottom Section - AI & System - Fixed at bottom */}
+      <div className="flex-shrink-0 border-t px-3 py-5">
         <Collapsible
           open={expandedSections[AI_SECTION.key]}
           onOpenChange={() => toggleSection(AI_SECTION.key)}
@@ -175,7 +178,7 @@ function Sidebar() {
             ))}
           </CollapsibleContent>
         </Collapsible>
-      </nav>
+      </div>
     </aside>
   );
 }
