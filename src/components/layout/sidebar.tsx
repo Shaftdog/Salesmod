@@ -10,6 +10,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Home,
   Package,
   Settings,
@@ -24,6 +32,13 @@ import {
   MapPin,
   Shield,
   Calendar,
+  Megaphone,
+  TrendingUp,
+  FileText,
+  CalendarDays,
+  UsersRound,
+  Mail,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/use-appraisers";
@@ -44,6 +59,17 @@ function Sidebar() {
     { href: "/cases", icon: LifeBuoy, label: "Cases" },
     { href: "/migrations", icon: Database, label: "Migrations" },
     ...(currentUser?.role === 'admin' ? [{ href: "/admin", icon: Shield, label: "Admin" }] : []),
+  ];
+
+  // Marketing submenu items
+  const marketingItems = [
+    { href: "/marketing", icon: TrendingUp, label: "Dashboard" },
+    { href: "/marketing/campaigns", icon: Megaphone, label: "Campaigns" },
+    { href: "/marketing/content", icon: FileText, label: "Content Library" },
+    { href: "/marketing/calendar", icon: CalendarDays, label: "Content Calendar" },
+    { href: "/marketing/audiences", icon: UsersRound, label: "Audiences" },
+    { href: "/marketing/newsletters", icon: Mail, label: "Newsletters" },
+    { href: "/marketing/analytics", icon: BarChart3, label: "Analytics" },
   ];
 
   return (
@@ -87,6 +113,38 @@ function Sidebar() {
               <TooltipContent side="right">{item.label}</TooltipContent>
             </Tooltip>
           ))}
+
+          {/* Marketing Dropdown */}
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={cn(
+                      "flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8 md:w-8",
+                      pathname.startsWith('/marketing') && "bg-accent text-accent-foreground"
+                    )}
+                  >
+                    <Megaphone className="h-5 w-5" />
+                    <span className="sr-only">Marketing</span>
+                  </button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="right">Marketing</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent side="right" align="start" className="w-48">
+              <DropdownMenuLabel>Marketing</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {marketingItems.map((item) => (
+                <DropdownMenuItem key={item.href} asChild>
+                  <Link href={item.href} className="flex items-center cursor-pointer">
+                    <item.icon className="h-4 w-4 mr-2" />
+                    {item.label}
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
       </nav>
       <nav className="mt-auto flex flex-col items-center gap-4 px-2 sm:py-5">
           <Tooltip>
