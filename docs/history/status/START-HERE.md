@@ -1,3 +1,9 @@
+---
+status: legacy
+last_verified: 2025-11-15
+updated_by: Claude Code
+---
+
 # 🚀 START HERE - Complete Agent Setup in 2 Minutes!
 
 ## What You Need

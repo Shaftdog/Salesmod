@@ -1,3 +1,9 @@
+---
+status: legacy
+last_verified: 2025-11-15
+updated_by: Claude Code
+---
+
 # 🔧 Phase 0 - Fix #1: validation_status Column
 
 **Issue**: Database schema mismatch - code expects `validation_status` but migration created `verification_status`

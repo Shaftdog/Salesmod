@@ -247,8 +247,66 @@ git log --follow docs/features/agents/AGENT-IMPLEMENTATION-README.md
 
 ---
 
+## Follow-Up Improvements (2025-11-14)
+
+After initial reorganization, the following improvements were implemented based on documentation review:
+
+### 1. Moved Additional Files ✅
+
+Moved 5 remaining markdown files from root to appropriate docs/ locations:
+- `BOUNCE-TAG-TEST-SUMMARY.md` → `docs/testing/`
+- `MERGE-FEATURE-TEST-SUMMARY.md` → `docs/testing/`
+- `MERGE-FUNCTIONS-FIX-SUMMARY.md` → `docs/troubleshooting/`
+- `MIGRATION_REPORT_20251114.md` → `docs/operations/database-migrations/`
+- `SECURITY-FIXES-SUMMARY.md` → `docs/troubleshooting/`
+
+**Result:** Root directory now contains only 3 core markdown files (README.md, PROJECT-SUMMARY.md, CLAUDE.md)
+
+### 2. Added YAML Frontmatter ✅
+
+Applied YAML frontmatter metadata to all 226 documentation files:
+- **176 files** marked as `status: current` (active documentation)
+- **49 files** marked as `status: legacy` (historical documentation in docs/history/)
+- **1 file** already had frontmatter (docs/index.md)
+
+**Format Used:**
+```yaml
+---
+status: current      # or "legacy"
+last_verified: 2025-11-14
+updated_by: Claude Code
+---
+```
+
+**Benefits:**
+- Can now distinguish current vs outdated documentation
+- Tracks when docs were last verified
+- Enables automated freshness checks in the future
+
+### 3. Created Category README Files ✅
+
+Added overview README.md files to major documentation categories:
+- `docs/features/agents/README.md` - AI agent system overview (19 files)
+- `docs/operations/database-migrations/README.md` - Migration workflow guide (17+ files)
+- `docs/operations/data-imports/README.md` - Import procedures overview (22 files)
+
+**Benefits:**
+- Improved navigation within large categories
+- Context about what each category contains
+- Quick links to key documents in each area
+
+### 4. Created Automation Script
+
+Created `scripts/add-frontmatter.js` for batch adding YAML frontmatter:
+- Automatically detects legacy vs current based on file path
+- Skips files that already have frontmatter
+- Provides detailed progress and summary output
+
+---
+
 **Reorganization Complete:** 2025-11-15
+**Follow-Up Improvements:** 2025-11-14
 **Performed by:** Claude Code
-**Status:** ✅ Success
+**Status:** ✅ Complete
 
 All documentation is now organized, accessible, and maintainable. See [docs/index.md](docs/index.md) for complete navigation.

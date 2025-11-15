@@ -1,3 +1,9 @@
+---
+status: legacy
+last_verified: 2025-11-15
+updated_by: Claude Code
+---
+
 # 🎯 Quick Start: Complete Your October Orders Import
 
 ## You're Almost Done! Just 2 SQL Files to Run

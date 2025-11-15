@@ -1,3 +1,9 @@
+---
+status: current
+last_verified: 2025-11-15
+updated_by: Claude Code
+---
+
 # Party Roles - Complete Browser Testing Report ✅
 
 **Date**: October 20, 2025  

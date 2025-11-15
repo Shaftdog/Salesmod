@@ -1,3 +1,9 @@
+---
+status: current
+last_verified: 2025-11-15
+updated_by: Claude Code
+---
+
 # 🎮 Chat Commands - COMPLETE!
 
 ## ✅ Chat Can Now Control Kanban Cards!

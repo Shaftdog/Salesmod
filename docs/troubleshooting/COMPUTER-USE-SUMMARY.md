@@ -1,3 +1,9 @@
+---
+status: current
+last_verified: 2025-11-15
+updated_by: Claude Code
+---
+
 # 🖥️ Computer Use - Quick Summary
 
 ## ✅ Good News: You're Already Using the Right Model!

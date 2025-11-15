@@ -1,3 +1,9 @@
+---
+status: current
+last_verified: 2025-11-15
+updated_by: Claude Code
+---
+
 # Computer Use Setup Guide
 
 ## Quick Test (Tools Available, No Execution)

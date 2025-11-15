@@ -1,3 +1,9 @@
+---
+status: current
+last_verified: 2025-11-15
+updated_by: Claude Code
+---
+
 # 🖥️ Claude Computer Use Integration Guide
 
 ## What is Computer Use?

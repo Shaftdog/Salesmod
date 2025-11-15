@@ -1,3 +1,9 @@
+---
+status: current
+last_verified: 2025-11-15
+updated_by: Claude Code
+---
+
 # RLS Infinite Recursion - Fixed ✅
 
 **Date:** October 27, 2025  

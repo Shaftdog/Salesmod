@@ -1,3 +1,9 @@
+---
+status: current
+last_verified: 2025-11-15
+updated_by: Claude Code
+---
+
 # 🤖 Agent Chat + RAG Setup Guide
 
 ## ✅ What Was Just Implemented

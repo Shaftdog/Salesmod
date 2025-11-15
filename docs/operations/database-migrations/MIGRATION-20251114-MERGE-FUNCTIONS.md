@@ -1,3 +1,9 @@
+---
+status: current
+last_verified: 2025-11-15
+updated_by: Claude Code
+---
+
 # Migration Report: Contact & Client Merge Functions
 
 **Migration File:** `supabase/migrations/20251114000000_add_merge_functions.sql`

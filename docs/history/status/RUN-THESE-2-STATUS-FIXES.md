@@ -1,3 +1,9 @@
+---
+status: legacy
+last_verified: 2025-11-15
+updated_by: Claude Code
+---
+
 # Fix Order Status - 2 SQL Files to Run
 
 ## The Issue Fixed

@@ -1,3 +1,9 @@
+---
+status: legacy
+last_verified: 2025-11-15
+updated_by: Claude Code
+---
+
 # ✅ Phase 0: Pre-Flight Checklist
 
 **Goal**: Fix blocking build issues before starting main production readiness work

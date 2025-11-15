@@ -1,3 +1,9 @@
+---
+status: legacy
+last_verified: 2025-11-15
+updated_by: Claude Code
+---
+
 # ✅ DELETE BUTTON ADDED TO KANBAN - START HERE!
 
 ## 🎉 What You Got

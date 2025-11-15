@@ -1,3 +1,9 @@
+---
+status: current
+last_verified: 2025-11-15
+updated_by: Claude Code
+---
+
 # Quick Test Guide: Email Draft Fix
 
 ## What Was Fixed
