@@ -1,18 +1,13 @@
-
 "use client";
 
-import React, { memo, useEffect } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import { usePathname } from 'next/navigation';
 import {
-  Home,
-  Package,
   PanelLeft,
-  Search,
-  Briefcase,
+  ChevronDown,
+  ChevronRight,
   Settings,
-  Target,
-  CheckSquare,
   Shield,
 } from "lucide-react";
 import {
@@ -32,34 +27,46 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { cn } from "@/lib/utils";
-import { useSearch } from "@/contexts/search-context";
 import { useAuth } from "@/components/auth/auth-provider";
 import { useCurrentUser } from "@/hooks/use-appraisers";
-
-const navLinks = [
-    { href: "/dashboard", label: "Dashboard", icon: Home },
-    { href: "/orders", label: "Orders", icon: Package },
-    { href: "/clients", label: "Clients", icon: Briefcase },
-    { href: "/deals", label: "Deals", icon: Target },
-    { href: "/tasks", label: "Tasks", icon: CheckSquare },
-    { href: "/settings", label: "Settings", icon: Settings },
-];
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  DEPARTMENT_SECTIONS,
+  AI_SECTION,
+  SYSTEM_ITEMS,
+  ADMIN_ITEM,
+  getInitialExpandedState,
+} from "@/lib/navigation-config";
+import { generateBreadcrumbs, isActivePath } from "@/lib/breadcrumb-utils";
 
 function Header() {
   const pathname = usePathname();
   const { signOut } = useAuth();
-  const { data: currentUser } = useCurrentUser();
+  const { data: currentUser, isLoading, error } = useCurrentUser();
   const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar-1');
-  
-  useEffect(() => {
-    // We don't reset search term on navigation anymore as filtering is now on the pages.
-    // setSearchTerm('');
-  }, [pathname]);
+  const [mobileExpandedSections, setMobileExpandedSections] = useState<Record<string, boolean>>(
+    getInitialExpandedState()
+  );
+
+  const toggleMobileSection = (section: string) => {
+    setMobileExpandedSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  };
+
+  // Log user data loading errors
+  if (error) {
+    console.error('Failed to load user data:', error);
+  }
 
   const handleSignOut = async () => {
     await signOut();
@@ -74,34 +81,7 @@ function Header() {
         .slice(0, 2)
     : 'AT';
 
-  const breadcrumbItems = React.useMemo(() => {
-    const pathParts = pathname.split('/').filter(part => part);
-    if (pathParts.length === 0) return [{ label: 'Dashboard', href: '/dashboard', isPage: true }];
-    
-    const items = pathParts.map((part, index) => {
-        const href = '/' + pathParts.slice(0, index + 1).join('/');
-        const isPage = index === pathParts.length - 1;
-        let label = part.charAt(0).toUpperCase() + part.slice(1).replace(/-/g, ' ');
-        // Special case for order IDs to show "Order <ID>"
-        if (pathParts[index-1] === 'orders' && part.match(/^order-\d+$/)) {
-            label = `Order ${part.split('-')[1]}`;
-        }
-        if (pathParts[index-1] === 'clients' && part.match(/^client-\d+$/)) {
-            label = `Client Details`;
-        }
-        return {
-            label,
-            href,
-            isPage
-        }
-    });
-
-    if (pathParts[0] !== 'dashboard') {
-        items.unshift({ label: 'Dashboard', href: '/dashboard', isPage: false });
-    }
-
-    return items;
-  }, [pathname]);
+  const breadcrumbItems = generateBreadcrumbs(pathname);
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
@@ -112,11 +92,11 @@ function Header() {
             <span className="sr-only">Toggle Menu</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="sm:max-w-xs">
-          <nav className="grid gap-6 text-lg font-medium">
+        <SheetContent side="left" className="sm:max-w-xs overflow-y-auto">
+          <nav className="grid gap-4 text-sm font-medium">
             <Link
-              href="#"
-              className="group flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-full bg-primary text-lg font-semibold text-primary-foreground md:text-base"
+              href="/dashboard"
+              className="group flex items-center gap-2 text-lg font-semibold"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -132,27 +112,144 @@ function Header() {
                 <path d="M2 17l10 5 10-5" />
                 <path d="M2 12l10 5 10-5" />
               </svg>
-              <span className="sr-only">AppraiseTrack</span>
+              <span>AppraiseTrack</span>
             </Link>
-            {navLinks.map(({ href, label, icon: Icon }) => (
-                 <Link
-                 key={label}
-                 href={href}
-                 className={cn("flex items-center gap-4 px-2.5", 
-                   pathname.startsWith(href) ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-                 )}
-               >
-                 <Icon className="h-5 w-5" />
-                 {label}
-               </Link>
-            ))}
+
+            {/* System Items */}
+            <div className="space-y-1">
+              {SYSTEM_ITEMS.map((item) => (
+                <SheetClose asChild key={item.href}>
+                  <Link
+                    href={item.href}
+                    className={cn("flex items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-accent",
+                      isActivePath(item.href, pathname) && "bg-accent"
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </Link>
+                </SheetClose>
+              ))}
+            </div>
+
+            <div className="border-t pt-4 space-y-1">
+              {/* Department Sections */}
+              {DEPARTMENT_SECTIONS.map((section) => (
+                <Collapsible
+                  key={section.key}
+                  open={mobileExpandedSections[section.key]}
+                  onOpenChange={() => toggleMobileSection(section.key)}
+                >
+                  <CollapsibleTrigger
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 font-medium hover:bg-accent"
+                    aria-label={`${section.label} department navigation`}
+                    aria-expanded={mobileExpandedSections[section.key]}
+                    aria-controls={`mobile-${section.key}-nav`}
+                  >
+                    <section.icon className="h-4 w-4" />
+                    <span className="flex-1 text-left">{section.label}</span>
+                    {mobileExpandedSections[section.key] ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </CollapsibleTrigger>
+                  <CollapsibleContent
+                    className="ml-4 space-y-1 border-l pl-2"
+                    id={`mobile-${section.key}-nav`}
+                  >
+                    {section.items.map((item) => (
+                      <SheetClose asChild key={item.href}>
+                        <Link
+                          href={item.href}
+                          className={cn(
+                            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-accent",
+                            isActivePath(item.href, pathname) && "bg-accent"
+                          )}
+                        >
+                          <item.icon className="h-4 w-4" />
+                          {item.label}
+                        </Link>
+                      </SheetClose>
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              ))}
+            </div>
+
+            <div className="border-t pt-4 space-y-1">
+              {/* AI Section */}
+              <Collapsible
+                open={mobileExpandedSections[AI_SECTION.key]}
+                onOpenChange={() => toggleMobileSection(AI_SECTION.key)}
+              >
+                <CollapsibleTrigger
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 font-medium hover:bg-accent"
+                  aria-label={`${AI_SECTION.label} navigation`}
+                  aria-expanded={mobileExpandedSections[AI_SECTION.key]}
+                  aria-controls={`mobile-${AI_SECTION.key}-nav`}
+                >
+                  <AI_SECTION.icon className="h-4 w-4" />
+                  <span className="flex-1 text-left">{AI_SECTION.label}</span>
+                  {mobileExpandedSections[AI_SECTION.key] ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </CollapsibleTrigger>
+                <CollapsibleContent
+                  className="ml-4 space-y-1 border-l pl-2"
+                  id={`mobile-${AI_SECTION.key}-nav`}
+                >
+                  {AI_SECTION.items.map((item) => (
+                    <SheetClose asChild key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-accent",
+                          isActivePath(item.href, pathname) && "bg-accent"
+                        )}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        {item.label}
+                      </Link>
+                    </SheetClose>
+                  ))}
+                </CollapsibleContent>
+              </Collapsible>
+
+              <SheetClose asChild>
+                <Link
+                  href="/settings"
+                  className={cn("flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-accent",
+                    pathname.startsWith('/settings') && "bg-accent"
+                  )}
+                >
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </Link>
+              </SheetClose>
+              {currentUser?.role === 'admin' && (
+                <SheetClose asChild>
+                  <Link
+                    href="/admin"
+                    className={cn("flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-accent",
+                      pathname.startsWith('/admin') && "bg-accent"
+                    )}
+                  >
+                    <Shield className="h-4 w-4" />
+                    Admin
+                  </Link>
+                </SheetClose>
+              )}
+            </div>
           </nav>
         </SheetContent>
       </Sheet>
       <Breadcrumb className="hidden md:flex">
         <BreadcrumbList>
           {breadcrumbItems.map((item, index) => (
-            <React.Fragment key={item.href}>
+            <Fragment key={item.href}>
               <BreadcrumbItem>
                 {item.isPage ? (
                   <BreadcrumbPage>{item.label}</BreadcrumbPage>
@@ -163,7 +260,7 @@ function Header() {
                 )}
               </BreadcrumbItem>
               {index < breadcrumbItems.length - 1 && <BreadcrumbSeparator />}
-            </React.Fragment>
+            </Fragment>
           ))}
         </BreadcrumbList>
       </Breadcrumb>
@@ -215,4 +312,4 @@ function Header() {
   );
 }
 
-export default memo(Header);
+export default Header;

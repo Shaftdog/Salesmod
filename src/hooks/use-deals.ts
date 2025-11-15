@@ -7,7 +7,7 @@ import { transformDeal } from '@/lib/supabase/transforms'
 export function useDeals(clientId?: string) {
   const supabase = createClient()
 
-  return useQuery({
+  const { data: deals = [], isLoading, error } = useQuery({
     queryKey: clientId ? ['deals', 'client', clientId] : ['deals'],
     queryFn: async () => {
       let query = supabase
@@ -20,24 +20,26 @@ export function useDeals(clientId?: string) {
           creator:profiles!deals_created_by_fkey(*)
         `)
         .order('created_at', { ascending: false })
-      
+
       if (clientId) {
         query = query.eq('client_id', clientId)
       }
-      
+
       const { data, error } = await query
-      
+
       if (error) throw error
       return (data || []).map(transformDeal)
     },
     staleTime: 1000 * 60 * 2, // 2 minutes
   })
+
+  return { deals, isLoading, error }
 }
 
 export function useActiveDeals() {
   const supabase = createClient()
 
-  return useQuery({
+  const { data: deals = [], isLoading, error } = useQuery({
     queryKey: ['deals', 'active'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -51,18 +53,20 @@ export function useActiveDeals() {
         `)
         .not('stage', 'in', '(won,lost)')
         .order('expected_close_date')
-      
+
       if (error) throw error
       return (data || []).map(transformDeal)
     },
     staleTime: 1000 * 60, // 1 minute
   })
+
+  return { deals, isLoading, error }
 }
 
 export function useDeal(id: string) {
   const supabase = createClient()
 
-  return useQuery({
+  const { data: deal, isLoading, error } = useQuery({
     queryKey: ['deals', id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -76,12 +80,14 @@ export function useDeal(id: string) {
         `)
         .eq('id', id)
         .single()
-      
+
       if (error) throw error
       return transformDeal(data)
     },
     enabled: !!id,
   })
+
+  return { deal, isLoading, error }
 }
 
 export function useCreateDeal() {

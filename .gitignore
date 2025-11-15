@@ -90,13 +90,25 @@ __pycache__/
 # Test outputs and reports
 /playwright-report/
 /test-results/
+/test-reports/
+/test-screenshots/
 /e2e/*.png
 /e2e/*.webm
 
 # Editor directories
 .cursor/
 .vscode/settings.json
+.vs/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Log files
+*.log
+debug.log
+dev-server.log
 
 # Temporary files
 debug-*.png
 test-structure.txt
+nul

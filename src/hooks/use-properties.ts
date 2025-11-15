@@ -8,11 +8,11 @@ import { Property, PropertyFilters, BackfillResult } from '@/lib/types';
 export function useProperties(filters: PropertyFilters = {}) {
   const supabase = createClient();
 
-  return useQuery({
+  const { data: properties = [], isLoading, error } = useQuery({
     queryKey: ['properties', filters],
     queryFn: async () => {
       const params = new URLSearchParams();
-      
+
       if (filters.search) params.append('search', filters.search);
       if (filters.city) params.append('city', filters.city);
       if (filters.state) params.append('state', filters.state);
@@ -22,7 +22,7 @@ export function useProperties(filters: PropertyFilters = {}) {
       if (filters.limit) params.append('limit', filters.limit.toString());
 
       const response = await fetch(`/api/properties?${params.toString()}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch properties');
       }
@@ -31,17 +31,19 @@ export function useProperties(filters: PropertyFilters = {}) {
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  return { properties, isLoading, error };
 }
 
 /**
  * Hook to fetch a single property with related orders
  */
 export function useProperty(id: string) {
-  return useQuery({
+  const { data: property, isLoading, error } = useQuery({
     queryKey: ['property', id],
     queryFn: async () => {
       const response = await fetch(`/api/properties/${id}`);
-      
+
       if (!response.ok) {
         if (response.status === 404) {
           throw new Error('Property not found');
@@ -54,6 +56,8 @@ export function useProperty(id: string) {
     enabled: !!id,
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
+
+  return { property, isLoading, error };
 }
 
 /**
