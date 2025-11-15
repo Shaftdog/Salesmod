@@ -190,11 +190,18 @@ async function processMessage(
     return;
   }
 
-  // 2. Classify message using AI
-  const context = contextMap.get(message.from.email);
-  const classification = await classifyEmail(message, context);
+  // 2. Check if this is a reply to a campaign email
+  const campaignContext = await findCampaignContext(orgId, message);
 
-  // 3. Update message with classification
+  // 3. Classify message using AI (with campaign context)
+  const context = contextMap.get(message.from.email);
+  const classification = await classifyEmail(message, {
+    ...context,
+    isCampaignReply: campaignContext?.isCampaignReply || false,
+    jobContext: campaignContext?.jobContext,
+  });
+
+  // 4. Update message with classification and campaign context
   await supabase
     .from('gmail_messages')
     .update({
@@ -205,6 +212,10 @@ async function processMessage(
         entities: classification.entities,
         reasoning: classification.reasoning,
       },
+      job_id: campaignContext?.jobId || null,
+      task_id: campaignContext?.taskId || null,
+      is_reply_to_campaign: campaignContext?.isCampaignReply || false,
+      original_message_id: campaignContext?.originalMessageId || null,
       processed_at: new Date().toISOString(),
     })
     .eq('id', gmailMessage.id);
@@ -227,6 +238,77 @@ async function processMessage(
   // 6. If needs escalation, send auto-reply
   if (classification.category === 'ESCALATE' || classification.shouldEscalate) {
     await sendEscalationAutoReply(orgId, message);
+  }
+}
+
+/**
+ * Finds campaign context if this email is a reply to a job/campaign email
+ * Looks up the original outbound email by thread ID
+ */
+async function findCampaignContext(
+  orgId: string,
+  message: GmailMessage
+): Promise<{
+  isCampaignReply: boolean;
+  jobId?: string;
+  taskId?: number;
+  originalMessageId?: string;
+  jobContext?: {
+    jobName: string;
+    jobDescription: string;
+    originalEmailSubject: string;
+    originalEmailBody: string;
+  };
+} | null> {
+  const supabase = await createClient();
+
+  try {
+    // Look for cards with the same thread ID that sent emails
+    // This indicates the thread was started by our agent
+    const { data: originalCard } = await supabase
+      .from('kanban_cards')
+      .select('id, job_id, task_id, type, action_payload, gmail_thread_id')
+      .eq('org_id', orgId)
+      .eq('gmail_thread_id', message.threadId)
+      .eq('type', 'send_email')
+      .eq('state', 'done')
+      .order('executed_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (!originalCard || !originalCard.job_id) {
+      return null;
+    }
+
+    // Get job context
+    const { data: job } = await supabase
+      .from('jobs')
+      .select('name, description, params')
+      .eq('id', originalCard.job_id)
+      .single();
+
+    if (!job) {
+      return null;
+    }
+
+    // Extract original email content from card
+    const payload = originalCard.action_payload || {};
+
+    return {
+      isCampaignReply: true,
+      jobId: originalCard.job_id,
+      taskId: originalCard.task_id || undefined,
+      originalMessageId: payload.messageId || undefined,
+      jobContext: {
+        jobName: job.name,
+        jobDescription: job.description || '',
+        originalEmailSubject: payload.subject || '',
+        originalEmailBody: payload.body || payload.bodyText || '',
+      },
+    };
+  } catch (error) {
+    console.error('Error finding campaign context:', error);
+    return null;
   }
 }
 

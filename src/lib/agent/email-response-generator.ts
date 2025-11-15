@@ -23,7 +23,14 @@ export async function generateEmailResponse(
   orgId: string,
   email: GmailMessage,
   classification: EmailClassification,
-  context?: BusinessContext
+  context?: BusinessContext,
+  campaignContext?: {
+    jobName?: string;
+    jobDescription?: string;
+    originalEmailSubject?: string;
+    originalEmailBody?: string;
+    conversationHistory?: string;
+  }
 ): Promise<EmailResponse> {
   const { category, entities } = classification;
 
@@ -33,7 +40,7 @@ export async function generateEmailResponse(
   }
 
   // Generate response based on category
-  const prompt = buildResponsePrompt(email, classification, context);
+  const prompt = buildResponsePrompt(email, classification, context, campaignContext);
 
   try {
     const message = await anthropic.messages.create({
@@ -87,7 +94,14 @@ export async function generateEmailResponse(
 function buildResponsePrompt(
   email: GmailMessage,
   classification: EmailClassification,
-  context: BusinessContext
+  context: BusinessContext,
+  campaignContext?: {
+    jobName?: string;
+    jobDescription?: string;
+    originalEmailSubject?: string;
+    originalEmailBody?: string;
+    conversationHistory?: string;
+  }
 ): string {
   const { category, entities } = classification;
 
@@ -133,6 +147,21 @@ BUSINESS CONTEXT:
 ${context.isExistingClient ? `This is an existing client: ${context.clientName}` : 'This is a new contact'}
 ${context.orderInfo ? `Order Information:\n${JSON.stringify(context.orderInfo, null, 2)}` : 'No active orders found'}
 ${context.propertyInfo ? `Property Information:\n${JSON.stringify(context.propertyInfo, null, 2)}` : ''}
+
+${campaignContext ? `CAMPAIGN CONTEXT (IMPORTANT - This is a reply to our outreach):
+Campaign: ${campaignContext.jobName || 'Unknown'}
+Campaign Goal: ${campaignContext.jobDescription || 'N/A'}
+
+ORIGINAL EMAIL WE SENT:
+Subject: ${campaignContext.originalEmailSubject || 'N/A'}
+Body: ${campaignContext.originalEmailBody || 'N/A'}
+
+⚠️ CRITICAL: This person is REPLYING to the email we sent them above. Your response must:
+1. Reference the specific content of our original email
+2. Continue the conversation naturally (don't start from scratch)
+3. Answer their reply in context of what we asked/offered
+4. Maintain conversation continuity
+` : ''}
 
 INSTRUCTIONS:
 ${categoryInstructions[category]}

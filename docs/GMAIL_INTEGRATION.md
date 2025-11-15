@@ -27,6 +27,34 @@ The agent automatically manages your Gmail inbox to keep it clean:
 - ⚠️ Requires your attention
 - Visible in both Gmail and Salesmod kanban
 
+## Campaign Context Tracking
+
+**Critical Feature:** The agent maintains full conversation continuity with Job/Campaign emails.
+
+When a client replies to a campaign email (from Jobs system):
+- ✅ **Automatically detects** the reply is part of a campaign conversation
+- ✅ **Links to original job** (job_id, task_id tracked in database)
+- ✅ **Retrieves campaign context** (job name, description, original email content)
+- ✅ **Includes conversation history** in AI response generation
+- ✅ **Maintains continuity** - responses reference the original email
+
+**Example:**
+```
+Campaign Email (Job: "Follow up on pending appraisals"):
+"Hi John, checking in on your appraisal for 123 Main St.
+Do you have any questions about the process?"
+
+Client Replies:
+"Yes, when will it be ready?"
+
+Agent Response (with context):
+"Thanks for getting back to me about the appraisal for 123 Main St!
+Based on our current progress, we expect to have it completed by [date].
+I'll keep you updated on the timeline."
+```
+
+**Without campaign context**, the agent would respond generically without knowing what appraisal or what the original email asked. **With campaign context**, responses are natural conversation continuations.
+
 ## Architecture
 
 ```
@@ -65,12 +93,15 @@ Gmail Inbox → Poller → Classifier → Card Generator → Executor → Respon
 5. **Response Generator** (`src/lib/agent/email-response-generator.ts`)
    - Generates AI-powered responses
    - Context-aware (client history, orders, properties)
+   - **Campaign-aware** (includes original email for continuity)
    - Category-specific templates
    - Professional ROI Homes voice
 
 6. **Gmail Poller** (`src/lib/agent/gmail-poller.ts`)
    - Orchestrates entire workflow
    - Polls Gmail every 2 minutes
+   - **Detects campaign replies** via thread tracking
+   - **Links to Jobs** for conversation context
    - Batch processes emails
    - Updates sync state
 

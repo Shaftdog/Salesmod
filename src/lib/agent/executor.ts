@@ -885,11 +885,46 @@ async function executeReplyToEmail(card: KanbanCard): Promise<ExecutionResult> {
       attachments: gmailMessage.attachments || [],
     };
 
-    // Generate response using AI
+    // Check if this is a reply to a campaign email
+    let campaignContext = undefined;
+    if (gmailMessage.is_reply_to_campaign && gmailMessage.job_id) {
+      // Fetch campaign context
+      const { data: job } = await supabase
+        .from('jobs')
+        .select('name, description')
+        .eq('id', gmailMessage.job_id)
+        .single();
+
+      // Fetch original email content from the original card
+      const { data: originalCard } = await supabase
+        .from('kanban_cards')
+        .select('action_payload')
+        .eq('job_id', gmailMessage.job_id)
+        .eq('gmail_thread_id', gmailMessage.gmail_thread_id)
+        .eq('type', 'send_email')
+        .eq('state', 'done')
+        .order('executed_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (job && originalCard) {
+        const originalPayload = originalCard.action_payload || {};
+        campaignContext = {
+          jobName: job.name,
+          jobDescription: job.description,
+          originalEmailSubject: originalPayload.subject || '',
+          originalEmailBody: originalPayload.body || originalPayload.bodyText || '',
+        };
+      }
+    }
+
+    // Generate response using AI (with campaign context if available)
     const response = await generateEmailResponse(
       card.org_id,
       email,
-      payload.classification
+      payload.classification,
+      undefined, // business context (will be built automatically)
+      campaignContext
     );
 
     // Create Gmail service
