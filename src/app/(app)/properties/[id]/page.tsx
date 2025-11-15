@@ -52,8 +52,8 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
   const router = useRouter();
   const { toast } = useToast();
   const { id } = use(params);
-  
-  const { data, isLoading, error } = useProperty(id);
+
+  const { property: data, isLoading, error } = useProperty(id);
   const refreshUSPAPMutation = useRefreshUSPAPCache();
 
   const handleRefreshUSPAP = async () => {

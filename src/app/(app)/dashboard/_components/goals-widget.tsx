@@ -29,7 +29,7 @@ export function GoalsWidget() {
   const [goalToDelete, setGoalToDelete] = useState<{ id: string; label: string } | null>(null);
   const { data: goals, isLoading } = useCurrentGoals();
   const { orders } = useOrders();
-  const { data: deals } = useDeals();
+  const { deals } = useDeals();
   const { clients } = useClients();
   const deleteGoal = useDeleteGoal();
   const { toast } = useToast();

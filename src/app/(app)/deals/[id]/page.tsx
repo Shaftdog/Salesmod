@@ -50,7 +50,7 @@ export default function DealDetailPage() {
   const dealId = params?.id as string;
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-  const { data: deal, isLoading: dealLoading } = useDeal(dealId);
+  const { deal, isLoading: dealLoading } = useDeal(dealId);
   const { data: activities = [], isLoading: activitiesLoading } = useDealActivities(dealId);
   const { clients, isLoading: clientsLoading } = useClients();
   const updateDeal = useUpdateDeal();

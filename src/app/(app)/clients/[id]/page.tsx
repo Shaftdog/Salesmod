@@ -37,7 +37,7 @@ export default function ClientDetailPage() {
   const { data: clientTags = [], isLoading: tagsLoading } = useClientTags(clientId);
   const { data: allTags = [] } = useTags();
   const { orders } = useOrders();
-  const { data: deals = [], isLoading: dealsLoading } = useDeals(clientId);
+  const { deals = [], isLoading: dealsLoading } = useDeals(clientId);
   
   const { mutateAsync: addTag } = useAddTagToClient();
   const { mutateAsync: removeTag } = useRemoveTagFromClient();

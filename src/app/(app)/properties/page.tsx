@@ -28,7 +28,7 @@ export default function PropertiesPage() {
   });
   const [expandedProperties, setExpandedProperties] = useState<Set<string>>(new Set());
 
-  const { data, isLoading, error} = useProperties(filters);
+  const { properties: data, isLoading, error} = useProperties(filters);
   const backfillMutation = useBackfillProperties();
   const { data: backfillStatus } = useBackfillStatus();
   

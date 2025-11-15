@@ -6,7 +6,7 @@ import { useClients } from "@/hooks/use-clients";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DealsPage() {
-  const { data: deals = [], isLoading: dealsLoading } = useDeals();
+  const { deals = [], isLoading: dealsLoading } = useDeals();
   const { clients } = useClients();
 
   if (dealsLoading) {
