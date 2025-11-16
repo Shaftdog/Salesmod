@@ -25,7 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useProducts } from "@/hooks/use-products";
+import { useCreateProduct, useUpdateProduct } from "@/hooks/use-products";
 import { CreateProductSchema, type CreateProductInput } from "@/lib/validations/products";
 import { PRODUCT_CATEGORY_OPTIONS } from "@/types/products";
 import type { Product } from "@/types/products";
@@ -39,10 +39,11 @@ interface ProductFormProps {
 export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) {
   const { toast } = useToast();
   const router = useRouter();
-  const { createProduct, updateProduct, isCreating, isUpdating } = useProducts();
+  const createProduct = useCreateProduct();
+  const updateProduct = useUpdateProduct();
 
   const isEditMode = !!product;
-  const isLoading = isCreating || isUpdating;
+  const isLoading = createProduct.isPending || updateProduct.isPending;
 
   const form = useForm<CreateProductInput>({
     resolver: zodResolver(CreateProductSchema),
