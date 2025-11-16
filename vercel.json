@@ -7,6 +7,10 @@
     {
       "path": "/api/agent/chat/cleanup",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/agent/gmail/poll",
+      "schedule": "*/2 * * * *"
     }
   ]
 }
