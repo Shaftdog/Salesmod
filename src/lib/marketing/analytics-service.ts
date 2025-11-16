@@ -283,14 +283,18 @@ export async function getAttributionFunnel(orgId: string): Promise<AttributionFu
   );
 
   // Get qualified leads (warm + hot)
-  const qualifiedLeads = contacts.filter(c =>
-    c.lead_score && ['warm', 'hot'].includes(c.lead_score.label)
-  );
+  const qualifiedLeads = contacts.filter(c => {
+    if (!c.lead_score) return false;
+    const label = Array.isArray(c.lead_score) ? c.lead_score[0]?.label : (c.lead_score as any)?.label;
+    return label && ['warm', 'hot'].includes(label);
+  });
 
   // Get hot leads ready for sales
-  const hotLeads = contacts.filter(c =>
-    c.lead_score && c.lead_score.label === 'hot'
-  );
+  const hotLeads = contacts.filter(c => {
+    if (!c.lead_score) return false;
+    const label = Array.isArray(c.lead_score) ? c.lead_score[0]?.label : (c.lead_score as any)?.label;
+    return label === 'hot';
+  });
 
   // Get contacts with deals
   const { data: deals } = await supabase
