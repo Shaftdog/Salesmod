@@ -1058,8 +1058,135 @@ export async function executeAnthropicTool(
     case 'storeEmailClassificationRule': {
       const { cardId, patternType, patternValue, correctCategory, wrongCategory, reason, confidenceOverride } = toolInput;
 
+      // ===== VALIDATION =====
+
+      // Validate category
+      const validCategories = [
+        'AMC_ORDER',
+        'OPPORTUNITY',
+        'CASE',
+        'STATUS',
+        'SCHEDULING',
+        'UPDATES',
+        'AP',
+        'AR',
+        'INFORMATION',
+        'NOTIFICATIONS',
+        'REMOVE',
+        'ESCALATE',
+      ];
+
+      if (!validCategories.includes(correctCategory)) {
+        return {
+          error: `Invalid category: ${correctCategory}. Must be one of: ${validCategories.join(', ')}`,
+        };
+      }
+
+      // Validate pattern type
+      const validPatternTypes = ['sender_email', 'sender_domain', 'subject_contains', 'subject_regex'];
+      if (!validPatternTypes.includes(patternType)) {
+        return {
+          error: `Invalid pattern type: ${patternType}. Must be one of: ${validPatternTypes.join(', ')}`,
+        };
+      }
+
+      // Validate pattern value
+      if (!patternValue || patternValue.trim().length === 0) {
+        return { error: 'Pattern value cannot be empty' };
+      }
+
+      if (patternValue.length > 300) {
+        return { error: 'Pattern value too long (max 300 characters)' };
+      }
+
+      // For regex patterns, validate they're safe
+      if (patternType === 'subject_regex') {
+        try {
+          new RegExp(patternValue);
+
+          // Check for dangerous patterns
+          if (patternValue.length > 200) {
+            return { error: 'Regex pattern too long (max 200 characters)' };
+          }
+
+          // Check for nested quantifiers (ReDoS risk)
+          if (/(\*|\+|\{)\s*(\*|\+|\{)/.test(patternValue)) {
+            return {
+              error: 'Regex pattern contains nested quantifiers (security risk)',
+              suggestion: 'Simplify your pattern to avoid nested quantifiers like **, ++, *+, etc.',
+            };
+          }
+
+          // Check for quantified groups with quantifiers inside
+          if (/(\(.*[\*\+].*\))\s*[\*\+]/.test(patternValue)) {
+            return {
+              error: 'Regex pattern has quantified group containing quantifiers (ReDoS risk)',
+              suggestion: 'Avoid patterns like (a+)+ or (.*)*',
+            };
+          }
+        } catch (e) {
+          return { error: `Invalid regex pattern: ${(e as Error).message}` };
+        }
+      }
+
+      // Validate confidence override
+      if (confidenceOverride !== undefined && confidenceOverride !== null) {
+        if (confidenceOverride < 0 || confidenceOverride > 1) {
+          return { error: 'Confidence override must be between 0 and 1' };
+        }
+      }
+
+      // Validate reason
+      if (!reason || reason.trim().length === 0) {
+        return { error: 'Reason is required to explain why this rule is needed' };
+      }
+
+      if (reason.length > 1000) {
+        return { error: 'Reason too long (max 1000 characters)' };
+      }
+
+      // ===== CHECK RULE COUNT LIMIT =====
+      const { count: ruleCount } = await supabase
+        .from('agent_memories')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', userId)
+        .eq('scope', 'email_classification');
+
+      if ((ruleCount || 0) >= 50) {
+        return {
+          error: 'Maximum classification rules reached (50).',
+          suggestion: 'Please delete old or unused rules before adding new ones. You can disable rules instead of deleting them.',
+        };
+      }
+
+      // ===== CHECK FOR DUPLICATES =====
+      const { data: existingRules } = await supabase
+        .from('agent_memories')
+        .select('content, key')
+        .eq('org_id', userId)
+        .eq('scope', 'email_classification');
+
+      const isDuplicate = existingRules?.some(
+        (r: any) =>
+          r.content.pattern_type === patternType &&
+          r.content.pattern_value === patternValue &&
+          r.content.correct_category === correctCategory
+      );
+
+      if (isDuplicate) {
+        return {
+          success: false,
+          error: 'Duplicate rule already exists',
+          message: `A rule for "${patternType}" = "${patternValue}" → ${correctCategory} already exists.`,
+          suggestion: 'Use a different pattern, modify the existing rule, or choose a different category.',
+        };
+      }
+
+      // ===== CREATE RULE =====
+
       // Generate a unique key for this rule based on pattern
-      const ruleKey = `classification_${patternType}_${patternValue.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}`;
+      const sanitizedValue = patternValue.replace(/[^a-z0-9]/gi, '_').substring(0, 50);
+      const ruleKey = `classification_${patternType}_${sanitizedValue}_${Date.now()}`;
 
       // Get the card to extract email details
       const { data: card } = await supabase
@@ -1083,14 +1210,32 @@ export async function executeAnthropicTool(
             reason,
             confidence_override: confidenceOverride || null,
             created_from_card_id: cardId,
+            created_by: userId,
             example_email_id: card?.gmail_message_id || null,
             created_at: new Date().toISOString(),
+            match_count: 0,
+            last_matched_at: null,
+            last_matched_email_id: null,
+            enabled: true,
           },
           importance: 0.95, // High importance - these rules directly affect classification
           last_used_at: new Date().toISOString(),
         });
 
-      if (error) return { error: error.message };
+      if (error) {
+        console.error('[storeEmailClassificationRule] Database error:', error);
+        return { error: `Failed to store rule: ${error.message}` };
+      }
+
+      // Invalidate rule cache for this org
+      try {
+        const { invalidateRuleCache } = await import('@/lib/agent/email-classifier');
+        invalidateRuleCache(userId);
+      } catch (err) {
+        console.warn('[storeEmailClassificationRule] Failed to invalidate cache:', err);
+      }
+
+      console.log(`[storeEmailClassificationRule] Created rule ${ruleKey} for org ${userId}`);
 
       return {
         success: true,
@@ -1102,7 +1247,7 @@ export async function executeAnthropicTool(
           correctCategory,
           reason,
         },
-        impact: `Future emails matching this pattern will be classified as ${correctCategory} instead of ${wrongCategory || 'other categories'}`,
+        impact: `Future emails matching this pattern will be classified as ${correctCategory} instead of ${wrongCategory || 'other categories'}. Current rule count: ${(ruleCount || 0) + 1}/50`,
       };
     }
 

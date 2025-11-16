@@ -84,14 +84,104 @@ function getAnthropicClient(): Anthropic {
 }
 
 /**
- * Fetch user-defined classification rules from agent_memories
+ * Sanitize user-supplied text to prevent prompt injection
+ */
+function sanitizeForPrompt(text: string, maxLength: number = 500): string {
+  if (!text) return '';
+
+  return text
+    // Remove potential prompt injection attempts
+    .replace(/IGNORE.*(PREVIOUS|ABOVE|ALL|PRIOR).*INSTRUCTIONS?/gi, '[removed]')
+    .replace(/SYSTEM\s*:/gi, '')
+    .replace(/ASSISTANT\s*:/gi, '')
+    .replace(/USER\s*:/gi, '')
+    .replace(/\n{3,}/g, '\n\n') // Limit excessive newlines
+    .substring(0, maxLength)
+    .trim();
+}
+
+/**
+ * Validate and sanitize regex pattern for safety
+ */
+function validateRegexPattern(pattern: string): { valid: boolean; error?: string } {
+  if (!pattern || pattern.trim().length === 0) {
+    return { valid: false, error: 'Pattern cannot be empty' };
+  }
+
+  if (pattern.length > 200) {
+    return { valid: false, error: 'Pattern too long (max 200 characters)' };
+  }
+
+  // Check for dangerous nested quantifiers that can cause ReDoS
+  const dangerousPatterns = [
+    /(\*|\+|\{)\s*(\*|\+|\{)/, // Nested quantifiers like ++, **, *+, etc.
+    /(\(.*\*.*\))\s*[\*\+]/, // Quantified groups with quantifiers inside
+  ];
+
+  for (const dangerous of dangerousPatterns) {
+    if (dangerous.test(pattern)) {
+      return { valid: false, error: 'Pattern contains nested quantifiers (ReDoS risk)' };
+    }
+  }
+
+  // Try to compile the regex
+  try {
+    new RegExp(pattern);
+    return { valid: true };
+  } catch (e) {
+    return { valid: false, error: `Invalid regex: ${(e as Error).message}` };
+  }
+}
+
+/**
+ * Test regex with timeout protection to prevent ReDoS attacks
+ */
+async function testRegexSafe(pattern: string, text: string, timeoutMs: number = 100): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('Regex execution timeout - possible ReDoS attack'));
+    }, timeoutMs);
+
+    try {
+      const regex = new RegExp(pattern, 'i');
+      const result = regex.test(text);
+      clearTimeout(timeout);
+      resolve(result);
+    } catch (error) {
+      clearTimeout(timeout);
+      reject(error);
+    }
+  });
+}
+
+// In-memory cache for classification rules (TTL: 60 seconds)
+const ruleCache = new Map<string, { rules: any[], fetchedAt: number }>();
+const RULE_CACHE_TTL_MS = 60000;
+
+/**
+ * Invalidate rule cache for an organization
+ */
+export function invalidateRuleCache(orgId: string): void {
+  ruleCache.delete(orgId);
+  console.log(`[Email Classifier] Rule cache invalidated for org ${orgId}`);
+}
+
+/**
+ * Fetch user-defined classification rules from agent_memories with caching
  */
 async function fetchClassificationRules(orgId: string): Promise<any[]> {
+  // Check cache first
+  const cached = ruleCache.get(orgId);
+  if (cached && (Date.now() - cached.fetchedAt) < RULE_CACHE_TTL_MS) {
+    console.log(`[Email Classifier] Using cached rules for org ${orgId} (${cached.rules.length} rules)`);
+    return cached.rules;
+  }
+
   try {
     const supabase = await createClient();
     const { data: rules, error } = await supabase
       .from('agent_memories')
-      .select('content')
+      .select('content, key')
       .eq('org_id', orgId)
       .eq('scope', 'email_classification')
       .gte('importance', 0.8) // Only high-importance rules
@@ -99,62 +189,193 @@ async function fetchClassificationRules(orgId: string): Promise<any[]> {
       .limit(20); // Limit to prevent prompt bloat
 
     if (error) {
-      console.warn('[Email Classifier] Failed to fetch classification rules:', error);
-      return [];
+      console.error('[Email Classifier] Database error fetching classification rules:', {
+        orgId,
+        error: error.message,
+        code: error.code,
+      });
+      // Return stale cache if available, otherwise empty array
+      return cached?.rules || [];
     }
 
-    return rules?.map(r => r.content) || [];
+    const ruleList = rules?.map(r => ({ ...r.content, _key: r.key })) || [];
+
+    // Validate each rule has required fields
+    const validRules = ruleList.filter(rule => {
+      const isValid =
+        rule.pattern_type &&
+        rule.pattern_value &&
+        rule.correct_category &&
+        rule.enabled !== false; // Skip disabled rules
+
+      if (!isValid) {
+        console.warn('[Email Classifier] Skipping invalid or disabled rule:', {
+          key: rule._key,
+          pattern_type: rule.pattern_type,
+          pattern_value: rule.pattern_value,
+        });
+      }
+      return isValid;
+    });
+
+    console.log(`[Email Classifier] Loaded ${validRules.length}/${ruleList.length} valid classification rules for org ${orgId}`);
+
+    // Update cache
+    ruleCache.set(orgId, {
+      rules: validRules,
+      fetchedAt: Date.now(),
+    });
+
+    return validRules;
   } catch (error) {
-    console.warn('[Email Classifier] Error fetching classification rules:', error);
-    return [];
+    console.error('[Email Classifier] Unexpected error fetching classification rules:', {
+      orgId,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    // TODO: Send to error tracking (Sentry, etc.)
+
+    // Return stale cache if available
+    return cached?.rules || [];
   }
 }
 
 /**
  * Check if email matches any user-defined classification rules
  */
-function checkClassificationRules(email: GmailMessage, rules: any[]): {
+async function checkClassificationRules(
+  email: GmailMessage,
+  rules: any[],
+  orgId: string
+): Promise<{
   matched: boolean;
   rule?: any;
   category?: EmailCategory;
   confidence?: number;
-} {
+}> {
   for (const rule of rules) {
+    // Skip disabled rules
+    if (rule.enabled === false) {
+      continue;
+    }
+
     let matches = false;
 
-    switch (rule.pattern_type) {
-      case 'sender_email':
-        matches = email.from.email.toLowerCase() === rule.pattern_value.toLowerCase();
-        break;
-      case 'sender_domain':
-        const domain = email.from.email.split('@')[1]?.toLowerCase();
-        matches = domain === rule.pattern_value.toLowerCase();
-        break;
-      case 'subject_contains':
-        matches = email.subject?.toLowerCase().includes(rule.pattern_value.toLowerCase()) || false;
-        break;
-      case 'subject_regex':
-        try {
-          const regex = new RegExp(rule.pattern_value, 'i');
-          matches = regex.test(email.subject || '');
-        } catch (e) {
-          console.warn(`[Email Classifier] Invalid regex in rule: ${rule.pattern_value}`);
-        }
-        break;
+    try {
+      switch (rule.pattern_type) {
+        case 'sender_email':
+          // Guard against missing email
+          if (!email.from?.email || !rule.pattern_value) break;
+          matches = email.from.email.toLowerCase() === rule.pattern_value.toLowerCase();
+          break;
+
+        case 'sender_domain':
+          // Guard against missing email or domain
+          if (!email.from?.email || !rule.pattern_value) break;
+          const domain = email.from.email.split('@')[1]?.toLowerCase();
+          if (!domain) break;
+          matches = domain === rule.pattern_value.toLowerCase();
+          break;
+
+        case 'subject_contains':
+          // Guard against missing subject
+          if (!email.subject || !rule.pattern_value) break;
+          matches = email.subject.toLowerCase().includes(rule.pattern_value.toLowerCase());
+          break;
+
+        case 'subject_regex':
+          // Guard against missing subject
+          if (!email.subject || !rule.pattern_value) break;
+
+          try {
+            // Use safe regex test with timeout
+            matches = await testRegexSafe(rule.pattern_value, email.subject, 100);
+          } catch (error) {
+            console.warn(`[Email Classifier] Regex rule failed (timeout or error):`, {
+              key: rule._key,
+              pattern: rule.pattern_value,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            // TODO: Mark rule as problematic or disable it
+            matches = false;
+          }
+          break;
+
+        default:
+          console.warn(`[Email Classifier] Unknown pattern type: ${rule.pattern_type}`);
+          break;
+      }
+    } catch (error) {
+      console.error(`[Email Classifier] Error checking rule:`, {
+        key: rule._key,
+        pattern_type: rule.pattern_type,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      continue;
     }
 
     if (matches) {
-      console.log(`[Email Classifier] Rule matched: ${rule.pattern_type} = ${rule.pattern_value} → ${rule.correct_category}`);
+      console.log(`[Email Classifier] Rule matched: ${rule.pattern_type} = "${rule.pattern_value}" → ${rule.correct_category}`, {
+        emailId: email.id,
+        ruleKey: rule._key,
+      });
+
+      // Update rule match statistics (async, don't await)
+      updateRuleMatchStats(orgId, rule._key, email.id).catch(err =>
+        console.warn('[Email Classifier] Failed to update rule stats:', err)
+      );
+
       return {
         matched: true,
         rule,
         category: rule.correct_category as EmailCategory,
-        confidence: rule.confidence_override || 0.99, // High confidence for rule-based matches
+        confidence: rule.confidence_override || 0.99,
       };
     }
   }
 
   return { matched: false };
+}
+
+/**
+ * Update rule match statistics (called async, don't await)
+ */
+async function updateRuleMatchStats(orgId: string, ruleKey: string, emailId: string): Promise<void> {
+  try {
+    const supabase = await createClient();
+
+    // Get current rule
+    const { data: memory } = await supabase
+      .from('agent_memories')
+      .select('content')
+      .eq('org_id', orgId)
+      .eq('key', ruleKey)
+      .single();
+
+    if (!memory) return;
+
+    const rule = memory.content;
+    const updatedContent = {
+      ...rule,
+      match_count: (rule.match_count || 0) + 1,
+      last_matched_at: new Date().toISOString(),
+      last_matched_email_id: emailId,
+    };
+
+    await supabase
+      .from('agent_memories')
+      .update({
+        content: updatedContent,
+        last_used_at: new Date().toISOString(),
+      })
+      .eq('org_id', orgId)
+      .eq('key', ruleKey);
+
+    console.log(`[Email Classifier] Updated rule stats for ${ruleKey}: ${updatedContent.match_count} matches`);
+  } catch (error) {
+    // Silent fail - stats update is not critical
+    console.debug('[Email Classifier] Failed to update rule match stats:', error);
+  }
 }
 
 /**
@@ -179,12 +400,15 @@ export async function classifyEmail(
   try {
     console.log(`[Email Classifier] Classifying email ${email.id} from ${email.from.email}`);
 
-    // Fetch user-defined classification rules
+    // Fetch user-defined classification rules (with caching)
     const rules = context?.orgId ? await fetchClassificationRules(context.orgId) : [];
     console.log(`[Email Classifier] Loaded ${rules.length} classification rules`);
 
     // Check if email matches any user-defined rules (fast path)
-    const ruleMatch = checkClassificationRules(email, rules);
+    const ruleMatch = context?.orgId
+      ? await checkClassificationRules(email, rules, context.orgId)
+      : { matched: false };
+
     if (ruleMatch.matched && ruleMatch.category) {
       console.log(`[Email Classifier] Email matched rule - returning ${ruleMatch.category} with confidence ${ruleMatch.confidence}`);
       return {
@@ -193,7 +417,7 @@ export async function classifyEmail(
         intent: ruleMatch.rule.reason || 'Matched user-defined classification rule',
         entities: {},
         shouldEscalate: false,
-        reasoning: `User-defined rule: ${ruleMatch.rule.pattern_type} = "${ruleMatch.rule.pattern_value}" → ${ruleMatch.category}. Reason: ${ruleMatch.rule.reason}`,
+        reasoning: `User-defined rule: ${ruleMatch.rule.pattern_type} = "${ruleMatch.rule.pattern_value}" → ${ruleMatch.category}. Reason: ${sanitizeForPrompt(ruleMatch.rule.reason, 200)}`,
       };
     }
 
@@ -287,13 +511,18 @@ function buildClassificationPrompt(
     ? sanitizeForAI(sanitizeEmailBody(email.bodyText).substring(0, 2000))
     : '';
 
-  // Build user-defined rules section
+  // Build user-defined rules section (with sanitization to prevent prompt injection)
   let rulesSection = '';
   if (userRules && userRules.length > 0) {
     rulesSection = `
 USER-DEFINED CLASSIFICATION RULES (HIGH PRIORITY - Check these first!):
-${userRules.map((rule, idx) => `${idx + 1}. ${rule.pattern_type} matching "${rule.pattern_value}" → ${rule.correct_category}
-   Reason: ${rule.reason}`).join('\n')}
+${userRules
+  .map(
+    (rule, idx) =>
+      `${idx + 1}. ${rule.pattern_type} matching "${sanitizeForPrompt(rule.pattern_value, 100)}" → ${rule.correct_category}
+   Reason: ${sanitizeForPrompt(rule.reason, 300)}`
+  )
+  .join('\n')}
 
 ⚠️ IMPORTANT: If this email matches any of the above rules, use that category with high confidence (0.99).
 `;
