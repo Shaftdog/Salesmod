@@ -1,5 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { z } from 'zod';
 import { GmailMessage } from '@/lib/gmail/gmail-service';
+import { sanitizeForAI, sanitizeEmailBody, sanitizeSubject } from '@/lib/utils/email-sanitizer';
+import { AnthropicRateLimiter } from '@/lib/utils/rate-limiter';
+import { validateEnv } from '@/lib/env';
 
 export type EmailCategory =
   | 'AMC_ORDER' // Official appraisal orders from AMCs
@@ -30,8 +34,40 @@ export interface EmailClassification {
   reasoning: string; // Why this classification was chosen
 }
 
+// Zod schema for validating Claude's response
+const EmailClassificationSchema = z.object({
+  category: z.enum([
+    'AMC_ORDER',
+    'OPPORTUNITY',
+    'CASE',
+    'STATUS',
+    'SCHEDULING',
+    'UPDATES',
+    'AP',
+    'AR',
+    'INFORMATION',
+    'NOTIFICATIONS',
+    'REMOVE',
+    'ESCALATE',
+  ]),
+  confidence: z.number().min(0).max(1),
+  intent: z.string(),
+  entities: z.object({
+    orderNumber: z.string().optional(),
+    propertyAddress: z.string().optional(),
+    amount: z.number().optional(),
+    urgency: z.enum(['low', 'medium', 'high']).optional(),
+    requestedAction: z.string().optional(),
+  }),
+  shouldEscalate: z.boolean(),
+  reasoning: z.string(),
+});
+
+// Validate environment on module load
+const env = validateEnv();
+
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: env.ANTHROPIC_API_KEY,
 });
 
 /**
@@ -44,6 +80,12 @@ export async function classifyEmail(
     isExistingClient?: boolean;
     hasActiveOrders?: boolean;
     recentInteractions?: number;
+    isCampaignReply?: boolean;
+    jobContext?: {
+      jobName?: string;
+      jobDescription?: string;
+      originalEmail?: string;
+    };
   }
 ): Promise<EmailClassification> {
   try {
@@ -67,7 +109,9 @@ export async function classifyEmail(
       throw new Error('Unexpected response type from Claude');
     }
 
-    const classification = JSON.parse(content.text) as EmailClassification;
+    // Validate with Zod schema
+    const parsed = JSON.parse(content.text);
+    const classification = EmailClassificationSchema.parse(parsed);
 
     // Apply 95% confidence rule
     classification.shouldEscalate = classification.confidence < 0.95;
@@ -77,16 +121,33 @@ export async function classifyEmail(
 
     return classification;
   } catch (error) {
-    console.error('Error classifying email:', error);
+    // Log detailed error for monitoring
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorDetails = {
+      emailId: email.id,
+      from: email.from.email,
+      subject: email.subject,
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    };
+
+    console.error('Email classification failed:', errorDetails);
+
+    // TODO: Send to monitoring/alerting system
+    // await alertMonitoring({
+    //   severity: 'high',
+    //   message: 'Email classification system failure',
+    //   context: errorDetails,
+    // });
 
     // Default to escalate if classification fails
     return {
       category: 'ESCALATE',
       confidence: 0,
-      intent: 'Unable to classify',
+      intent: 'Unable to classify due to system error',
       entities: {},
       shouldEscalate: true,
-      reasoning: 'Classification error - requires human review',
+      reasoning: `Classification error: ${errorMessage}`,
     };
   }
 }
@@ -100,8 +161,21 @@ function buildClassificationPrompt(
     isExistingClient?: boolean;
     hasActiveOrders?: boolean;
     recentInteractions?: number;
+    isCampaignReply?: boolean;
+    jobContext?: {
+      jobName?: string;
+      jobDescription?: string;
+      originalEmail?: string;
+    };
   }
 ): string {
+  // Sanitize email content to prevent prompt injection
+  const sanitizedSubject = sanitizeSubject(email.subject);
+  const sanitizedSnippet = sanitizeForAI(email.snippet || '');
+  const sanitizedBody = email.bodyText
+    ? sanitizeForAI(sanitizeEmailBody(email.bodyText).substring(0, 2000))
+    : '';
+
   return `You are the AI Inbox Manager for ROI Homes, an appraisal management company. Your task is to classify incoming emails with high accuracy.
 
 CLASSIFICATION CATEGORIES:
@@ -122,10 +196,10 @@ CONFIDENCE THRESHOLD: Only classify with confidence ≥ 0.95. If unsure, use ESC
 
 EMAIL DETAILS:
 From: ${email.from.name || ''} <${email.from.email}>
-Subject: ${email.subject}
-Snippet: ${email.snippet}
+Subject: ${sanitizedSubject}
+Snippet: ${sanitizedSnippet}
 
-${email.bodyText ? `Body:\n${email.bodyText.substring(0, 2000)}` : ''}
+${sanitizedBody ? `Body:\n${sanitizedBody}` : ''}
 
 ${context ? `CONTEXT:
 - Existing client: ${context.isExistingClient ? 'Yes' : 'No'}
@@ -225,30 +299,41 @@ Now classify the email above. Return ONLY the JSON response, no other text.`;
 }
 
 /**
- * Batch classifies multiple emails
+ * Batch classifies multiple emails with rate limiting
  */
 export async function classifyEmails(
   emails: GmailMessage[],
   contextMap?: Map<string, { isExistingClient?: boolean; hasActiveOrders?: boolean }>
 ): Promise<Map<string, EmailClassification>> {
-  const classifications = new Map<string, EmailClassification>();
+  console.log(`Classifying ${emails.length} emails...`);
 
-  // Process in parallel with rate limiting
-  const batchSize = 5;
-  for (let i = 0; i < emails.length; i += batchSize) {
-    const batch = emails.slice(i, i + batchSize);
-
-    const promises = batch.map(async (email) => {
+  // Use rate limiter to prevent API quota exhaustion
+  const { results, errors } = await AnthropicRateLimiter.classifyEmails(
+    emails,
+    async (email) => {
       const context = contextMap?.get(email.from.email);
       const classification = await classifyEmail(email, context);
       return { emailId: email.id, classification };
-    });
+    }
+  );
 
-    const results = await Promise.all(promises);
-    results.forEach(({ emailId, classification }) => {
-      classifications.set(emailId, classification);
-    });
+  // Convert results to map
+  const classifications = new Map<string, EmailClassification>();
+  results.forEach(({ emailId, classification }) => {
+    classifications.set(emailId, classification);
+  });
+
+  // Log any errors
+  if (errors.length > 0) {
+    console.warn(
+      `Failed to classify ${errors.length}/${emails.length} emails. ` +
+      `Check logs for details.`
+    );
   }
+
+  console.log(
+    `Classification complete: ${results.length} successful, ${errors.length} errors`
+  );
 
   return classifications;
 }

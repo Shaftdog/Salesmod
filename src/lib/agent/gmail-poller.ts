@@ -425,7 +425,8 @@ async function buildContextMap(
         .from('orders')
         .select('*', { count: 'exact', head: true })
         .eq('client_id', contact.client_id)
-        .in('status', ['pending', 'in_progress', 'scheduled']);
+        .in('status', ['pending', 'in_progress', 'scheduled'])
+        .limit(100); // Limit to prevent unbounded query
 
       hasActiveOrders = (count || 0) > 0;
     }

@@ -1,6 +1,8 @@
 import { google, gmail_v1 } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import { createClient } from '@/lib/supabase/server';
+import { GmailRateLimiter } from '@/lib/utils/rate-limiter';
+import { validateEnv } from '@/lib/env';
 
 export interface GmailMessage {
   id: string;
@@ -61,11 +63,12 @@ export class GmailService {
     const expiresAt = new Date(token.expires_at);
     const isExpired = expiresAt < new Date();
 
-    // Create OAuth2 client
+    // Validate environment and create OAuth2 client
+    const env = validateEnv();
     const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      `${process.env.NEXT_PUBLIC_APP_URL}/api/integrations/gmail/callback`
+      env.GOOGLE_CLIENT_ID,
+      env.GOOGLE_CLIENT_SECRET,
+      `${env.NEXT_PUBLIC_APP_URL}/api/integrations/gmail/callback`
     );
 
     oauth2Client.setCredentials({
@@ -117,12 +120,20 @@ export class GmailService {
         return [];
       }
 
-      // Fetch full message details in parallel
-      const messagePromises = listResponse.messages.map((msg) =>
-        this.fetchMessage(msg.id!)
+      console.log(`Fetching ${listResponse.messages.length} Gmail messages with rate limiting...`);
+
+      // Fetch full message details with rate limiting to prevent quota exhaustion
+      const { results: messages, errors } = await GmailRateLimiter.fetchMessages(
+        listResponse.messages,
+        async (msg) => this.fetchMessage(msg.id!)
       );
 
-      const messages = await Promise.all(messagePromises);
+      if (errors.length > 0) {
+        console.warn(
+          `Failed to fetch ${errors.length}/${listResponse.messages.length} Gmail messages`
+        );
+      }
+
       return messages.filter((msg): msg is GmailMessage => msg !== null);
     } catch (error) {
       console.error('Error fetching Gmail messages:', error);

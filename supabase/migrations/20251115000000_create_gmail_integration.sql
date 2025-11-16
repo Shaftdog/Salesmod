@@ -141,3 +141,53 @@ COMMENT ON TABLE gmail_sync_state IS 'Tracks Gmail sync state and configuration 
 COMMENT ON COLUMN gmail_messages.confidence IS 'AI classification confidence score (0.00-1.00). <0.95 triggers escalation';
 COMMENT ON COLUMN gmail_messages.intent IS 'AI-extracted entities like {orderNumber, propertyAddress, urgency, amount}';
 COMMENT ON COLUMN gmail_sync_state.auto_respond_threshold IS 'Minimum confidence to auto-respond (default 0.95)';
+
+-- ============================================================================
+-- ROW LEVEL SECURITY POLICIES
+-- ============================================================================
+
+-- Enable RLS on gmail_messages
+ALTER TABLE gmail_messages ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own Gmail messages
+CREATE POLICY "Users can view their own Gmail messages"
+  ON gmail_messages FOR SELECT
+  USING (auth.uid() = org_id);
+
+-- Users can insert their own Gmail messages
+CREATE POLICY "Users can insert their own Gmail messages"
+  ON gmail_messages FOR INSERT
+  WITH CHECK (auth.uid() = org_id);
+
+-- Users can update their own Gmail messages
+CREATE POLICY "Users can update their own Gmail messages"
+  ON gmail_messages FOR UPDATE
+  USING (auth.uid() = org_id);
+
+-- Users can delete their own Gmail messages
+CREATE POLICY "Users can delete their own Gmail messages"
+  ON gmail_messages FOR DELETE
+  USING (auth.uid() = org_id);
+
+-- Enable RLS on gmail_sync_state
+ALTER TABLE gmail_sync_state ENABLE ROW LEVEL SECURITY;
+
+-- Users can view their own sync state
+CREATE POLICY "Users can view their own sync state"
+  ON gmail_sync_state FOR SELECT
+  USING (auth.uid() = org_id);
+
+-- Users can insert their own sync state
+CREATE POLICY "Users can insert their own sync state"
+  ON gmail_sync_state FOR INSERT
+  WITH CHECK (auth.uid() = org_id);
+
+-- Users can update their own sync state
+CREATE POLICY "Users can update their own sync state"
+  ON gmail_sync_state FOR UPDATE
+  USING (auth.uid() = org_id);
+
+-- Users can delete their own sync state
+CREATE POLICY "Users can delete their own sync state"
+  ON gmail_sync_state FOR DELETE
+  USING (auth.uid() = org_id);
