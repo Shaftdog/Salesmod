@@ -76,9 +76,9 @@ export default function AudiencesPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Audiences & Lead Scoring</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Lead Scoring</h1>
           <p className="text-muted-foreground">
-            Build segments and track engagement with lead scoring
+            Track contact engagement and identify hot leads
           </p>
         </div>
         <div className="flex gap-2">

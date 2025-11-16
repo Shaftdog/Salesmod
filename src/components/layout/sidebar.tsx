@@ -39,6 +39,7 @@ import {
   UsersRound,
   Mail,
   BarChart3,
+  Flame,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/use-appraisers";
@@ -67,7 +68,7 @@ function Sidebar() {
     { href: "/marketing/campaigns", icon: Megaphone, label: "Campaigns" },
     { href: "/marketing/content", icon: FileText, label: "Content Library" },
     { href: "/marketing/calendar", icon: CalendarDays, label: "Content Calendar" },
-    { href: "/marketing/audiences", icon: UsersRound, label: "Audiences" },
+    { href: "/marketing/audiences", icon: Flame, label: "Lead Scoring" },
     { href: "/marketing/newsletters", icon: Mail, label: "Newsletters" },
     { href: "/marketing/email-templates", icon: Mail, label: "Email Templates" },
     { href: "/marketing/analytics", icon: BarChart3, label: "Analytics" },
