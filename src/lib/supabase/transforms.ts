@@ -23,7 +23,11 @@ import type {
   Booking,
   BookingConflict,
   TimeEntry,
-  RoutePlan
+  RoutePlan,
+  MileageLog,
+  GpsTracking,
+  RouteWaypoint,
+  OfflineSyncQueue
 } from '@/lib/types'
 
 export function transformClient(dbClient: any): Client {
@@ -620,5 +624,101 @@ export function transformRoutePlan(dbPlan: any): RoutePlan {
     updatedAt: dbPlan.updated_at,
     resource: dbPlan.bookable_resources ? transformBookableResource(dbPlan.bookable_resources) : undefined,
     bookings: dbPlan.bookings ? dbPlan.bookings.map(transformBooking) : undefined,
+  }
+}
+
+// Phase 4 Transforms
+
+export function transformMileageLog(dbLog: any): MileageLog {
+  return {
+    id: dbLog.id,
+    orgId: dbLog.org_id,
+    resourceId: dbLog.resource_id,
+    bookingId: dbLog.booking_id,
+    routePlanId: dbLog.route_plan_id,
+    logDate: dbLog.log_date,
+    startTime: dbLog.start_time,
+    endTime: dbLog.end_time,
+    startLocation: dbLog.start_location,
+    endLocation: dbLog.end_location,
+    startCoordinates: dbLog.start_coordinates,
+    endCoordinates: dbLog.end_coordinates,
+    distanceMiles: dbLog.distance_miles,
+    distanceKm: dbLog.distance_km,
+    purpose: dbLog.purpose,
+    isBillable: dbLog.is_billable,
+    vehicleId: dbLog.vehicle_id,
+    odometerStart: dbLog.odometer_start,
+    odometerEnd: dbLog.odometer_end,
+    ratePerMile: dbLog.rate_per_mile,
+    reimbursementAmount: dbLog.reimbursement_amount,
+    isReimbursed: dbLog.is_reimbursed,
+    reimbursedDate: dbLog.reimbursed_date,
+    notes: dbLog.notes,
+    createdAt: dbLog.created_at,
+    updatedAt: dbLog.updated_at,
+    resource: dbLog.bookable_resources ? transformBookableResource(dbLog.bookable_resources) : undefined,
+    booking: dbLog.bookings ? transformBooking(dbLog.bookings) : undefined,
+    routePlan: dbLog.route_plans ? transformRoutePlan(dbLog.route_plans) : undefined,
+    vehicle: dbLog.equipment_catalog ? transformEquipment(dbLog.equipment_catalog) : undefined,
+  }
+}
+
+export function transformGpsTracking(dbGps: any): GpsTracking {
+  return {
+    id: dbGps.id,
+    resourceId: dbGps.resource_id,
+    bookingId: dbGps.booking_id,
+    timestamp: dbGps.timestamp,
+    coordinates: dbGps.coordinates,
+    speed: dbGps.speed,
+    heading: dbGps.heading,
+    altitude: dbGps.altitude,
+    batteryLevel: dbGps.battery_level,
+    isOnline: dbGps.is_online,
+    createdAt: dbGps.created_at,
+    resource: dbGps.bookable_resources ? transformBookableResource(dbGps.bookable_resources) : undefined,
+    booking: dbGps.bookings ? transformBooking(dbGps.bookings) : undefined,
+  }
+}
+
+export function transformRouteWaypoint(dbWaypoint: any): RouteWaypoint {
+  return {
+    id: dbWaypoint.id,
+    routePlanId: dbWaypoint.route_plan_id,
+    bookingId: dbWaypoint.booking_id,
+    sequenceOrder: dbWaypoint.sequence_order,
+    locationName: dbWaypoint.location_name,
+    address: dbWaypoint.address,
+    coordinates: dbWaypoint.coordinates,
+    arrivalTime: dbWaypoint.arrival_time,
+    departureTime: dbWaypoint.departure_time,
+    durationMinutes: dbWaypoint.duration_minutes,
+    distanceFromPrevious: dbWaypoint.distance_from_previous,
+    travelTimeMinutes: dbWaypoint.travel_time_minutes,
+    isCompleted: dbWaypoint.is_completed,
+    completedAt: dbWaypoint.completed_at,
+    notes: dbWaypoint.notes,
+    createdAt: dbWaypoint.created_at,
+    updatedAt: dbWaypoint.updated_at,
+    routePlan: dbWaypoint.route_plans ? transformRoutePlan(dbWaypoint.route_plans) : undefined,
+    booking: dbWaypoint.bookings ? transformBooking(dbWaypoint.bookings) : undefined,
+  }
+}
+
+export function transformOfflineSyncQueue(dbSync: any): OfflineSyncQueue {
+  return {
+    id: dbSync.id,
+    resourceId: dbSync.resource_id,
+    entityType: dbSync.entity_type,
+    entityId: dbSync.entity_id,
+    operation: dbSync.operation,
+    data: dbSync.data,
+    isSynced: dbSync.is_synced,
+    syncedAt: dbSync.synced_at,
+    syncError: dbSync.sync_error,
+    createdAt: dbSync.created_at,
+    deviceId: dbSync.device_id,
+    resource: dbSync.bookable_resources ? transformBookableResource(dbSync.bookable_resources) : undefined,
   }
 }

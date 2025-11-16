@@ -884,3 +884,109 @@ export interface RoutePlan {
   resource?: BookableResource;
   bookings?: Booking[];
 }
+
+// Phase 4: Route Optimization & Mobile Support
+
+// Mileage Logs
+export const mileagePurposes = ['business', 'personal', 'commute'] as const;
+export type MileagePurpose = typeof mileagePurposes[number];
+
+export interface MileageLog {
+  id: string;
+  orgId: string;
+  resourceId: string;
+  bookingId?: string;
+  routePlanId?: string;
+  logDate: string;
+  startTime?: string;
+  endTime?: string;
+  startLocation?: string;
+  endLocation?: string;
+  startCoordinates?: { lat: number; lng: number };
+  endCoordinates?: { lat: number; lng: number };
+  distanceMiles?: number;
+  distanceKm?: number;
+  purpose: MileagePurpose;
+  isBillable: boolean;
+  vehicleId?: string;
+  odometerStart?: number;
+  odometerEnd?: number;
+  ratePerMile?: number;
+  reimbursementAmount?: number;
+  isReimbursed: boolean;
+  reimbursedDate?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  resource?: BookableResource;
+  booking?: Booking;
+  routePlan?: RoutePlan;
+  vehicle?: Equipment;
+}
+
+// GPS Tracking
+export interface GpsTracking {
+  id: string;
+  resourceId: string;
+  bookingId?: string;
+  timestamp: string;
+  coordinates: { lat: number; lng: number; accuracy?: number };
+  speed?: number;
+  heading?: number;
+  altitude?: number;
+  batteryLevel?: number;
+  isOnline: boolean;
+  createdAt: string;
+
+  // Relations
+  resource?: BookableResource;
+  booking?: Booking;
+}
+
+// Route Waypoints
+export interface RouteWaypoint {
+  id: string;
+  routePlanId: string;
+  bookingId?: string;
+  sequenceOrder: number;
+  locationName?: string;
+  address: string;
+  coordinates?: { lat: number; lng: number };
+  arrivalTime?: string;
+  departureTime?: string;
+  durationMinutes?: number;
+  distanceFromPrevious?: number;
+  travelTimeMinutes?: number;
+  isCompleted: boolean;
+  completedAt?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  routePlan?: RoutePlan;
+  booking?: Booking;
+}
+
+// Offline Sync Queue
+export const syncOperations = ['create', 'update', 'delete'] as const;
+export type SyncOperation = typeof syncOperations[number];
+
+export interface OfflineSyncQueue {
+  id: string;
+  resourceId: string;
+  entityType: string;
+  entityId?: string;
+  operation: SyncOperation;
+  data: any;
+  isSynced: boolean;
+  syncedAt?: string;
+  syncError?: string;
+  createdAt: string;
+  deviceId?: string;
+
+  // Relations
+  resource?: BookableResource;
+}
