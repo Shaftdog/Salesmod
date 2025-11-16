@@ -110,7 +110,7 @@ export function AudienceBuilder({ value, onChange }: AudienceBuilderProps) {
             Role Categories
           </Label>
           <div className="flex flex-wrap gap-2">
-            {['lender', 'investor', 'service_provider'].map((category) => (
+            {(['lender', 'investor', 'service_provider'] as const).map((category) => (
               <Button
                 key={category}
                 variant={value.targetRoleCategories?.includes(category) ? 'default' : 'outline'}
