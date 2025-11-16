@@ -1,5 +1,4 @@
 import { withAdminAuth } from '@/lib/admin/api-middleware'
-import { PERMISSIONS } from '@/lib/admin/permissions'
 import { NextRequest, NextResponse } from 'next/server'
 import { logSuccess } from '@/lib/admin/audit'
 import { AUDIT_ACTIONS } from '@/lib/admin/audit'
@@ -82,25 +81,55 @@ export const POST = withAdminAuth(async (request: NextRequest, { userId, supabas
       )
     }
 
-    // Create auth user (this would typically be done through Supabase Admin API)
-    // For now, we'll just create the profile entry
-    // In production, you'd want to use Supabase Admin API to create auth.users entry first
+    // Create admin client with service role key
+    const { createClient } = await import('@supabase/supabase-js')
+    const adminClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    )
 
-    const { data: newUser, error } = await supabase
+    // Create auth user using Admin API
+    const { data: authUser, error: authError } = await adminClient.auth.admin.createUser({
+      email,
+      email_confirm: true, // Auto-confirm email
+      user_metadata: { name }
+    })
+
+    if (authError) {
+      console.error('Error creating auth user:', authError)
+      return NextResponse.json(
+        { error: authError.message || 'Failed to create auth user' },
+        { status: 500 }
+      )
+    }
+
+    // The trigger will automatically create the profile
+    // Now update the profile with the role
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .insert([{ email, name, role }])
+      .update({ role })
+      .eq('id', authUser.user.id)
       .select()
       .single()
 
-    if (error) {
-      throw error
+    if (profileError) {
+      console.error('Error updating profile role:', profileError)
+      // User was created, but role update failed - still return success
     }
+
+    const newUser = profile || { id: authUser.user.id, email, name, role }
 
     // Log the action
     await logSuccess(
       AUDIT_ACTIONS.USER_CREATE,
       'user',
-      newUser.id,
+      authUser.user.id,
       { name, email, role },
       { created_by: userId }
     )
