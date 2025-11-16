@@ -270,12 +270,13 @@ async function processMessage(
     console.log(`[Gmail Poller] Message ${message.id} is a campaign reply for job ${campaignContext.jobId}`);
   }
 
-  // 3. Classify message using AI (with campaign context)
+  // 3. Classify message using AI (with campaign context and user rules)
   console.log(`[Gmail Poller] Classifying message ${message.id}...`);
   const context = contextMap.get(message.from.email);
   let classification;
   try {
     classification = await classifyEmail(message, {
+      orgId, // Pass orgId to enable user-defined classification rules
       ...context,
       isCampaignReply: campaignContext?.isCampaignReply || false,
       jobContext: campaignContext?.jobContext,

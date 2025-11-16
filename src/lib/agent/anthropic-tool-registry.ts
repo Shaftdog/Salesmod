@@ -722,6 +722,46 @@ export const anthropicTools: Anthropic.Messages.Tool[] = [
     },
   },
   {
+    name: 'storeEmailClassificationRule',
+    description: 'Store a rule to improve email classification accuracy. Use when user says an email was misclassified or should be categorized differently.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        cardId: {
+          type: 'string',
+          description: 'ID of the card that triggered this rule',
+        },
+        patternType: {
+          type: 'string',
+          enum: ['sender_email', 'sender_domain', 'subject_contains', 'subject_regex'],
+          description: 'What pattern to match on (e.g., "sender_domain" for all emails from @hubspot.com)',
+        },
+        patternValue: {
+          type: 'string',
+          description: 'The pattern value (e.g., "hubspot.com" or "newsletter" or email address)',
+        },
+        correctCategory: {
+          type: 'string',
+          enum: ['AMC_ORDER', 'OPPORTUNITY', 'CASE', 'STATUS', 'SCHEDULING', 'UPDATES', 'AP', 'AR', 'INFORMATION', 'NOTIFICATIONS', 'REMOVE', 'ESCALATE'],
+          description: 'The CORRECT category for emails matching this pattern',
+        },
+        wrongCategory: {
+          type: 'string',
+          description: 'The incorrect category it was classified as (for learning)',
+        },
+        reason: {
+          type: 'string',
+          description: 'Why this classification rule is needed (user explanation)',
+        },
+        confidenceOverride: {
+          type: 'number',
+          description: 'Optional: confidence score (0-1) to assign when this rule matches',
+        },
+      },
+      required: ['cardId', 'patternType', 'patternValue', 'correctCategory', 'reason'],
+    },
+  },
+  {
     name: 'reviseCard',
     description: 'Create an improved version of a card based on user feedback. Creates new suggested card with improvements.',
     input_schema: {

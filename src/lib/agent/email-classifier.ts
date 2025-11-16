@@ -4,6 +4,7 @@ import { GmailMessage } from '@/lib/gmail/gmail-service';
 import { sanitizeForAI, sanitizeEmailBody, sanitizeSubject } from '@/lib/utils/email-sanitizer';
 import { AnthropicRateLimiter } from '@/lib/utils/rate-limiter';
 import { validateEnv } from '@/lib/env';
+import { createClient } from '@/lib/supabase/server';
 
 export type EmailCategory =
   | 'AMC_ORDER' // Official appraisal orders from AMCs
@@ -83,12 +84,87 @@ function getAnthropicClient(): Anthropic {
 }
 
 /**
- * Classifies an email using Claude Sonnet 4.5
- * Based on Lindy.ai classification rules
+ * Fetch user-defined classification rules from agent_memories
+ */
+async function fetchClassificationRules(orgId: string): Promise<any[]> {
+  try {
+    const supabase = await createClient();
+    const { data: rules, error } = await supabase
+      .from('agent_memories')
+      .select('content')
+      .eq('org_id', orgId)
+      .eq('scope', 'email_classification')
+      .gte('importance', 0.8) // Only high-importance rules
+      .order('importance', { ascending: false })
+      .limit(20); // Limit to prevent prompt bloat
+
+    if (error) {
+      console.warn('[Email Classifier] Failed to fetch classification rules:', error);
+      return [];
+    }
+
+    return rules?.map(r => r.content) || [];
+  } catch (error) {
+    console.warn('[Email Classifier] Error fetching classification rules:', error);
+    return [];
+  }
+}
+
+/**
+ * Check if email matches any user-defined classification rules
+ */
+function checkClassificationRules(email: GmailMessage, rules: any[]): {
+  matched: boolean;
+  rule?: any;
+  category?: EmailCategory;
+  confidence?: number;
+} {
+  for (const rule of rules) {
+    let matches = false;
+
+    switch (rule.pattern_type) {
+      case 'sender_email':
+        matches = email.from.email.toLowerCase() === rule.pattern_value.toLowerCase();
+        break;
+      case 'sender_domain':
+        const domain = email.from.email.split('@')[1]?.toLowerCase();
+        matches = domain === rule.pattern_value.toLowerCase();
+        break;
+      case 'subject_contains':
+        matches = email.subject?.toLowerCase().includes(rule.pattern_value.toLowerCase()) || false;
+        break;
+      case 'subject_regex':
+        try {
+          const regex = new RegExp(rule.pattern_value, 'i');
+          matches = regex.test(email.subject || '');
+        } catch (e) {
+          console.warn(`[Email Classifier] Invalid regex in rule: ${rule.pattern_value}`);
+        }
+        break;
+    }
+
+    if (matches) {
+      console.log(`[Email Classifier] Rule matched: ${rule.pattern_type} = ${rule.pattern_value} → ${rule.correct_category}`);
+      return {
+        matched: true,
+        rule,
+        category: rule.correct_category as EmailCategory,
+        confidence: rule.confidence_override || 0.99, // High confidence for rule-based matches
+      };
+    }
+  }
+
+  return { matched: false };
+}
+
+/**
+ * Classifies an email using Claude Sonnet 4.5 with user-defined rules
+ * Based on Lindy.ai classification rules + learned preferences
  */
 export async function classifyEmail(
   email: GmailMessage,
   context?: {
+    orgId?: string; // Required for fetching classification rules
     isExistingClient?: boolean;
     hasActiveOrders?: boolean;
     recentInteractions?: number;
@@ -102,7 +178,27 @@ export async function classifyEmail(
 ): Promise<EmailClassification> {
   try {
     console.log(`[Email Classifier] Classifying email ${email.id} from ${email.from.email}`);
-    const prompt = buildClassificationPrompt(email, context);
+
+    // Fetch user-defined classification rules
+    const rules = context?.orgId ? await fetchClassificationRules(context.orgId) : [];
+    console.log(`[Email Classifier] Loaded ${rules.length} classification rules`);
+
+    // Check if email matches any user-defined rules (fast path)
+    const ruleMatch = checkClassificationRules(email, rules);
+    if (ruleMatch.matched && ruleMatch.category) {
+      console.log(`[Email Classifier] Email matched rule - returning ${ruleMatch.category} with confidence ${ruleMatch.confidence}`);
+      return {
+        category: ruleMatch.category,
+        confidence: ruleMatch.confidence || 0.99,
+        intent: ruleMatch.rule.reason || 'Matched user-defined classification rule',
+        entities: {},
+        shouldEscalate: false,
+        reasoning: `User-defined rule: ${ruleMatch.rule.pattern_type} = "${ruleMatch.rule.pattern_value}" → ${ruleMatch.category}. Reason: ${ruleMatch.rule.reason}`,
+      };
+    }
+
+    // No rule match - use AI classification with rules as context
+    const prompt = buildClassificationPrompt(email, context, rules);
 
     const client = getAnthropicClient();
     const message = await client.messages.create({
@@ -167,7 +263,7 @@ export async function classifyEmail(
 }
 
 /**
- * Builds the classification prompt for Claude
+ * Builds the classification prompt for Claude with user-defined rules
  */
 function buildClassificationPrompt(
   email: GmailMessage,
@@ -181,7 +277,8 @@ function buildClassificationPrompt(
       jobDescription?: string;
       originalEmail?: string;
     };
-  }
+  },
+  userRules?: any[]
 ): string {
   // Sanitize email content to prevent prompt injection
   const sanitizedSubject = sanitizeSubject(email.subject);
@@ -189,6 +286,18 @@ function buildClassificationPrompt(
   const sanitizedBody = email.bodyText
     ? sanitizeForAI(sanitizeEmailBody(email.bodyText).substring(0, 2000))
     : '';
+
+  // Build user-defined rules section
+  let rulesSection = '';
+  if (userRules && userRules.length > 0) {
+    rulesSection = `
+USER-DEFINED CLASSIFICATION RULES (HIGH PRIORITY - Check these first!):
+${userRules.map((rule, idx) => `${idx + 1}. ${rule.pattern_type} matching "${rule.pattern_value}" → ${rule.correct_category}
+   Reason: ${rule.reason}`).join('\n')}
+
+⚠️ IMPORTANT: If this email matches any of the above rules, use that category with high confidence (0.99).
+`;
+  }
 
   return `You are the AI Inbox Manager for ROI Homes, an appraisal management company. Your task is to classify incoming emails with high accuracy.
 
@@ -207,7 +316,7 @@ CLASSIFICATION CATEGORIES:
 - ESCALATE: Default for unclear emails (if confidence < 95%)
 
 CONFIDENCE THRESHOLD: Only classify with confidence ≥ 0.95. If unsure, use ESCALATE.
-
+${rulesSection}
 EMAIL DETAILS:
 From: ${email.from.name || ''} <${email.from.email}>
 Subject: ${sanitizedSubject}

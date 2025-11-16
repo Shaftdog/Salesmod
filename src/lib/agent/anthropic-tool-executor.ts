@@ -1055,6 +1055,57 @@ export async function executeAnthropicTool(
       };
     }
 
+    case 'storeEmailClassificationRule': {
+      const { cardId, patternType, patternValue, correctCategory, wrongCategory, reason, confidenceOverride } = toolInput;
+
+      // Generate a unique key for this rule based on pattern
+      const ruleKey = `classification_${patternType}_${patternValue.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}`;
+
+      // Get the card to extract email details
+      const { data: card } = await supabase
+        .from('kanban_cards')
+        .select('gmail_message_id, action_payload')
+        .eq('id', cardId)
+        .single();
+
+      const { error } = await supabase
+        .from('agent_memories')
+        .insert({
+          org_id: userId,
+          scope: 'email_classification',
+          key: ruleKey,
+          content: {
+            type: 'classification_rule',
+            pattern_type: patternType,
+            pattern_value: patternValue,
+            correct_category: correctCategory,
+            wrong_category: wrongCategory,
+            reason,
+            confidence_override: confidenceOverride || null,
+            created_from_card_id: cardId,
+            example_email_id: card?.gmail_message_id || null,
+            created_at: new Date().toISOString(),
+          },
+          importance: 0.95, // High importance - these rules directly affect classification
+          last_used_at: new Date().toISOString(),
+        });
+
+      if (error) return { error: error.message };
+
+      return {
+        success: true,
+        message: `✓ Classification rule created: "${patternType}" matching "${patternValue}" → ${correctCategory}`,
+        rule: {
+          key: ruleKey,
+          patternType,
+          patternValue,
+          correctCategory,
+          reason,
+        },
+        impact: `Future emails matching this pattern will be classified as ${correctCategory} instead of ${wrongCategory || 'other categories'}`,
+      };
+    }
+
     case 'reviseCard': {
       const { cardId, changes, improvementNote } = toolInput;
 
