@@ -302,11 +302,21 @@ export class ReputationService {
 
     // Increment template usage count with org_id verification
     if (templateId) {
-      await supabase
+      // Fetch current template to increment usage_count
+      const { data: template } = await supabase
         .from("review_response_templates")
-        .update({ usage_count: supabase.raw("usage_count + 1") })
+        .select("usage_count")
         .eq("id", templateId)
-        .eq("org_id", orgId); // Verify template belongs to this org
+        .eq("org_id", orgId)
+        .single();
+
+      if (template) {
+        await supabase
+          .from("review_response_templates")
+          .update({ usage_count: (template.usage_count || 0) + 1 })
+          .eq("id", templateId)
+          .eq("org_id", orgId);
+      }
     }
 
     return data;
