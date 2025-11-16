@@ -65,17 +65,24 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
 
   async function onSubmit(data: CreateProductInput) {
     try {
+      // Transform null values to undefined for API compatibility
+      const sanitizedData = {
+        ...data,
+        description: data.description || undefined,
+        sku: data.sku || undefined,
+      };
+
       if (isEditMode && product) {
         await updateProduct.mutateAsync({
           id: product.id,
-          data,
+          data: sanitizedData,
         });
         toast({
           title: "Success",
           description: "Product updated successfully",
         });
       } else {
-        await createProduct.mutateAsync(data);
+        await createProduct.mutateAsync(sanitizedData);
         toast({
           title: "Success",
           description: "Product created successfully",
