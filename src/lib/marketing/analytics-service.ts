@@ -186,9 +186,9 @@ export async function getContentPerformance(orgId: string): Promise<ContentPerfo
     const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
 
     return {
-      contentId: schedule.content?.id || schedule.id,
-      title: schedule.content?.title || 'Untitled',
-      contentType: schedule.content?.content_type || 'unknown',
+      contentId: (Array.isArray(schedule.content) ? schedule.content[0]?.id : (schedule.content as any)?.id) || schedule.id,
+      title: (Array.isArray(schedule.content) ? schedule.content[0]?.title : (schedule.content as any)?.title) || 'Untitled',
+      contentType: (Array.isArray(schedule.content) ? schedule.content[0]?.content_type : (schedule.content as any)?.content_type) || 'unknown',
       channel: schedule.channel,
       publishedAt: schedule.published_at,
       impressions,
