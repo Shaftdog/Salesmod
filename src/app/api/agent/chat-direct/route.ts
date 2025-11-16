@@ -24,7 +24,15 @@ export async function POST(request: NextRequest) {
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
 
+    // Get current date for the agent
+    const currentDate = new Date();
+
     const systemPrompt = `You are an AI Account Manager assistant for a property appraisal management company. You help manage client relationships, track goals, and coordinate outreach.
+
+## Current Date & Time
+${currentDate.toISOString()}
+Date: ${currentDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+Time: ${currentDate.toLocaleTimeString('en-US')}
 
 Your capabilities:
 
