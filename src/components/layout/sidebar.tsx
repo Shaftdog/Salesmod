@@ -69,6 +69,7 @@ function Sidebar() {
     { href: "/marketing/calendar", icon: CalendarDays, label: "Content Calendar" },
     { href: "/marketing/audiences", icon: UsersRound, label: "Audiences" },
     { href: "/marketing/newsletters", icon: Mail, label: "Newsletters" },
+    { href: "/marketing/email-templates", icon: Mail, label: "Email Templates" },
     { href: "/marketing/analytics", icon: BarChart3, label: "Analytics" },
   ];
 
