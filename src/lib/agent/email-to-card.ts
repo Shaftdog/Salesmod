@@ -368,7 +368,7 @@ ${classification.shouldEscalate ? 'Escalated for human review due to low confide
     // For scheduling cards, include time/date entities
     actionPayload = {
       ...actionPayload,
-      requestedTime: entities.timeframe,
+      requestedAction: entities.requestedAction,
       urgency: entities.urgency,
     };
   } else if (cardType === 'create_deal') {
