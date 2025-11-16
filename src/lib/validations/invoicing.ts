@@ -61,6 +61,8 @@ export const CodCollectionMethodSchema = z.enum([
 
 export const CreateLineItemSchema = z.object({
   order_id: z.string().uuid().optional(),
+  product_id: z.string().uuid().optional(), // Optional - for product catalog items
+  square_footage: z.number().int().positive().optional(), // Optional - for SF-based pricing
   description: z.string().min(1, 'Description is required').max(500).transform(sanitizeText),
   quantity: z.number().positive('Quantity must be positive').default(1),
   unit_price: z.number().nonnegative('Unit price must be non-negative'),
@@ -69,6 +71,8 @@ export const CreateLineItemSchema = z.object({
 });
 
 export const UpdateLineItemSchema = z.object({
+  product_id: z.string().uuid().optional(),
+  square_footage: z.number().int().positive().optional(),
   description: z.string().min(1).max(500).transform(sanitizeText).optional(),
   quantity: z.number().positive().optional(),
   unit_price: z.number().nonnegative().optional(),

@@ -17,9 +17,10 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Trash2, ArrowLeft } from 'lucide-react';
+import { Plus, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils/currency';
+import { InvoiceLineItemForm } from '@/components/invoicing/invoice-line-item-form';
 
 export default function CreateInvoicePage() {
   const router = useRouter();
@@ -33,6 +34,8 @@ export default function CreateInvoicePage() {
       payment_method: 'stripe_link',
       line_items: [
         {
+          product_id: undefined,
+          square_footage: undefined,
           description: '',
           quantity: 1,
           unit_price: 0,
@@ -226,121 +229,26 @@ export default function CreateInvoicePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {fields.map((field, index) => (
-                <div key={field.id} className="flex gap-4 items-start p-4 border rounded-lg">
-                  <div className="flex-1 space-y-4">
-                    <FormField
-                      control={form.control}
-                      name={`line_items.${index}.description`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Description</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Residential appraisal service" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <div className="grid grid-cols-3 gap-4">
-                      <FormField
-                        control={form.control}
-                        name={`line_items.${index}.quantity`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Quantity</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                min="1"
-                                {...field}
-                                onChange={(e) => field.onChange(parseFloat(e.target.value))}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name={`line_items.${index}.unit_price`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Unit Price</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                {...field}
-                                onChange={(e) => field.onChange(parseFloat(e.target.value))}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name={`line_items.${index}.tax_rate`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Tax Rate (%)</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="0.01"
-                                {...field}
-                                value={field.value || 0}
-                                onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <div className="text-sm text-muted-foreground">
-                      Subtotal: {formatCurrency(
-                        (watchLineItems[index]?.quantity || 0) * (watchLineItems[index]?.unit_price || 0)
-                      )}
-                      {' | '}
-                      Tax: {formatCurrency(
-                        (watchLineItems[index]?.quantity || 0) *
-                        (watchLineItems[index]?.unit_price || 0) *
-                        ((watchLineItems[index]?.tax_rate || 0) / 100)
-                      )}
-                      {' | '}
-                      Total: {formatCurrency(
-                        (watchLineItems[index]?.quantity || 0) *
-                        (watchLineItems[index]?.unit_price || 0) *
-                        (1 + ((watchLineItems[index]?.tax_rate || 0) / 100))
-                      )}
-                    </div>
-                  </div>
-
-                  {fields.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="icon"
-                      onClick={() => remove(index)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
+                <InvoiceLineItemForm
+                  key={field.id}
+                  form={form}
+                  index={index}
+                  onRemove={() => remove(index)}
+                  showRemove={fields.length > 1}
+                />
               ))}
 
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => append({ description: '', quantity: 1, unit_price: 0, tax_rate: 0 })}
+                onClick={() => append({
+                  product_id: undefined,
+                  square_footage: undefined,
+                  description: '',
+                  quantity: 1,
+                  unit_price: 0,
+                  tax_rate: 0
+                })}
               >
                 <Plus className="mr-2 h-4 w-4" />
                 Add Line Item

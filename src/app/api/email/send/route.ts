@@ -115,12 +115,12 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: replyTo || 'Account Manager <manager@myroihome.com>',
+          from: replyTo || 'Admin <Admin@roiappraise.com>',
           to: to, // Must be a string
           subject,
           html,
           text,
-          reply_to: replyTo,
+          reply_to: replyTo || 'Admin@roiappraise.com',
         }),
       });
 

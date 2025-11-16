@@ -122,6 +122,7 @@ export interface InvoiceLineItem {
   id: string;
   invoice_id: string;
   order_id: string | null;
+  product_id: string | null; // Reference to product catalog
 
   description: string;
   quantity: number;
@@ -130,6 +131,8 @@ export interface InvoiceLineItem {
 
   tax_rate: number;
   tax_amount: number;
+
+  square_footage: number | null; // For products requiring SF-based pricing
 
   line_order: number;
 
