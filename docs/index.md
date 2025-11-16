@@ -76,6 +76,14 @@ updated_by: Claude Code
   - [System Complete](features/contacts/CONTACTS-SYSTEM-COMPLETE.md)
   - [Management Plan](features/contacts/CONTACTS-MANAGEMENT-PLAN.md)
 
+- **[Invoicing](features/invoicing/)** - Billing and payment collection
+  - [Module Design](features/invoicing/INVOICING-MODULE-DESIGN.md)
+  - [Quick Start](features/invoicing/README.md)
+  - [System Design](features/invoicing/INVOICING_SYSTEM_DESIGN.md)
+  - [API Documentation](features/invoicing/API-ROUTES.md)
+  - [SQL Reference](features/invoicing/INVOICING_SQL_REFERENCE.md)
+  - [Testing Guide](features/invoicing/INVOICING_TESTING_GUIDE.md)
+
 - **[Admin Panel](features/admin-panel/)** - Administrative controls
   - [Quickstart](features/admin-panel/ADMIN-PANEL-QUICKSTART.md)
   - [Phase 1](features/admin-panel/ADMIN_PANEL_PHASE1_README.md)
