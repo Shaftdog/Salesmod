@@ -32,6 +32,7 @@ import {
   Receipt,
   CreditCard,
   PieChart,
+  Wallet,
 } from "lucide-react";
 
 export interface NavItem {
@@ -120,6 +121,7 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     items: [
       { href: "/finance", icon: LayoutDashboard, label: "Dashboard" },
       { href: "/finance/invoicing", icon: Receipt, label: "Invoicing" },
+      { href: "/finance/cashflow", icon: Wallet, label: "Cash Flow" },
       { href: "/finance/payments", icon: CreditCard, label: "Payments" },
       { href: "/finance/reports", icon: PieChart, label: "Reports" },
     ],
