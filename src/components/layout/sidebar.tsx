@@ -40,6 +40,7 @@ import {
   Mail,
   BarChart3,
   Flame,
+  Video,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/use-appraisers";
@@ -71,6 +72,7 @@ function Sidebar() {
     { href: "/marketing/audiences", icon: Flame, label: "Lead Scoring" },
     { href: "/marketing/newsletters", icon: Mail, label: "Newsletters" },
     { href: "/marketing/email-templates", icon: Mail, label: "Email Templates" },
+    { href: "/marketing/webinars", icon: Video, label: "Webinars" },
     { href: "/marketing/analytics", icon: BarChart3, label: "Analytics" },
   ];
 
