@@ -32,6 +32,7 @@ import {
   Receipt,
   CreditCard,
   PieChart,
+  ShoppingBag,
 } from "lucide-react";
 
 export interface NavItem {
@@ -62,6 +63,7 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
       { href: "/deals", icon: Target, label: "Deals" },
       { href: "/cases", icon: LifeBuoy, label: "Cases" },
       { href: "/properties", icon: MapPin, label: "Properties" },
+      { href: "/sales/products", icon: ShoppingBag, label: "Products" },
     ],
   },
   {
