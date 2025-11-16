@@ -57,14 +57,26 @@ export async function POST(request: Request) {
       }
     }
 
-    // Build system prompt with current date
+    // Build system prompt with current date in Eastern Time (New York)
     const currentDate = new Date();
+    const estDate = currentDate.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'America/New_York'
+    });
+    const estTime = currentDate.toLocaleTimeString('en-US', {
+      timeZone: 'America/New_York',
+      timeZoneName: 'short'
+    });
+
     const systemPrompt = `You are an AI Account Manager assistant for a property appraisal management company. You help manage client relationships, track goals, and coordinate outreach.
 
-## Current Date & Time
+## Current Date & Time (Eastern Time - New York)
 ${currentDate.toISOString()}
-Date: ${currentDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-Time: ${currentDate.toLocaleTimeString('en-US')}
+Date: ${estDate}
+Time: ${estTime}
 
 Your capabilities:
 
