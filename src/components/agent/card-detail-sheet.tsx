@@ -200,10 +200,57 @@ export function CardDetailSheet({ card, open, onOpenChange }: CardDetailSheetPro
 
             <Separator />
 
+            {/* Original Email Context (if card was created from an email) */}
+            {card.action_payload?.emailId && card.action_payload?.from && (
+              <>
+                <Separator />
+                <div>
+                  <h3 className="text-sm font-medium mb-2">Original Email</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground">From</p>
+                      <p className="text-sm font-medium">
+                        {card.action_payload.from.name || card.action_payload.from.email}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{card.action_payload.from.email}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Subject</p>
+                      <p className="text-sm font-medium">{card.action_payload.subject}</p>
+                    </div>
+                    {(card.action_payload.bodyText || card.action_payload.bodyHtml) && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-2">Email Content</p>
+                        <div
+                          className="prose prose-sm max-w-none rounded-md border p-4 bg-white text-sm max-h-96 overflow-y-auto"
+                          dangerouslySetInnerHTML={{
+                            __html: formatEmailBody(card.action_payload.bodyHtml || card.action_payload.bodyText || '')
+                          }}
+                        />
+                      </div>
+                    )}
+                    {card.action_payload.classification && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Classification</p>
+                        <div className="flex gap-2 items-center">
+                          <Badge variant="outline">{card.action_payload.classification.category}</Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {Math.round((card.action_payload.classification.confidence || 0) * 100)}% confidence
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            <Separator />
+
             {/* Action Details */}
             <div>
               <h3 className="text-sm font-medium mb-2">Action Details</h3>
-              
+
               {card.type === 'send_email' && card.action_payload && (
                 <div className="space-y-3">
                   <div>
