@@ -113,8 +113,8 @@ export function isValidStatusTransition(
   fromStatus: InvoiceStatus,
   toStatus: InvoiceStatus
 ): boolean {
-  const validTransitions = INVOICE_STATUS_TRANSITIONS[fromStatus];
-  return validTransitions.includes(toStatus as any);
+  const validTransitions = INVOICE_STATUS_TRANSITIONS[fromStatus] as readonly string[];
+  return validTransitions.includes(toStatus);
 }
 
 /**

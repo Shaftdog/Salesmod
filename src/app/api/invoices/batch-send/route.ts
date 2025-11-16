@@ -75,8 +75,9 @@ export async function POST(request: NextRequest) {
           throw new Error(`Cannot send invoice with status: ${invoice.status}`);
         }
 
-        // Check if client has email
-        if (!invoice.client.email) {
+        // Check if client has email (client is returned as object from Supabase)
+        const client = Array.isArray(invoice.client) ? invoice.client[0] : invoice.client;
+        if (!client?.email) {
           throw new Error('Client has no email address');
         }
 

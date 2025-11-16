@@ -4,6 +4,16 @@
  */
 
 // =============================================
+// TYPE ALIASES
+// =============================================
+
+/**
+ * Stripe metadata - can contain arbitrary string key-value pairs
+ * Used to attach custom data to Stripe invoices/payments
+ */
+export type StripeMetadata = Record<string, string | number | boolean | null>;
+
+// =============================================
 // ENUMS
 // =============================================
 
@@ -79,7 +89,7 @@ export interface Invoice {
   stripe_payment_link_url: string | null;
   stripe_payment_intent_id: string | null;
   stripe_customer_id: string | null;
-  stripe_metadata: Record<string, any> | null;
+  stripe_metadata: StripeMetadata | null;
 
   // COD fields
   cod_collected_by: string | null;
@@ -278,7 +288,7 @@ export interface UpdateInvoiceRequest {
   stripe_invoice_id?: string;
   stripe_payment_link_url?: string;
   stripe_payment_intent_id?: string;
-  stripe_metadata?: Record<string, any>;
+  stripe_metadata?: StripeMetadata;
 
   // COD updates
   cod_collected_at?: string;

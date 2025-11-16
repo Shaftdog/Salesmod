@@ -43,7 +43,7 @@ export async function POST(
     // Fetch invoice
     const { data: invoice, error: fetchError } = await supabase
       .from('invoices')
-      .select('status, amount_paid')
+      .select('status, amount_paid, notes')
       .eq('id', id)
       .single();
 

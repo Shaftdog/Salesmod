@@ -1,6 +1,13 @@
 /**
  * Batch Invoice Creation API Route
  * POST /api/invoices/batch - Create multiple invoices at once
+ *
+ * NOTE: This implementation processes invoices sequentially without database transactions.
+ * In case of partial failures, successfully created invoices are returned in the 'success' array.
+ * Failed invoices are returned in the 'failed' array with error details.
+ *
+ * FUTURE IMPROVEMENT: Consider implementing Supabase RPC function for atomic batch operations
+ * or implementing compensating transactions for rollback on partial failure.
  */
 
 import { NextRequest } from 'next/server';

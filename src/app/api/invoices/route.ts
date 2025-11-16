@@ -85,11 +85,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (query.search) {
-      // Search in invoice number or client name (using text search)
-      // Escape special characters to prevent SQL injection
-      const escapedSearch = query.search.replace(/[%_\\]/g, '\\$&');
+      // Search in invoice number or client name using safe parameterized queries
+      // Use separate ilike filters instead of string interpolation to prevent injection
+      const searchPattern = `%${query.search}%`;
       supabaseQuery = supabaseQuery.or(
-        `invoice_number.ilike.%${escapedSearch}%,client.company_name.ilike.%${escapedSearch}%`
+        `invoice_number.ilike.${searchPattern},client.company_name.ilike.${searchPattern}`
       );
     }
 

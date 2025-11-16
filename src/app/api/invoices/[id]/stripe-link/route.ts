@@ -6,6 +6,7 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import Stripe from 'stripe';
+import { randomUUID } from 'crypto';
 import {
   GenerateStripeLinkSchema,
   type GenerateStripeLinkInput,
@@ -19,15 +20,15 @@ import {
   verifyResourceOwnership,
 } from '@/lib/errors/api-errors';
 
-// Validate environment variables
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('STRIPE_SECRET_KEY environment variable is required');
+// Initialize Stripe (lazy initialization to avoid build-time errors)
+function getStripeClient() {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error('STRIPE_SECRET_KEY environment variable is required');
+  }
+  return new Stripe(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: '2025-02-24.acacia',
+  });
 }
-
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2024-11-20.acacia',
-});
 
 // =============================================
 // POST /api/invoices/[id]/stripe-link
@@ -84,6 +85,7 @@ export async function POST(
     }
 
     // Get or create Stripe customer
+    const stripe = getStripeClient();
     let stripeCustomerId = invoice.stripe_customer_id;
 
     if (!stripeCustomerId) {
@@ -122,7 +124,8 @@ export async function POST(
         ...body.metadata,
       },
     }, {
-      idempotencyKey: `invoice_create_${id}_${Date.now()}`,
+      // Use UUID for robust idempotency (prevents collisions from concurrent requests)
+      idempotencyKey: `invoice_create_${id}_${randomUUID()}`,
     });
 
     // Add line items to Stripe invoice
@@ -135,7 +138,8 @@ export async function POST(
         unit_amount: Math.round(lineItem.unit_price * 100), // Convert to cents
         tax_rates: lineItem.tax_rate > 0 ? undefined : undefined, // TODO: Create tax rates in Stripe
       }, {
-        idempotencyKey: `invoice_item_${lineItem.id}_${Date.now()}`,
+        // Use UUID for robust idempotency (prevents collisions from concurrent requests)
+        idempotencyKey: `invoice_item_${lineItem.id}_${randomUUID()}`,
       });
     }
 
@@ -147,7 +151,8 @@ export async function POST(
         description: 'Discount',
         amount: -Math.round(invoice.discount_amount * 100), // Negative for discount
       }, {
-        idempotencyKey: `invoice_discount_${id}_${Date.now()}`,
+        // Use UUID for robust idempotency (prevents collisions from concurrent requests)
+        idempotencyKey: `invoice_discount_${id}_${randomUUID()}`,
       });
     }
 
@@ -156,7 +161,8 @@ export async function POST(
       stripeInvoice.id,
       undefined,
       {
-        idempotencyKey: `invoice_finalize_${id}_${Date.now()}`,
+        // Use UUID for robust idempotency (prevents collisions from concurrent requests)
+        idempotencyKey: `invoice_finalize_${id}_${randomUUID()}`,
       }
     );
 

@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { sanitizeText } from '@/lib/utils/sanitize';
 import {
   PAYMENT_METHOD_OPTIONS,
   INVOICE_STATUS_OPTIONS,
@@ -60,7 +61,7 @@ export const CodCollectionMethodSchema = z.enum([
 
 export const CreateLineItemSchema = z.object({
   order_id: z.string().uuid().optional(),
-  description: z.string().min(1, 'Description is required').max(500),
+  description: z.string().min(1, 'Description is required').max(500).transform(sanitizeText),
   quantity: z.number().positive('Quantity must be positive').default(1),
   unit_price: z.number().nonnegative('Unit price must be non-negative'),
   tax_rate: z.number().min(0).max(1).optional().default(0),
@@ -68,7 +69,7 @@ export const CreateLineItemSchema = z.object({
 });
 
 export const UpdateLineItemSchema = z.object({
-  description: z.string().min(1).max(500).optional(),
+  description: z.string().min(1).max(500).transform(sanitizeText).optional(),
   quantity: z.number().positive().optional(),
   unit_price: z.number().nonnegative().optional(),
   tax_rate: z.number().min(0).max(1).optional(),
@@ -91,18 +92,18 @@ export const CreateInvoiceSchema = z.object({
   tax_rate: z.number().min(0).max(1).optional().default(0),
   discount_amount: z.number().nonnegative().optional().default(0),
 
-  // Content
-  notes: z.string().max(2000).optional(),
-  terms_and_conditions: z.string().max(5000).optional(),
-  footer_text: z.string().max(500).optional(),
+  // Content (sanitized to prevent XSS)
+  notes: z.string().max(2000).transform(sanitizeText).optional(),
+  terms_and_conditions: z.string().max(5000).transform(sanitizeText).optional(),
+  footer_text: z.string().max(500).transform(sanitizeText).optional(),
 
   // Stripe fields (required if payment_method = 'stripe_link')
   stripe_customer_id: z.string().optional(),
 
   // COD fields (required if payment_method = 'cod')
-  cod_collected_by: z.string().min(1).max(200).optional(),
+  cod_collected_by: z.string().min(1).max(200).transform(sanitizeText).optional(),
   cod_collection_method: CodCollectionMethodSchema.optional(),
-  cod_notes: z.string().max(1000).optional(),
+  cod_notes: z.string().max(1000).transform(sanitizeText).optional(),
 
   // Line items (required)
   line_items: z.array(CreateLineItemSchema).min(1, 'At least one line item is required'),
@@ -140,20 +141,20 @@ export const UpdateInvoiceSchema = z.object({
   due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
   tax_rate: z.number().min(0).max(1).optional(),
   discount_amount: z.number().nonnegative().optional(),
-  notes: z.string().max(2000).optional(),
-  terms_and_conditions: z.string().max(5000).optional(),
-  footer_text: z.string().max(500).optional(),
+  notes: z.string().max(2000).transform(sanitizeText).optional(),
+  terms_and_conditions: z.string().max(5000).transform(sanitizeText).optional(),
+  footer_text: z.string().max(500).transform(sanitizeText).optional(),
 
   // Stripe updates
   stripe_invoice_id: z.string().optional(),
   stripe_payment_link_url: z.string().url().optional(),
   stripe_payment_intent_id: z.string().optional(),
-  stripe_metadata: z.record(z.any()).optional(),
+  stripe_metadata: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
 
   // COD updates (cod_collected_at is TIMESTAMPTZ so uses datetime)
   cod_collected_at: z.string().datetime().optional(),
-  cod_receipt_number: z.string().max(100).optional(),
-  cod_notes: z.string().max(1000).optional(),
+  cod_receipt_number: z.string().max(100).transform(sanitizeText).optional(),
+  cod_notes: z.string().max(1000).transform(sanitizeText).optional(),
 });
 
 // =============================================
@@ -164,18 +165,18 @@ export const CreatePaymentSchema = z.object({
   amount: z.number().positive('Payment amount must be positive'),
   payment_method: PaymentTypeSchema,
   payment_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
-  reference_number: z.string().max(200).optional(),
+  reference_number: z.string().max(200).transform(sanitizeText).optional(),
   stripe_payment_intent_id: z.string().optional(),
   stripe_charge_id: z.string().optional(),
-  notes: z.string().max(1000).optional(),
+  notes: z.string().max(1000).transform(sanitizeText).optional(),
 });
 
 export const UpdatePaymentSchema = z.object({
   amount: z.number().positive().optional(),
   payment_method: PaymentTypeSchema.optional(),
   payment_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
-  reference_number: z.string().max(200).optional(),
-  notes: z.string().max(1000).optional(),
+  reference_number: z.string().max(200).transform(sanitizeText).optional(),
+  notes: z.string().max(1000).transform(sanitizeText).optional(),
   is_reconciled: z.boolean().optional(),
 });
 

@@ -5,7 +5,7 @@
 
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
-import { PostgrestError } from '@supabase/supabase-js';
+import { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
 
 // =============================================
 // ERROR TYPES
@@ -278,11 +278,11 @@ export function noContentResponse(): NextResponse {
  */
 export async function validateRequestBody<T>(
   request: Request,
-  schema: any
+  schema: { parse: (data: unknown) => T }
 ): Promise<T> {
   try {
     const body = await request.json();
-    return schema.parse(body) as T;
+    return schema.parse(body);
   } catch (error) {
     if (error instanceof ZodError) {
       throw new ValidationError('Invalid request body', error.errors);
@@ -296,9 +296,9 @@ export async function validateRequestBody<T>(
  */
 export function validateQueryParams<T>(
   url: URL,
-  schema: any
+  schema: { parse: (data: unknown) => T }
 ): T {
-  const params: Record<string, any> = {};
+  const params: Record<string, string | number | boolean> = {};
 
   url.searchParams.forEach((value, key) => {
     // Try to parse numbers
@@ -349,12 +349,32 @@ export async function getAuthenticatedOrgId(supabase: any): Promise<string> {
 /**
  * Verify that a resource belongs to the authenticated user's org
  */
+// Valid tables for ownership verification (must have org_id column)
+const TABLES_WITH_ORG_ID = [
+  'invoices',
+  'payments',
+  'clients',
+  'orders',
+  'properties',
+  'comparables',
+] as const;
+
 export async function verifyResourceOwnership(
-  supabase: any,
+  supabase: SupabaseClient,
   table: string,
   resourceId: string,
   orgId: string
 ): Promise<void> {
+  // Validate table name to prevent potential misuse
+  if (!TABLES_WITH_ORG_ID.includes(table as any)) {
+    console.error('SECURITY: Invalid table for ownership verification', {
+      table,
+      resourceId,
+      orgId,
+    });
+    throw new Error(`Invalid table for ownership verification: ${table}`);
+  }
+
   const { data, error } = await supabase
     .from(table)
     .select('org_id')
@@ -365,10 +385,24 @@ export async function verifyResourceOwnership(
     if (error.code === 'PGRST116') {
       throw new NotFoundError('Resource');
     }
+    console.error('Ownership verification error', {
+      table,
+      resourceId,
+      error: error.message,
+      code: error.code,
+    });
     throw error;
   }
 
-  if (data.org_id !== orgId) {
+  if (!data || data.org_id !== orgId) {
+    // Log potential unauthorized access attempts
+    console.warn('SECURITY: Unauthorized resource access attempt', {
+      table,
+      resourceId,
+      attemptedBy: orgId,
+      actualOwner: data?.org_id || 'unknown',
+      timestamp: new Date().toISOString(),
+    });
     throw new ForbiddenError('You do not have access to this resource');
   }
 }

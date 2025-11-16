@@ -16,20 +16,22 @@ import { createClient } from '@/lib/supabase/server';
 import Stripe from 'stripe';
 import { headers } from 'next/headers';
 
-// Validate environment variables
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('STRIPE_SECRET_KEY environment variable is required');
-}
-if (!process.env.STRIPE_WEBHOOK_SECRET) {
-  throw new Error('STRIPE_WEBHOOK_SECRET environment variable is required');
+// Initialize Stripe (lazy initialization to avoid build-time errors)
+function getStripeClient() {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error('STRIPE_SECRET_KEY environment variable is required');
+  }
+  return new Stripe(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: '2025-02-24.acacia',
+  });
 }
 
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2024-11-20.acacia',
-});
-
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+function getWebhookSecret() {
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    throw new Error('STRIPE_WEBHOOK_SECRET environment variable is required');
+  }
+  return process.env.STRIPE_WEBHOOK_SECRET;
+}
 
 // =============================================
 // POST /api/webhooks/stripe
@@ -50,11 +52,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify webhook signature
+    const stripe = getStripeClient();
+    const webhookSecret = getWebhookSecret();
     let event: Stripe.Event;
     try {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
     } catch (err) {
-      console.error('Webhook signature verification failed:', err);
+      // Enhanced security logging for signature verification failures
+      console.error('SECURITY: Webhook signature verification failed', {
+        error: err instanceof Error ? err.message : 'Unknown error',
+        timestamp: new Date().toISOString(),
+        ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
+        userAgent: request.headers.get('user-agent') || 'unknown',
+      });
+      // TODO: Implement alerting for repeated signature failures (potential attack)
       return NextResponse.json(
         { error: 'Invalid signature' },
         { status: 400 }
@@ -106,7 +117,7 @@ export async function POST(request: NextRequest) {
 async function handlePaymentSucceeded(stripeInvoice: Stripe.Invoice) {
   const supabase = await createClient();
 
-  const invoiceId = stripeInvoice.metadata.invoice_id;
+  const invoiceId = stripeInvoice.metadata?.invoice_id;
   if (!invoiceId) {
     console.error('No invoice_id in Stripe invoice metadata');
     return;
@@ -161,7 +172,7 @@ async function handlePaymentSucceeded(stripeInvoice: Stripe.Invoice) {
 async function handlePaymentFailed(stripeInvoice: Stripe.Invoice) {
   const supabase = await createClient();
 
-  const invoiceId = stripeInvoice.metadata.invoice_id;
+  const invoiceId = stripeInvoice.metadata?.invoice_id;
   if (!invoiceId) return;
 
   // Update invoice with failure information
@@ -183,7 +194,7 @@ async function handlePaymentFailed(stripeInvoice: Stripe.Invoice) {
 async function handleInvoiceFinalized(stripeInvoice: Stripe.Invoice) {
   const supabase = await createClient();
 
-  const invoiceId = stripeInvoice.metadata.invoice_id;
+  const invoiceId = stripeInvoice.metadata?.invoice_id;
   if (!invoiceId) return;
 
   // Update invoice with finalized Stripe data
@@ -202,7 +213,7 @@ async function handleInvoiceFinalized(stripeInvoice: Stripe.Invoice) {
 async function handleInvoiceSent(stripeInvoice: Stripe.Invoice) {
   const supabase = await createClient();
 
-  const invoiceId = stripeInvoice.metadata.invoice_id;
+  const invoiceId = stripeInvoice.metadata?.invoice_id;
   if (!invoiceId) return;
 
   // Update sent timestamp
@@ -220,7 +231,7 @@ async function handleInvoiceSent(stripeInvoice: Stripe.Invoice) {
 async function handleInvoiceVoided(stripeInvoice: Stripe.Invoice) {
   const supabase = await createClient();
 
-  const invoiceId = stripeInvoice.metadata.invoice_id;
+  const invoiceId = stripeInvoice.metadata?.invoice_id;
   if (!invoiceId) return;
 
   // Void our invoice as well
