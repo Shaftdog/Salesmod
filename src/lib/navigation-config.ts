@@ -37,6 +37,7 @@ import {
   Mail,
   Video,
   CalendarDays,
+  Star,
 } from "lucide-react";
 
 export interface NavItem {
@@ -83,6 +84,7 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
       { href: "/marketing/newsletters", icon: Mail, label: "Newsletters" },
       { href: "/marketing/email-templates", icon: Mail, label: "Email Templates" },
       { href: "/marketing/webinars", icon: Video, label: "Webinars" },
+      { href: "/marketing/reputation", icon: Star, label: "Reputation" },
       { href: "/marketing/analytics", icon: BarChart3, label: "Analytics" },
       { href: "/marketing/calendar", icon: CalendarDays, label: "Calendar" },
     ],
