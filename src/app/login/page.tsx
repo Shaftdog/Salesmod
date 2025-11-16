@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { RegisterForm } from "@/components/auth/RegisterForm";
+import Link from "next/link";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -112,6 +113,14 @@ export default function LoginPage() {
                     disabled={isLoading}
                     minLength={6}
                   />
+                </div>
+                <div className="flex justify-end">
+                  <Link
+                    href="/reset-password"
+                    className="text-sm text-primary hover:underline underline-offset-4"
+                  >
+                    Forgot password?
+                  </Link>
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
