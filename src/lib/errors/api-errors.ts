@@ -268,6 +268,22 @@ export function noContentResponse(): NextResponse {
   return new NextResponse(null, { status: 204 });
 }
 
+/**
+ * Create a not found (404) response
+ */
+export function notFoundResponse(message: string = 'Resource not found'): NextResponse<ErrorResponse> {
+  return NextResponse.json(
+    {
+      error: {
+        message,
+        code: 'NOT_FOUND',
+        statusCode: 404,
+      },
+    },
+    { status: 404 }
+  );
+}
+
 // =============================================
 // VALIDATION HELPERS
 // =============================================
