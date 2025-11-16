@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import DOMPurify from 'isomorphic-dompurify';
 
 export interface EmailTemplate {
   id: string;
@@ -189,7 +190,7 @@ export async function deleteEmailTemplate(templateId: string): Promise<boolean> 
 }
 
 /**
- * Render template with variables
+ * Render template with variables (XSS-protected)
  */
 export function renderTemplate(
   template: string,
@@ -197,24 +198,40 @@ export function renderTemplate(
 ): string {
   let rendered = template;
 
-  // Replace all {{variable}} placeholders
+  // Replace all {{variable}} placeholders with sanitized values
   Object.entries(variables).forEach(([key, value]) => {
     const regex = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
-    rendered = rendered.replace(regex, String(value || ''));
+    // Sanitize the value to prevent XSS attacks
+    const sanitized = DOMPurify.sanitize(String(value || ''), {
+      ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br', 'ul', 'ol', 'li'],
+      ALLOWED_ATTR: ['href', 'target'],
+    });
+    rendered = rendered.replace(regex, sanitized);
   });
 
   return rendered;
 }
 
 /**
- * Extract variables from template
+ * Extract variables from template (protected against ReDoS)
  */
 export function extractVariables(template: string): string[] {
-  const regex = /{{\\s*([a-zA-Z0-9_]+)\\s*}}/g;
+  // Protect against very large templates that could cause ReDoS
+  if (template.length > 100000) {
+    throw new Error('Template too large (max 100KB)');
+  }
+
+  // Fixed regex - removed incorrect backslash escaping
+  const regex = /{{\s*([a-zA-Z0-9_]+)\s*}}/g;
   const variables: string[] = [];
   let match;
+  let iterations = 0;
+  const MAX_ITERATIONS = 1000;
 
   while ((match = regex.exec(template)) !== null) {
+    if (++iterations > MAX_ITERATIONS) {
+      throw new Error('Too many variables in template (max 1000)');
+    }
     if (!variables.includes(match[1])) {
       variables.push(match[1]);
     }

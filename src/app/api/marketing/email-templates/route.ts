@@ -5,6 +5,8 @@ import {
   listEmailTemplates,
   CreateEmailTemplateInput,
 } from '@/lib/marketing/email-template-service';
+import { createEmailTemplateSchema } from '@/lib/validation/marketing';
+import { z } from 'zod';
 
 export async function GET(request: NextRequest) {
   try {
@@ -71,16 +73,12 @@ export async function POST(request: NextRequest) {
 
     const orgId = profile.id;
 
-    const body: CreateEmailTemplateInput = await request.json();
+    const body = await request.json();
 
-    if (!body.name || !body.category || !body.subjectTemplate || !body.bodyTemplate) {
-      return NextResponse.json(
-        { error: 'Missing required fields: name, category, subjectTemplate, bodyTemplate' },
-        { status: 400 }
-      );
-    }
+    // SECURITY: Validate input with Zod schema
+    const validated = createEmailTemplateSchema.parse(body);
 
-    const template = await createEmailTemplate(orgId, user.id, body);
+    const template = await createEmailTemplate(orgId, user.id, validated as CreateEmailTemplateInput);
 
     if (!template) {
       return NextResponse.json(
@@ -91,6 +89,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ template }, { status: 201 });
   } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: error.errors },
+        { status: 400 }
+      );
+    }
     console.error('Error in POST /api/marketing/email-templates:', error);
     return NextResponse.json(
       { error: error.message || 'Internal server error' },

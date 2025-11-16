@@ -6,10 +6,13 @@ import {
   listNewsletterIssues,
   createNewsletterIssue,
 } from '@/lib/marketing/newsletter-service';
+import { verifyOrgAccess } from '@/lib/api/helpers';
+import { updateNewsletterSchema } from '@/lib/validation/marketing';
+import { z } from 'zod';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -22,14 +25,21 @@ export async function GET(
     const searchParams = request.nextUrl.searchParams;
     const includeIssues = searchParams.get('includeIssues') === 'true';
 
-    const newsletter = await getNewsletter(params.id);
+    const { id } = await params;
+
+    const newsletter = await getNewsletter(id);
 
     if (!newsletter) {
       return NextResponse.json({ error: 'Newsletter not found' }, { status: 404 });
     }
 
+    // SECURITY: Verify org ownership to prevent IDOR vulnerability
+    if (!await verifyOrgAccess(newsletter.orgId)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     if (includeIssues) {
-      const issues = await listNewsletterIssues(params.id);
+      const issues = await listNewsletterIssues(id);
       return NextResponse.json({ newsletter, issues });
     }
 
@@ -45,7 +55,7 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -55,9 +65,26 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
+
+    // First, fetch the newsletter to verify ownership
+    const existingNewsletter = await getNewsletter(id);
+
+    if (!existingNewsletter) {
+      return NextResponse.json({ error: 'Newsletter not found' }, { status: 404 });
+    }
+
+    // SECURITY: Verify org ownership to prevent IDOR vulnerability
+    if (!await verifyOrgAccess(existingNewsletter.orgId)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const body = await request.json();
 
-    const newsletter = await updateNewsletter(params.id, body);
+    // SECURITY: Validate input with Zod schema
+    const validated = updateNewsletterSchema.parse(body);
+
+    const newsletter = await updateNewsletter(id, validated);
 
     if (!newsletter) {
       return NextResponse.json(
@@ -68,6 +95,12 @@ export async function PATCH(
 
     return NextResponse.json({ newsletter });
   } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: error.errors },
+        { status: 400 }
+      );
+    }
     console.error('Error in PATCH /api/marketing/newsletters/[id]:', error);
     return NextResponse.json(
       { error: error.message || 'Internal server error' },

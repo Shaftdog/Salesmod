@@ -46,7 +46,7 @@ export async function getAudienceContacts(
 
   // Exclude role codes
   if (filter.excludeRoleCodes?.length) {
-    query = query.not('primary_role_code', 'in', `(${filter.excludeRoleCodes.join(',')})`);
+    query = query.not('primary_role_code', 'in', filter.excludeRoleCodes);
   }
 
   const { data: contacts, error } = await query;

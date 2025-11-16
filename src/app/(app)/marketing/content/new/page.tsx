@@ -21,25 +21,20 @@ import { toast } from 'sonner';
 import { CreateContentInput, ContentType, FunnelStage } from '@/lib/types/marketing';
 
 const CONTENT_TYPES: { value: ContentType; label: string }[] = [
-  { value: 'blog_post', label: 'Blog Post' },
+  { value: 'blog', label: 'Blog Post' },
   { value: 'social_post', label: 'Social Post' },
   { value: 'email', label: 'Email' },
   { value: 'case_study', label: 'Case Study' },
-  { value: 'whitepaper', label: 'Whitepaper' },
-  { value: 'video', label: 'Video' },
-  { value: 'podcast', label: 'Podcast' },
-  { value: 'infographic', label: 'Infographic' },
-  { value: 'ebook', label: 'eBook' },
-  { value: 'webinar', label: 'Webinar' },
-  { value: 'press_release', label: 'Press Release' },
+  { value: 'testimonial', label: 'Testimonial' },
+  { value: 'market_update', label: 'Market Update' },
+  { value: 'educational', label: 'Educational' },
 ];
 
 const FUNNEL_STAGES: { value: FunnelStage; label: string }[] = [
   { value: 'awareness', label: 'Awareness' },
   { value: 'consideration', label: 'Consideration' },
-  { value: 'decision', label: 'Decision' },
+  { value: 'conversion', label: 'Conversion' },
   { value: 'retention', label: 'Retention' },
-  { value: 'advocacy', label: 'Advocacy' },
 ];
 
 export default function NewContentPage() {
@@ -47,7 +42,7 @@ export default function NewContentPage() {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<CreateContentInput>({
     title: '',
-    contentType: 'blog_post',
+    contentType: 'blog',
     body: {
       short: '',
       medium: '',

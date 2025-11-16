@@ -5,6 +5,8 @@ import {
   listWebinars,
   CreateWebinarInput,
 } from '@/lib/marketing/webinar-service';
+import { createWebinarSchema } from '@/lib/validation/marketing';
+import { z } from 'zod';
 
 export async function GET(request: NextRequest) {
   try {
@@ -73,16 +75,12 @@ export async function POST(request: NextRequest) {
 
     const orgId = profile.id;
 
-    const body: CreateWebinarInput = await request.json();
+    const body = await request.json();
 
-    if (!body.title || !body.scheduledAt) {
-      return NextResponse.json(
-        { error: 'Missing required fields: title, scheduledAt' },
-        { status: 400 }
-      );
-    }
+    // SECURITY: Validate input with Zod schema
+    const validated = createWebinarSchema.parse(body);
 
-    const webinar = await createWebinar(orgId, user.id, body);
+    const webinar = await createWebinar(orgId, user.id, validated as CreateWebinarInput);
 
     if (!webinar) {
       return NextResponse.json(
@@ -93,6 +91,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ webinar }, { status: 201 });
   } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: error.errors },
+        { status: 400 }
+      );
+    }
     console.error('Error in POST /api/marketing/webinars:', error);
     return NextResponse.json(
       { error: error.message || 'Internal server error' },

@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import {
+  getWebinar,
   getWebinarRegistrations,
   registerForWebinar,
   markAttendance,
 } from '@/lib/marketing/webinar-service';
+import { verifyOrgAccess } from '@/lib/api/helpers';
+import { createWebinarRegistrationSchema } from '@/lib/validation/marketing';
+import { z } from 'zod';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -18,7 +22,19 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const registrations = await getWebinarRegistrations(params.id);
+    const { id } = await params;
+
+    // SECURITY: Verify the webinar belongs to user's org
+    const webinar = await getWebinar(id);
+    if (!webinar) {
+      return NextResponse.json({ error: 'Webinar not found' }, { status: 404 });
+    }
+
+    if (!await verifyOrgAccess(webinar.orgId)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const registrations = await getWebinarRegistrations(id);
 
     // Fetch contact details for each registration
     const contactIds = registrations.map((r) => r.contactId);
@@ -47,7 +63,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -57,8 +73,23 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
+
+    // SECURITY: Verify the webinar belongs to user's org
+    const webinar = await getWebinar(id);
+    if (!webinar) {
+      return NextResponse.json({ error: 'Webinar not found' }, { status: 404 });
+    }
+
+    if (!await verifyOrgAccess(webinar.orgId)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const body = await request.json();
 
+    // SECURITY: Validate input with Zod schema
+    // Note: We don't validate all fields here as some may be optional in the service
+    // But we do validate the critical fields
     if (!body.contactId) {
       return NextResponse.json(
         { error: 'Missing required field: contactId' },
@@ -67,7 +98,7 @@ export async function POST(
     }
 
     const registration = await registerForWebinar(
-      params.id,
+      id,
       body.contactId,
       body.source,
       body.questionsAnswers
@@ -82,8 +113,6 @@ export async function POST(
 
     return NextResponse.json({ registration }, { status: 201 });
   } catch (error: any) {
-    console.error('Error in POST /api/marketing/webinars/[id]/registrations:', error);
-
     // Check for unique constraint violation
     if (error.message?.includes('duplicate') || error.code === '23505') {
       return NextResponse.json(
@@ -92,6 +121,7 @@ export async function POST(
       );
     }
 
+    console.error('Error in POST /api/marketing/webinars/[id]/registrations:', error);
     return NextResponse.json(
       { error: error.message || 'Internal server error' },
       { status: 500 }

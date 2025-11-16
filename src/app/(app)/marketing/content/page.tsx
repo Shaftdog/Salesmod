@@ -17,31 +17,23 @@ import {
 import { MarketingContent, ContentType } from '@/lib/types/marketing';
 
 const CONTENT_TYPE_ICONS: Record<ContentType, any> = {
-  'blog_post': FileText,
+  'blog': FileText,
   'social_post': Image,
   'email': Mail,
   'case_study': FileText,
-  'whitepaper': FileText,
-  'video': Video,
-  'podcast': Podcast,
-  'infographic': Image,
-  'ebook': FileText,
-  'webinar': Video,
-  'press_release': FileText,
+  'testimonial': FileText,
+  'market_update': FileText,
+  'educational': FileText,
 };
 
 const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
-  'blog_post': 'Blog Post',
+  'blog': 'Blog Post',
   'social_post': 'Social Post',
   'email': 'Email',
   'case_study': 'Case Study',
-  'whitepaper': 'Whitepaper',
-  'video': 'Video',
-  'podcast': 'Podcast',
-  'infographic': 'Infographic',
-  'ebook': 'eBook',
-  'webinar': 'Webinar',
-  'press_release': 'Press Release',
+  'testimonial': 'Testimonial',
+  'market_update': 'Market Update',
+  'educational': 'Educational',
 };
 
 export default function ContentLibraryPage() {

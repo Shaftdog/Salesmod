@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createCampaign, listCampaigns } from '@/lib/marketing/campaign-service';
 import { CreateCampaignInput } from '@/lib/types/marketing';
+import { createCampaignSchema } from '@/lib/validation/marketing';
+import { z } from 'zod';
 
 export async function GET(request: NextRequest) {
   try {
@@ -66,17 +68,12 @@ export async function POST(request: NextRequest) {
 
     const orgId = profile.id;
 
-    const body: CreateCampaignInput = await request.json();
+    const body = await request.json();
 
-    // Validate required fields
-    if (!body.name || !body.goal || !body.startDate || !body.channels?.length) {
-      return NextResponse.json(
-        { error: 'Missing required fields: name, goal, startDate, channels' },
-        { status: 400 }
-      );
-    }
+    // SECURITY: Validate input with Zod schema
+    const validated = createCampaignSchema.parse(body);
 
-    const campaign = await createCampaign(orgId, user.id, body);
+    const campaign = await createCampaign(orgId, user.id, validated as CreateCampaignInput);
 
     if (!campaign) {
       return NextResponse.json(
@@ -87,6 +84,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ campaign }, { status: 201 });
   } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: error.errors },
+        { status: 400 }
+      );
+    }
     console.error('Error in POST /api/marketing/campaigns:', error);
     return NextResponse.json(
       { error: error.message || 'Internal server error' },
