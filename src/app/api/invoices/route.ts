@@ -114,19 +114,37 @@ export async function GET(request: NextRequest) {
       throw error;
     }
 
+    // Calculate stats
+    const invoices = data || [];
+    const stats = {
+      total_invoices: count || 0,
+      total_amount: invoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0),
+      total_outstanding: invoices.reduce((sum, inv) => sum + (inv.amount_due || 0), 0),
+      total_overdue: invoices
+        .filter(inv =>
+          ['sent', 'viewed', 'partially_paid', 'overdue'].includes(inv.status) &&
+          inv.due_date &&
+          new Date(inv.due_date) < new Date()
+        )
+        .reduce((sum, inv) => sum + (inv.amount_due || 0), 0),
+    };
+
     // Calculate pagination metadata
     const totalPages = count ? Math.ceil(count / limit) : 0;
 
-    return successResponse<InvoiceWithDetails[]>(
-      data || [],
-      undefined,
-      {
+    return NextResponse.json({
+      success: true,
+      data: {
+        invoices,
+        stats,
+      },
+      meta: {
         page,
         limit,
         total: count || 0,
         totalPages,
       }
-    );
+    });
   } catch (error) {
     return handleApiError(error);
   }

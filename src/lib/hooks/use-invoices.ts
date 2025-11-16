@@ -31,7 +31,10 @@ export function useInvoices(params?: {
 
       const response = await fetch(`/api/invoices?${searchParams}`);
       if (!response.ok) throw new Error('Failed to fetch invoices');
-      return response.json();
+      const result = await response.json();
+
+      // Return the data object which contains invoices and stats
+      return result.data || { invoices: [], stats: {} };
     },
   });
 }
