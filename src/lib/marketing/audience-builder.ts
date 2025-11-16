@@ -64,7 +64,7 @@ export async function getAudienceContacts(
   // Filter by tags
   if (filter.includeTags?.length || filter.excludeTags?.length) {
     filtered = filtered.filter(contact => {
-      const contactTags = contact.client?.client_tags?.map(ct => ct.tag?.name) || [];
+      const contactTags = contact.client?.client_tags?.map((ct: any) => ct.tag?.name) || [];
 
       if (filter.includeTags?.length) {
         const hasRequiredTag = filter.includeTags.some(tag =>
