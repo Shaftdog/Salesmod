@@ -7,13 +7,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { CalculatePriceSchema } from '@/lib/validations/products';
 import type { CalculatePriceResponse, ProductPriceBreakdown } from '@/types/products';
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerClient();
+    const supabase = await createClient();
 
     // Check authentication
     const {
