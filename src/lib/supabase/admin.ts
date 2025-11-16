@@ -182,3 +182,36 @@ export async function generateBorrowerMagicLink(
     }
   );
 }
+
+/**
+ * Send magic link to borrower via email
+ *
+ * Uses Supabase Auth's built-in email sending (configured in Supabase dashboard)
+ *
+ * @param email - Borrower email address
+ * @param orderId - Order ID for redirect context
+ */
+export async function sendBorrowerMagicLink(
+  email: string,
+  orderId: string
+): Promise<void> {
+  const adminClient = getAdminClient();
+
+  const { error } = await adminClient.auth.admin.inviteUserByEmail(email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/borrower/orders/${orderId}`,
+    data: {
+      role: 'borrower',
+      order_id: orderId,
+    },
+  });
+
+  if (error) {
+    throw new Error(`Failed to send magic link: ${error.message}`);
+  }
+
+  console.log('[BORROWER MAGIC LINK SENT]', {
+    email,
+    orderId,
+    timestamp: new Date().toISOString(),
+  });
+}
