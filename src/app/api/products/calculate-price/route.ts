@@ -98,7 +98,8 @@ export async function POST(request: NextRequest) {
       breakdown,
     };
 
-    return NextResponse.json(response);
+    // Wrap in data property to match expected API response format
+    return NextResponse.json({ data: response });
   } catch (error: any) {
     console.error('Calculate price API error:', error);
     return NextResponse.json(
