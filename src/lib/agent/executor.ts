@@ -94,6 +94,14 @@ export async function executeCard(cardId: string): Promise<ExecutionResult> {
         result = await executeResearch(card);
         break;
 
+      case 'reply_to_email':
+        result = await executeReplyToEmail(card);
+        break;
+
+      case 'needs_human_response':
+        result = await executeNeedsHumanResponse(card);
+        break;
+
       default:
         result = {
           success: false,
@@ -826,6 +834,180 @@ export async function executeApprovedCards(runId: string, limit: number = 10): P
   }
 
   return results;
+}
+
+/**
+ * Execute: Reply to Email
+ * Generates an AI response and sends it via Gmail API
+ */
+async function executeReplyToEmail(card: KanbanCard): Promise<ExecutionResult> {
+  const supabase = await createClient();
+  const payload = card.action_payload;
+
+  try {
+    // Import Gmail service and response generator
+    const { GmailService } = await import('@/lib/gmail/gmail-service');
+    const { generateEmailResponse } = await import('@/lib/agent/email-response-generator');
+
+    // Get Gmail message from database
+    const { data: gmailMessage, error: msgError } = await supabase
+      .from('gmail_messages')
+      .select('*')
+      .eq('gmail_message_id', payload.emailId)
+      .single();
+
+    if (msgError || !gmailMessage) {
+      return {
+        success: false,
+        cardId: card.id,
+        message: 'Gmail message not found',
+        error: msgError?.message || 'Message does not exist',
+      };
+    }
+
+    // Reconstruct Gmail message object
+    const email = {
+      id: gmailMessage.gmail_message_id,
+      threadId: gmailMessage.gmail_thread_id,
+      from: {
+        email: gmailMessage.from_email,
+        name: gmailMessage.from_name,
+      },
+      to: gmailMessage.to_email,
+      cc: gmailMessage.cc_email,
+      subject: gmailMessage.subject,
+      bodyText: gmailMessage.body_text,
+      bodyHtml: gmailMessage.body_html,
+      snippet: gmailMessage.snippet,
+      receivedAt: new Date(gmailMessage.received_at),
+      labels: gmailMessage.labels || [],
+      hasAttachments: gmailMessage.has_attachments,
+      attachments: gmailMessage.attachments || [],
+    };
+
+    // Check if this is a reply to a campaign email
+    let campaignContext = undefined;
+    if (gmailMessage.is_reply_to_campaign && gmailMessage.job_id) {
+      // Fetch campaign context
+      const { data: job } = await supabase
+        .from('jobs')
+        .select('name, description')
+        .eq('id', gmailMessage.job_id)
+        .single();
+
+      // Fetch original email content from the original card
+      const { data: originalCard } = await supabase
+        .from('kanban_cards')
+        .select('action_payload')
+        .eq('job_id', gmailMessage.job_id)
+        .eq('gmail_thread_id', gmailMessage.gmail_thread_id)
+        .eq('type', 'send_email')
+        .eq('state', 'done')
+        .order('executed_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (job && originalCard) {
+        const originalPayload = originalCard.action_payload || {};
+        campaignContext = {
+          jobName: job.name,
+          jobDescription: job.description,
+          originalEmailSubject: originalPayload.subject || '',
+          originalEmailBody: originalPayload.body || originalPayload.bodyText || '',
+        };
+      }
+    }
+
+    // Generate response using AI (with campaign context if available)
+    const response = await generateEmailResponse(
+      card.org_id,
+      email,
+      payload.classification,
+      undefined, // business context (will be built automatically)
+      campaignContext
+    );
+
+    // Create Gmail service
+    const gmailService = await GmailService.create(card.org_id);
+
+    // Send reply via Gmail API
+    const sentMessageId = await gmailService.sendReply({
+      threadId: email.threadId,
+      to: [email.from.email],
+      subject: response.subject,
+      bodyHtml: response.bodyHtml,
+      inReplyTo: email.id,
+    });
+
+    // Log activity
+    await supabase.from('activities').insert({
+      org_id: card.org_id,
+      client_id: card.client_id,
+      contact_id: card.contact_id,
+      type: 'email_sent',
+      subject: `Replied to: ${email.subject}`,
+      body: response.bodyText,
+      metadata: {
+        cardId: card.id,
+        gmailMessageId: sentMessageId,
+        threadId: email.threadId,
+        category: payload.category,
+        autoSent: response.shouldAutoSend,
+      },
+    });
+
+    return {
+      success: true,
+      cardId: card.id,
+      message: `Email reply sent to ${email.from.email}`,
+      metadata: {
+        sentMessageId,
+        recipient: email.from.email,
+        subject: response.subject,
+      },
+    };
+  } catch (error: any) {
+    console.error('Error executing reply_to_email:', error);
+    return {
+      success: false,
+      cardId: card.id,
+      message: 'Failed to send email reply',
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Execute: Needs Human Response
+ * This card type is for human-only tasks - logs that it needs attention
+ */
+async function executeNeedsHumanResponse(card: KanbanCard): Promise<ExecutionResult> {
+  const supabase = await createClient();
+
+  // This card type should not auto-execute
+  // It's meant to stay in "in_review" state until a human handles it
+
+  // Log activity to notify
+  await supabase.from('activities').insert({
+    org_id: card.org_id,
+    client_id: card.client_id,
+    contact_id: card.contact_id,
+    type: 'note',
+    subject: `Email requires human response: ${card.title}`,
+    body: card.description || '',
+    metadata: {
+      cardId: card.id,
+      emailCategory: card.action_payload?.category,
+      urgent: card.priority === 'high',
+    },
+  });
+
+  return {
+    success: false,
+    cardId: card.id,
+    message: 'This card requires human response and cannot auto-execute',
+    error: 'Human intervention required',
+  };
 }
 
 
