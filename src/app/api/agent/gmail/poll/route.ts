@@ -11,46 +11,80 @@ import { pollGmailInbox } from '@/lib/agent/gmail-poller';
  */
 export async function POST(request: NextRequest) {
   try {
+    console.log('[Gmail Poll Route] Starting manual poll request...');
     const supabase = await createClient();
 
     // Get authenticated user
+    console.log('[Gmail Poll Route] Authenticating user...');
     const {
       data: { user },
       error: userError,
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
+      console.error('[Gmail Poll Route] Authentication failed:', userError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    console.log(`[Gmail Poll Route] Authenticated user: ${user.id}`);
+
     // Get org_id
-    const { data: profile } = await supabase
+    console.log('[Gmail Poll Route] Fetching user profile...');
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id')
       .eq('id', user.id)
       .single();
 
+    if (profileError) {
+      console.error('[Gmail Poll Route] Profile lookup error:', profileError);
+      return NextResponse.json({ error: 'Profile lookup failed' }, { status: 500 });
+    }
+
     if (!profile) {
+      console.error('[Gmail Poll Route] Profile not found for user:', user.id);
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
+    console.log(`[Gmail Poll Route] Profile found: ${profile.id}`);
+
     // Poll Gmail inbox
+    console.log('[Gmail Poll Route] Starting Gmail inbox poll...');
     const result = await pollGmailInbox(profile.id);
 
     if (!result.success) {
+      console.error('[Gmail Poll Route] Polling failed with errors:', result.errors);
+
+      // Determine the most specific error message
+      const mainError = result.errors.length > 0
+        ? result.errors[0]
+        : 'Unknown polling error';
+
       return NextResponse.json(
         {
           success: false,
-          message: 'Gmail polling failed',
+          message: mainError,
           errors: result.errors,
+          details: {
+            messagesProcessed: result.messagesProcessed,
+            cardsCreated: result.cardsCreated,
+          }
         },
         { status: 500 }
       );
     }
 
+    console.log('[Gmail Poll Route] Polling succeeded:', {
+      messagesProcessed: result.messagesProcessed,
+      cardsCreated: result.cardsCreated,
+      autoExecutedCards: result.autoExecutedCards,
+    });
+
     return NextResponse.json({
       success: true,
-      message: `Processed ${result.messagesProcessed} messages`,
+      message: result.messagesProcessed > 0
+        ? `Successfully processed ${result.messagesProcessed} message${result.messagesProcessed === 1 ? '' : 's'}`
+        : 'No new messages',
       data: {
         messagesProcessed: result.messagesProcessed,
         cardsCreated: result.cardsCreated,
@@ -59,12 +93,18 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Gmail polling error:', error);
+    console.error('[Gmail Poll Route] Unexpected error:', error);
+    const errorMessage = (error as Error).message;
+    const errorStack = (error as Error).stack;
+
+    console.error('[Gmail Poll Route] Error stack:', errorStack);
+
     return NextResponse.json(
       {
         success: false,
-        message: 'Failed to poll Gmail',
-        error: (error as Error).message,
+        message: 'Gmail sync failed',
+        error: errorMessage,
+        details: 'Check server logs for more information'
       },
       { status: 500 }
     );

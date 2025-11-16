@@ -25,26 +25,45 @@ export async function pollGmailInbox(orgId: string): Promise<PollResult> {
   };
 
   try {
+    console.log(`[Gmail Poller] Starting poll for org ${orgId}`);
     const supabase = await createClient();
 
     // Check if Gmail sync is enabled
-    const { data: syncState } = await supabase
+    console.log(`[Gmail Poller] Checking sync state...`);
+    const { data: syncState, error: syncStateError } = await supabase
       .from('gmail_sync_state')
       .select('*')
       .eq('org_id', orgId)
       .single();
 
-    if (!syncState || !syncState.is_enabled) {
-      result.errors.push('Gmail sync is not enabled');
+    if (syncStateError) {
+      console.error('[Gmail Poller] Failed to fetch sync state:', syncStateError);
+      result.errors.push(`Database error: ${syncStateError.message}`);
       return result;
     }
 
+    if (!syncState || !syncState.is_enabled) {
+      console.log('[Gmail Poller] Gmail sync is not enabled');
+      result.errors.push('Gmail sync is not enabled for this organization');
+      return result;
+    }
+
+    console.log('[Gmail Poller] Sync state:', {
+      enabled: syncState.is_enabled,
+      autoProcess: syncState.auto_process,
+      lastSync: syncState.last_sync_at,
+    });
+
     // Create Gmail service
+    console.log('[Gmail Poller] Creating Gmail service...');
     let gmailService: GmailService;
     try {
       gmailService = await GmailService.create(orgId);
+      console.log('[Gmail Poller] Gmail service created successfully');
     } catch (error) {
-      result.errors.push('Failed to connect to Gmail: ' + (error as Error).message);
+      const errorMessage = (error as Error).message;
+      console.error('[Gmail Poller] Failed to create Gmail service:', errorMessage);
+      result.errors.push(`Gmail connection failed: ${errorMessage}`);
       return result;
     }
 
@@ -53,26 +72,50 @@ export async function pollGmailInbox(orgId: string): Promise<PollResult> {
       ? new Date(syncState.last_sync_at)
       : new Date(Date.now() - 24 * 60 * 60 * 1000); // Last 24 hours if first sync
 
-    const messages = await gmailService.fetchNewMessages(sinceDate);
+    console.log(`[Gmail Poller] Fetching messages since ${sinceDate.toISOString()}...`);
+
+    let messages: GmailMessage[];
+    try {
+      messages = await gmailService.fetchNewMessages(sinceDate);
+      console.log(`[Gmail Poller] Found ${messages.length} new messages`);
+    } catch (error) {
+      const errorMessage = (error as Error).message;
+      console.error('[Gmail Poller] Failed to fetch messages:', errorMessage);
+      result.errors.push(`Gmail API error: ${errorMessage}`);
+      return result;
+    }
 
     if (messages.length === 0) {
+      console.log('[Gmail Poller] No new messages to process');
       result.success = true;
       return result;
     }
 
-    console.log(`Found ${messages.length} new Gmail messages for org ${orgId}`);
+    console.log(`[Gmail Poller] Processing ${messages.length} new messages...`);
 
     // Build context map for classification (check if senders are existing clients)
-    const contextMap = await buildContextMap(orgId, messages);
+    console.log('[Gmail Poller] Building context map...');
+    let contextMap: Map<string, { isExistingClient?: boolean; hasActiveOrders?: boolean }>;
+    try {
+      contextMap = await buildContextMap(orgId, messages);
+      console.log(`[Gmail Poller] Context map built for ${contextMap.size} senders`);
+    } catch (error) {
+      console.error('[Gmail Poller] Failed to build context map:', error);
+      result.errors.push(`Context building failed: ${(error as Error).message}`);
+      return result;
+    }
 
     // Process each message
     for (const message of messages) {
       try {
+        console.log(`[Gmail Poller] Processing message ${message.id} from ${message.from.email}`);
         await processMessage(orgId, message, contextMap, syncState.auto_process);
         result.messagesProcessed++;
+        console.log(`[Gmail Poller] Message ${message.id} processed successfully`);
       } catch (error) {
-        console.error(`Error processing message ${message.id}:`, error);
-        result.errors.push(`Message ${message.id}: ${(error as Error).message}`);
+        const errorMessage = (error as Error).message;
+        console.error(`[Gmail Poller] Error processing message ${message.id}:`, errorMessage);
+        result.errors.push(`Message ${message.id}: ${errorMessage}`);
       }
     }
 
@@ -186,20 +229,33 @@ async function processMessage(
 
   // Skip processing if auto_process is disabled
   if (!autoProcess) {
-    console.log(`Auto-process disabled, message ${message.id} stored but not processed`);
+    console.log(`[Gmail Poller] Auto-process disabled, message ${message.id} stored but not processed`);
     return;
   }
 
   // 2. Check if this is a reply to a campaign email
+  console.log(`[Gmail Poller] Checking campaign context for message ${message.id}...`);
   const campaignContext = await findCampaignContext(orgId, message);
+  if (campaignContext?.isCampaignReply) {
+    console.log(`[Gmail Poller] Message ${message.id} is a campaign reply for job ${campaignContext.jobId}`);
+  }
 
   // 3. Classify message using AI (with campaign context)
+  console.log(`[Gmail Poller] Classifying message ${message.id}...`);
   const context = contextMap.get(message.from.email);
-  const classification = await classifyEmail(message, {
-    ...context,
-    isCampaignReply: campaignContext?.isCampaignReply || false,
-    jobContext: campaignContext?.jobContext,
-  });
+  let classification;
+  try {
+    classification = await classifyEmail(message, {
+      ...context,
+      isCampaignReply: campaignContext?.isCampaignReply || false,
+      jobContext: campaignContext?.jobContext,
+    });
+    console.log(`[Gmail Poller] Message ${message.id} classified as ${classification.category} (confidence: ${classification.confidence})`);
+  } catch (error) {
+    const errorMessage = (error as Error).message;
+    console.error(`[Gmail Poller] Failed to classify message ${message.id}:`, errorMessage);
+    throw new Error(`Email classification failed: ${errorMessage}`);
+  }
 
   // 4. Update message with classification and campaign context
   await supabase

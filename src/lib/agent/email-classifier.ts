@@ -63,12 +63,24 @@ const EmailClassificationSchema = z.object({
   reasoning: z.string(),
 });
 
-// Validate environment on module load
-const env = validateEnv();
+// Lazy initialization to avoid module-load time validation errors
+let anthropic: Anthropic | null = null;
 
-const anthropic = new Anthropic({
-  apiKey: env.ANTHROPIC_API_KEY,
-});
+function getAnthropicClient(): Anthropic {
+  if (!anthropic) {
+    try {
+      const env = validateEnv();
+      anthropic = new Anthropic({
+        apiKey: env.ANTHROPIC_API_KEY,
+      });
+      console.log('[Email Classifier] Anthropic client initialized successfully');
+    } catch (error) {
+      console.error('[Email Classifier] Failed to initialize Anthropic client:', error);
+      throw new Error(`Email classification unavailable: ${(error as Error).message}`);
+    }
+  }
+  return anthropic;
+}
 
 /**
  * Classifies an email using Claude Sonnet 4.5
@@ -89,9 +101,11 @@ export async function classifyEmail(
   }
 ): Promise<EmailClassification> {
   try {
+    console.log(`[Email Classifier] Classifying email ${email.id} from ${email.from.email}`);
     const prompt = buildClassificationPrompt(email, context);
 
-    const message = await anthropic.messages.create({
+    const client = getAnthropicClient();
+    const message = await client.messages.create({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 1024,
       temperature: 0,

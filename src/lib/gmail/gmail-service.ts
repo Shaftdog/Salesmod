@@ -45,9 +45,11 @@ export class GmailService {
    * Creates a Gmail service instance with stored OAuth tokens
    */
   static async create(orgId: string): Promise<GmailService> {
+    console.log(`[Gmail Service] Creating service for org ${orgId}...`);
     const supabase = await createClient();
 
     // Get OAuth tokens from database
+    console.log('[Gmail Service] Fetching OAuth tokens from database...');
     const { data: token, error } = await supabase
       .from('oauth_tokens')
       .select('*')
@@ -55,16 +57,38 @@ export class GmailService {
       .eq('provider', 'google')
       .single();
 
-    if (error || !token) {
-      throw new Error('Gmail not connected for this organization');
+    if (error) {
+      console.error('[Gmail Service] Database error fetching OAuth tokens:', error);
+      throw new Error(`Failed to retrieve Gmail tokens: ${error.message}`);
     }
+
+    if (!token) {
+      console.error('[Gmail Service] No OAuth tokens found for this organization');
+      throw new Error('Gmail not connected for this organization. Please reconnect Gmail in Settings.');
+    }
+
+    console.log('[Gmail Service] OAuth tokens retrieved:', {
+      hasAccessToken: !!token.access_token,
+      hasRefreshToken: !!token.refresh_token,
+      expiresAt: token.expires_at,
+    });
 
     // Check if token is expired
     const expiresAt = new Date(token.expires_at);
     const isExpired = expiresAt < new Date();
+    console.log(`[Gmail Service] Token expired: ${isExpired}`);
 
     // Validate environment and create OAuth2 client
-    const env = validateEnv();
+    console.log('[Gmail Service] Validating environment variables...');
+    let env;
+    try {
+      env = validateEnv();
+    } catch (error) {
+      console.error('[Gmail Service] Environment validation failed:', error);
+      throw new Error(`Gmail service configuration error: ${(error as Error).message}`);
+    }
+
+    console.log('[Gmail Service] Creating OAuth2 client...');
     const oauth2Client = new google.auth.OAuth2(
       env.GOOGLE_CLIENT_ID,
       env.GOOGLE_CLIENT_SECRET,
@@ -79,21 +103,29 @@ export class GmailService {
 
     // Refresh token if expired
     if (isExpired && token.refresh_token) {
-      const { credentials } = await oauth2Client.refreshAccessToken();
-      oauth2Client.setCredentials(credentials);
+      console.log('[Gmail Service] Refreshing expired access token...');
+      try {
+        const { credentials } = await oauth2Client.refreshAccessToken();
+        oauth2Client.setCredentials(credentials);
+        console.log('[Gmail Service] Access token refreshed successfully');
 
-      // Update tokens in database
-      await supabase
-        .from('oauth_tokens')
-        .update({
-          access_token: credentials.access_token!,
-          expires_at: new Date(credentials.expiry_date!).toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('org_id', orgId)
-        .eq('provider', 'google');
+        // Update tokens in database
+        await supabase
+          .from('oauth_tokens')
+          .update({
+            access_token: credentials.access_token!,
+            expires_at: new Date(credentials.expiry_date!).toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('org_id', orgId)
+          .eq('provider', 'google');
+      } catch (error) {
+        console.error('[Gmail Service] Failed to refresh access token:', error);
+        throw new Error('Failed to refresh Gmail access token. Please reconnect Gmail in Settings.');
+      }
     }
 
+    console.log('[Gmail Service] Gmail service created successfully');
     return new GmailService(orgId, oauth2Client);
   }
 
