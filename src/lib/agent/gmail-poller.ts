@@ -105,19 +105,40 @@ export async function pollGmailInbox(orgId: string): Promise<PollResult> {
       return result;
     }
 
-    // Process each message
+    // Process each message and track card creation
+    let cardsCreatedCount = 0;
+    const cardCreationErrors: Array<{ messageId: string; subject: string; error: string }> = [];
+
     for (const message of messages) {
       try {
         console.log(`[Gmail Poller] Processing message ${message.id} from ${message.from.email}`);
-        await processMessage(orgId, message, contextMap, syncState.auto_process);
+        const cardCreated = await processMessage(orgId, message, contextMap, syncState.auto_process);
         result.messagesProcessed++;
-        console.log(`[Gmail Poller] Message ${message.id} processed successfully`);
+
+        if (cardCreated) {
+          cardsCreatedCount++;
+          console.log(`[Gmail Poller] Message ${message.id} processed successfully - card created`);
+        } else {
+          console.log(`[Gmail Poller] Message ${message.id} processed - no card created (auto_process disabled or skipped)`);
+        }
       } catch (error) {
         const errorMessage = (error as Error).message;
-        console.error(`[Gmail Poller] Error processing message ${message.id}:`, errorMessage);
-        result.errors.push(`Message ${message.id}: ${errorMessage}`);
+        console.error(`[Gmail Poller] Error processing message ${message.id}:`, {
+          error: errorMessage,
+          stack: (error as Error).stack,
+        });
+
+        cardCreationErrors.push({
+          messageId: message.id,
+          subject: message.subject,
+          error: errorMessage,
+        });
+
+        result.errors.push(`Failed to process "${message.subject}": ${errorMessage}`);
       }
     }
+
+    result.cardsCreated = cardsCreatedCount;
 
     // Update sync state
     const { error: updateError } = await supabase
@@ -134,20 +155,8 @@ export async function pollGmailInbox(orgId: string): Promise<PollResult> {
       .eq('org_id', orgId);
 
     if (updateError) {
-      console.error('Failed to update sync state:', updateError);
+      console.error('[Gmail Poller] Failed to update sync state:', updateError);
     }
-
-    // Count cards created
-    const { count: cardsCreated } = await supabase
-      .from('kanban_cards')
-      .select('*', { count: 'exact', head: true })
-      .eq('org_id', orgId)
-      .in(
-        'gmail_message_id',
-        messages.map((m) => m.id)
-      );
-
-    result.cardsCreated = cardsCreated || 0;
 
     // Count auto-executed cards
     const { count: autoExecuted } = await supabase
@@ -162,7 +171,24 @@ export async function pollGmailInbox(orgId: string): Promise<PollResult> {
 
     result.autoExecutedCards = autoExecuted || 0;
 
-    result.success = true;
+    // Only mark as success if:
+    // 1. No errors occurred, OR
+    // 2. Messages were processed and stored successfully (even if card creation was skipped due to auto_process being disabled)
+    const hasCardCreationErrors = cardCreationErrors.length > 0;
+    result.success = result.errors.length === 0;
+
+    if (hasCardCreationErrors) {
+      console.error('[Gmail Poller] Card creation errors summary:', cardCreationErrors);
+    }
+
+    console.log('[Gmail Poller] Processing complete:', {
+      messagesProcessed: result.messagesProcessed,
+      cardsCreated: result.cardsCreated,
+      autoExecutedCards: result.autoExecutedCards,
+      errors: result.errors.length,
+      success: result.success,
+    });
+
     return result;
   } catch (error) {
     console.error('Error polling Gmail inbox:', error);
@@ -173,13 +199,14 @@ export async function pollGmailInbox(orgId: string): Promise<PollResult> {
 
 /**
  * Processes a single Gmail message
+ * @returns true if a card was created, false if not (e.g., auto_process disabled or message already exists)
  */
 async function processMessage(
   orgId: string,
   message: GmailMessage,
   contextMap: Map<string, { isExistingClient?: boolean; hasActiveOrders?: boolean }>,
   autoProcess: boolean
-): Promise<void> {
+): Promise<boolean> {
   const supabase = await createClient();
 
   // Check if message already processed
@@ -191,11 +218,12 @@ async function processMessage(
     .single();
 
   if (existing) {
-    console.log(`Message ${message.id} already processed, skipping`);
-    return;
+    console.log(`[Gmail Poller] Message ${message.id} already processed, skipping`);
+    return false;
   }
 
   // 1. Store message in database
+  console.log(`[Gmail Poller] Storing message ${message.id} in database...`);
   const { data: gmailMessage, error: insertError } = await supabase
     .from('gmail_messages')
     .insert({
@@ -223,14 +251,16 @@ async function processMessage(
     .single();
 
   if (insertError) {
-    console.error('Error storing Gmail message:', insertError);
-    throw insertError;
+    console.error('[Gmail Poller] Error storing Gmail message:', insertError);
+    throw new Error(`Failed to store email in database: ${insertError.message}`);
   }
 
-  // Skip processing if auto_process is disabled
+  console.log(`[Gmail Poller] Message ${message.id} stored successfully`);
+
+  // Skip card creation if auto_process is disabled
   if (!autoProcess) {
-    console.log(`[Gmail Poller] Auto-process disabled, message ${message.id} stored but not processed`);
-    return;
+    console.log(`[Gmail Poller] Auto-process disabled, message ${message.id} stored but card creation skipped`);
+    return false;
   }
 
   // 2. Check if this is a reply to a campaign email
@@ -258,6 +288,7 @@ async function processMessage(
   }
 
   // 4. Update message with classification and campaign context
+  console.log(`[Gmail Poller] Updating message ${message.id} with classification...`);
   await supabase
     .from('gmail_messages')
     .update({
@@ -276,25 +307,48 @@ async function processMessage(
     })
     .eq('id', gmailMessage.id);
 
-  // 4. Create card from email
-  const cardResult = await createCardFromEmail(
-    orgId,
-    message,
-    classification,
-    gmailMessage.id
-  );
+  // 5. Create card from email
+  console.log(`[Gmail Poller] Creating card for message ${message.id}...`);
+  let cardResult;
+  try {
+    cardResult = await createCardFromEmail(
+      orgId,
+      message,
+      classification,
+      gmailMessage.id
+    );
 
-  console.log(
-    `Created ${cardResult.type} card (${cardResult.state}) for message ${message.id}`
-  );
-
-  // 5. Manage Gmail inbox (label, mark read, archive)
-  await manageGmailInbox(orgId, message, classification, cardResult);
-
-  // 6. If needs escalation, send auto-reply
-  if (classification.category === 'ESCALATE' || classification.shouldEscalate) {
-    await sendEscalationAutoReply(orgId, message);
+    console.log(
+      `[Gmail Poller] Created ${cardResult.type} card (${cardResult.state}) for message ${message.id}`
+    );
+  } catch (error) {
+    const errorMessage = (error as Error).message;
+    console.error(`[Gmail Poller] FAILED to create card for message ${message.id}:`, {
+      error: errorMessage,
+      stack: (error as Error).stack,
+    });
+    throw new Error(`Card creation failed: ${errorMessage}`);
   }
+
+  // 6. Manage Gmail inbox (label, mark read, archive)
+  try {
+    await manageGmailInbox(orgId, message, classification, cardResult);
+  } catch (error) {
+    console.error(`[Gmail Poller] WARNING: Failed to manage Gmail inbox for message ${message.id}:`, error);
+    // Non-fatal - don't block on inbox management failures
+  }
+
+  // 7. If needs escalation, send auto-reply
+  if (classification.category === 'ESCALATE' || classification.shouldEscalate) {
+    try {
+      await sendEscalationAutoReply(orgId, message);
+    } catch (error) {
+      console.error(`[Gmail Poller] WARNING: Failed to send escalation auto-reply for message ${message.id}:`, error);
+      // Non-fatal - don't block on auto-reply failures
+    }
+  }
+
+  return true; // Card was successfully created
 }
 
 /**

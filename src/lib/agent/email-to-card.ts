@@ -2,11 +2,16 @@ import { createClient } from '@/lib/supabase/server';
 import { GmailMessage } from '@/lib/gmail/gmail-service';
 import { EmailClassification, EmailCategory } from '@/lib/agent/email-classifier';
 
+// Valid card types from database schema
+// CHECK constraint: type IN ('send_email', 'schedule_call', 'research', 'create_task', 'follow_up', 'create_deal')
 type CardType =
-  | 'reply_to_email'
-  | 'needs_human_response'
-  | 'create_task'
-  | 'send_email';
+  | 'send_email'      // For email replies (auto or manual)
+  | 'schedule_call'   // For scheduling requests
+  | 'research'        // For information gathering
+  | 'create_task'     // For actionable tasks
+  | 'follow_up'       // For follow-up actions
+  | 'create_deal';    // For sales opportunities
+
 type CardState = 'suggested' | 'in_review' | 'approved' | 'executing' | 'done' | 'blocked' | 'rejected';
 type Priority = 'low' | 'medium' | 'high';
 
@@ -27,18 +32,61 @@ export async function createCardFromEmail(
   classification: EmailClassification,
   gmailMessageId: string
 ): Promise<CardGenerationResult> {
+  console.log('[Email-to-Card] Starting card creation from email:', {
+    messageId: email.id,
+    subject: email.subject,
+    from: email.from.email,
+    category: classification.category,
+    confidence: classification.confidence,
+  });
+
+  // Validate required inputs
+  if (!orgId) {
+    const error = new Error('Cannot create card: orgId is required');
+    console.error('[Email-to-Card] Validation failed:', error.message);
+    throw error;
+  }
+
+  if (!classification.category) {
+    const error = new Error('Cannot create card: classification category is missing');
+    console.error('[Email-to-Card] Validation failed:', error.message);
+    throw error;
+  }
+
   const supabase = await createClient();
 
   // Determine card type and state based on category
+  console.log('[Email-to-Card] Determining card strategy...');
   const { cardType, state, priority, autoExecute } = determineCardStrategy(classification);
+  console.log('[Email-to-Card] Card strategy:', { cardType, state, priority, autoExecute });
 
   // Find or create contact
-  const contactId = await findOrCreateContact(orgId, email);
+  console.log('[Email-to-Card] Finding or creating contact...');
+  let contactId: string;
+  try {
+    contactId = await findOrCreateContact(orgId, email);
+    console.log('[Email-to-Card] Contact ID:', contactId);
+  } catch (error) {
+    console.error('[Email-to-Card] FAILED to find/create contact:', {
+      error: (error as Error).message,
+      stack: (error as Error).stack,
+    });
+    throw new Error(`Contact creation failed: ${(error as Error).message}`);
+  }
 
   // Get client if exists
-  const clientId = await findClientByContact(contactId);
+  console.log('[Email-to-Card] Looking up client for contact...');
+  let clientId: string | null;
+  try {
+    clientId = await findClientByContact(contactId);
+    console.log('[Email-to-Card] Client ID:', clientId || 'none');
+  } catch (error) {
+    console.error('[Email-to-Card] WARNING: Client lookup failed:', error);
+    clientId = null; // Non-fatal, continue without client
+  }
 
   // Build card title and description
+  console.log('[Email-to-Card] Building card content...');
   const { title, description, rationale, actionPayload } = buildCardContent(
     email,
     classification,
@@ -46,6 +94,15 @@ export async function createCardFromEmail(
   );
 
   // Create the card
+  console.log('[Email-to-Card] Inserting card into database...', {
+    org_id: orgId,
+    client_id: clientId,
+    contact_id: contactId,
+    type: cardType,
+    state,
+    priority,
+  });
+
   const { data: card, error } = await supabase
     .from('kanban_cards')
     .insert({
@@ -68,15 +125,50 @@ export async function createCardFromEmail(
     .single();
 
   if (error) {
-    console.error('Error creating card from email:', error);
-    throw error;
+    console.error('[Email-to-Card] FAILED to create card in database:', {
+      messageId: email.id,
+      subject: email.subject,
+      cardType,
+      error: {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      },
+      insertData: {
+        org_id: orgId,
+        client_id: clientId,
+        contact_id: contactId,
+        type: cardType,
+        state,
+        priority,
+      },
+    });
+    throw new Error(`Card insertion failed: ${error.message} (code: ${error.code})`);
   }
 
+  console.log('[Email-to-Card] Card created successfully:', {
+    cardId: card.id,
+    type: cardType,
+    state,
+  });
+
   // Update gmail_message with card_id
-  await supabase
+  console.log('[Email-to-Card] Updating gmail_message with card_id...');
+  const { error: updateError } = await supabase
     .from('gmail_messages')
     .update({ card_id: card.id })
     .eq('gmail_message_id', email.id);
+
+  if (updateError) {
+    console.error('[Email-to-Card] WARNING: Failed to update gmail_message with card_id:', updateError);
+    // Non-fatal - card was created successfully
+  }
+
+  console.log('[Email-to-Card] Card creation complete:', {
+    cardId: card.id,
+    messageId: email.id,
+  });
 
   return {
     cardId: card.id,
@@ -89,6 +181,14 @@ export async function createCardFromEmail(
 /**
  * Determines card type, state, and priority based on classification
  * Implements Lindy-style triage logic
+ *
+ * Maps email categories to valid card types:
+ * - send_email: For email replies
+ * - schedule_call: For scheduling requests
+ * - research: For information gathering
+ * - create_task: For actionable tasks
+ * - follow_up: For follow-up actions
+ * - create_deal: For sales opportunities
  */
 function determineCardStrategy(classification: EmailClassification): {
   cardType: CardType;
@@ -98,84 +198,101 @@ function determineCardStrategy(classification: EmailClassification): {
 } {
   const { category, confidence, entities } = classification;
 
-  // Escalate low confidence
+  // Escalate low confidence - create a task for human review
   if (category === 'ESCALATE' || confidence < 0.95) {
     return {
-      cardType: 'needs_human_response',
+      cardType: 'create_task',
       state: 'in_review',
       priority: 'medium',
       autoExecute: false,
     };
   }
 
-  // Auto-handle categories (high confidence)
-  const autoHandleCategories: EmailCategory[] = [
-    'STATUS',
-    'SCHEDULING',
-    'REMOVE',
-    'NOTIFICATIONS',
-  ];
+  // Map email categories to appropriate card types
+  switch (category) {
+    case 'SCHEDULING':
+      // Scheduling requests → schedule_call card
+      return {
+        cardType: 'schedule_call',
+        state: confidence >= 0.95 ? 'approved' : 'in_review',
+        priority: entities.urgency === 'high' ? 'high' : 'medium',
+        autoExecute: confidence >= 0.95,
+      };
 
-  if (autoHandleCategories.includes(category) && confidence >= 0.95) {
-    return {
-      cardType: 'reply_to_email',
-      state: 'approved', // Auto-approved for execution
-      priority: entities.urgency === 'high' ? 'high' : 'medium',
-      autoExecute: true,
-    };
+    case 'OPPORTUNITY':
+      // Business opportunities → create_deal card
+      return {
+        cardType: 'create_deal',
+        state: 'in_review', // Always requires human review
+        priority: 'high',
+        autoExecute: false,
+      };
+
+    case 'STATUS':
+    case 'REMOVE':
+    case 'NOTIFICATIONS':
+      // Simple responses → send_email card
+      return {
+        cardType: 'send_email',
+        state: confidence >= 0.95 ? 'approved' : 'in_review',
+        priority: entities.urgency === 'high' ? 'high' : 'medium',
+        autoExecute: confidence >= 0.95,
+      };
+
+    case 'UPDATES':
+      // Updates may need follow-up → follow_up card
+      return {
+        cardType: 'follow_up',
+        state: 'in_review',
+        priority: 'medium',
+        autoExecute: false,
+      };
+
+    case 'AMC_ORDER':
+    case 'CASE':
+    case 'AP':
+    case 'AR':
+      // Complex actions requiring human intervention → create_task card
+      const priorityMap: Record<EmailCategory, Priority> = {
+        AMC_ORDER: 'high',
+        CASE: 'high',
+        AP: 'medium',
+        AR: 'medium',
+        OPPORTUNITY: 'high',
+        STATUS: 'medium',
+        SCHEDULING: 'medium',
+        UPDATES: 'medium',
+        INFORMATION: 'low',
+        NOTIFICATIONS: 'low',
+        REMOVE: 'low',
+        ESCALATE: 'medium',
+      };
+
+      return {
+        cardType: 'create_task',
+        state: 'in_review',
+        priority: priorityMap[category] || 'medium',
+        autoExecute: false,
+      };
+
+    case 'INFORMATION':
+      // Informational emails → research card
+      return {
+        cardType: 'research',
+        state: 'suggested',
+        priority: 'low',
+        autoExecute: false,
+      };
+
+    default:
+      // Fallback: create a task for human review
+      return {
+        cardType: 'create_task',
+        state: 'suggested',
+        priority: 'low',
+        autoExecute: false,
+      };
   }
-
-  // Review mode categories (draft for review)
-  const reviewCategories: EmailCategory[] = ['OPPORTUNITY', 'UPDATES'];
-
-  if (reviewCategories.includes(category)) {
-    return {
-      cardType: 'reply_to_email',
-      state: 'in_review', // Requires human approval
-      priority: category === 'OPPORTUNITY' ? 'high' : 'medium',
-      autoExecute: false,
-    };
-  }
-
-  // Human required categories
-  const humanCategories: EmailCategory[] = [
-    'AMC_ORDER',
-    'CASE',
-    'AP',
-    'AR',
-  ];
-
-  if (humanCategories.includes(category)) {
-    const priorityMap: Record<EmailCategory, Priority> = {
-      AMC_ORDER: 'high',
-      CASE: 'high',
-      AP: 'medium',
-      AR: 'medium',
-      OPPORTUNITY: 'high',
-      STATUS: 'medium',
-      SCHEDULING: 'medium',
-      UPDATES: 'medium',
-      INFORMATION: 'low',
-      NOTIFICATIONS: 'low',
-      REMOVE: 'low',
-      ESCALATE: 'medium',
-    };
-
-    return {
-      cardType: 'needs_human_response',
-      state: 'in_review',
-      priority: priorityMap[category] || 'medium',
-      autoExecute: false,
-    };
-  }
-
-  // Information/notifications - just log, no card needed (but we'll create one anyway)
-  return {
-    cardType: 'reply_to_email',
-    state: 'suggested',
-    priority: 'low',
-    autoExecute: false,
-  };
 }
 
 /**
@@ -238,16 +355,31 @@ ${classification.shouldEscalate ? 'Escalated for human review due to low confide
     classification,
   };
 
-  if (cardType === 'reply_to_email') {
-    // For auto-reply cards, include response template hints
+  // Add card-type-specific payload data
+  if (cardType === 'send_email') {
+    // For email reply cards, include response template hints
     actionPayload = {
       ...actionPayload,
       category,
       entities,
       shouldAutoSend: classification.confidence >= 0.95,
     };
-  } else if (cardType === 'needs_human_response') {
-    // For human cards, include full email context
+  } else if (cardType === 'schedule_call') {
+    // For scheduling cards, include time/date entities
+    actionPayload = {
+      ...actionPayload,
+      requestedTime: entities.timeframe,
+      urgency: entities.urgency,
+    };
+  } else if (cardType === 'create_deal') {
+    // For opportunity cards, include deal details
+    actionPayload = {
+      ...actionPayload,
+      opportunityType: category,
+      estimatedValue: entities.amount,
+    };
+  } else {
+    // For tasks, research, follow-ups: include full email context
     actionPayload = {
       ...actionPayload,
       bodyText: email.bodyText,
