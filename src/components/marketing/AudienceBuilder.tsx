@@ -51,7 +51,7 @@ export function AudienceBuilder({ value, onChange }: AudienceBuilderProps) {
     return () => clearTimeout(debounce);
   }, [value]);
 
-  const handleRoleCategoryToggle = (category: string) => {
+  const handleRoleCategoryToggle = (category: 'lender' | 'investor' | 'service_provider' | 'other') => {
     const categories = value.targetRoleCategories || [];
     const newCategories = categories.includes(category)
       ? categories.filter(c => c !== category)
