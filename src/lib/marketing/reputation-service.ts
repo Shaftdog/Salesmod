@@ -16,7 +16,7 @@ interface ReviewWithPlatformName {
   platform_id: string;
   rating: number;
   review_date: string;
-  platform: { platform_name: string } | null;
+  platform: { platform_name: string }[] | null;
 }
 
 export class ReputationService {
@@ -121,7 +121,7 @@ export class ReputationService {
       const platformId = review.platform_id;
       if (!platformMap.has(platformId)) {
         platformMap.set(platformId, {
-          platform_name: review.platform?.platform_name || 'Unknown',
+          platform_name: review.platform?.[0]?.platform_name || 'Unknown',
           ratings: [],
           dates: [],
         });
