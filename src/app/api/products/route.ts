@@ -87,18 +87,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate pagination metadata
-    const totalPages = count ? Math.ceil(count / limit) : 0;
+    const total_pages = count ? Math.ceil(count / limit) : 0;
 
-    return successResponse<Product[]>(
-      data || [],
-      undefined,
-      {
+    // Return response matching ProductListResponse type
+    return NextResponse.json({
+      data: data || [],
+      pagination: {
         page,
         limit,
         total: count || 0,
-        totalPages,
-      }
-    );
+        total_pages,
+      },
+    });
   } catch (error) {
     return handleApiError(error);
   }
