@@ -50,6 +50,24 @@ export function useInvoice(id: string | null) {
   });
 }
 
+// Fetch invoices for a specific order
+export function useOrderInvoices(orderId: string | null) {
+  return useQuery({
+    queryKey: ['order-invoices', orderId],
+    queryFn: async () => {
+      if (!orderId) return [];
+      const response = await fetch(`/api/orders/${orderId}/invoices`);
+      if (!response.ok) {
+        if (response.status === 404) return [];
+        throw new Error('Failed to fetch order invoices');
+      }
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: !!orderId,
+  });
+}
+
 // Create invoice
 export function useCreateInvoice() {
   const queryClient = useQueryClient();

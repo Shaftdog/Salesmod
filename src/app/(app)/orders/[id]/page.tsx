@@ -41,6 +41,7 @@ import { formatCurrency } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { PropertyChip } from "@/components/orders/property-chip";
 import { useRouter } from "next/navigation";
+import { OrderInvoicesSection } from "@/components/orders/order-invoices-section";
 
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -122,8 +123,9 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="overview">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="invoice">Invoice</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
                 <TabsTrigger value="communication">Communication</TabsTrigger>
                 <TabsTrigger value="history">History</TabsTrigger>
@@ -203,6 +205,11 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                             </div>
                         </div>
                     </div>
+                </div>
+              </TabsContent>
+              <TabsContent value="invoice">
+                <div className="pt-6">
+                  <OrderInvoicesSection orderId={order.id} />
                 </div>
               </TabsContent>
               <TabsContent value="documents">
