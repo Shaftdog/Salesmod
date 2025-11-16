@@ -44,8 +44,8 @@ export async function POST(request: NextRequest) {
 
     const { product_id, square_footage } = validation.data;
 
-    // Call the database function to calculate the price
-    const { data, error } = await supabase.rpc('calculate_product_price', {
+    // Call the database function to get price breakdown
+    const { data, error } = await supabase.rpc('get_product_price_breakdown', {
       p_product_id: product_id,
       p_square_footage: square_footage,
     });
