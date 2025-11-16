@@ -314,21 +314,11 @@ export function validateQueryParams<T>(
   url: URL,
   schema: { parse: (data: unknown) => T }
 ): T {
-  const params: Record<string, string | number | boolean> = {};
+  const params: Record<string, string> = {};
 
+  // Keep all query params as strings - let Zod schema handle transformations
   url.searchParams.forEach((value, key) => {
-    // Try to parse numbers
-    if (!isNaN(Number(value))) {
-      params[key] = Number(value);
-    }
-    // Try to parse booleans
-    else if (value === 'true' || value === 'false') {
-      params[key] = value === 'true';
-    }
-    // Keep as string
-    else {
-      params[key] = value;
-    }
+    params[key] = value;
   });
 
   try {
