@@ -33,6 +33,10 @@ import {
   CreditCard,
   PieChart,
   ShoppingBag,
+  FolderOpen,
+  Mail,
+  Video,
+  CalendarDays,
 } from "lucide-react";
 
 export interface NavItem {
@@ -74,8 +78,13 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     items: [
       { href: "/marketing", icon: LayoutDashboard, label: "Dashboard" },
       { href: "/marketing/campaigns", icon: FileText, label: "Campaigns" },
-      { href: "/marketing/leads", icon: UserPlus, label: "Leads" },
+      { href: "/marketing/content", icon: FolderOpen, label: "Content Library" },
+      { href: "/marketing/audiences", icon: UserPlus, label: "Lead Scoring" },
+      { href: "/marketing/newsletters", icon: Mail, label: "Newsletters" },
+      { href: "/marketing/email-templates", icon: Mail, label: "Email Templates" },
+      { href: "/marketing/webinars", icon: Video, label: "Webinars" },
       { href: "/marketing/analytics", icon: BarChart3, label: "Analytics" },
+      { href: "/marketing/calendar", icon: CalendarDays, label: "Calendar" },
     ],
   },
   {
