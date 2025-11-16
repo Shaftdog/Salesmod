@@ -571,4 +571,4 @@ CREATE TRIGGER trigger_set_webinar_registration_org_id
   FOR EACH ROW
   EXECUTE FUNCTION set_webinar_registration_org_id();
 
-COMMENT ON MIGRATION '20251116000001_fix_marketing_rls_policies' IS 'CRITICAL SECURITY FIX: Enforce proper org_id isolation in all marketing module RLS policies';
+-- Note: CRITICAL SECURITY FIX - Enforces proper org_id isolation in all marketing module RLS policies
