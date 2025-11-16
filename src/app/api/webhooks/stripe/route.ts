@@ -16,12 +16,20 @@ import { createClient } from '@/lib/supabase/server';
 import Stripe from 'stripe';
 import { headers } from 'next/headers';
 
+// Validate environment variables
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('STRIPE_SECRET_KEY environment variable is required');
+}
+if (!process.env.STRIPE_WEBHOOK_SECRET) {
+  throw new Error('STRIPE_WEBHOOK_SECRET environment variable is required');
+}
+
 // Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2024-11-20.acacia',
 });
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 // =============================================
 // POST /api/webhooks/stripe
@@ -96,7 +104,7 @@ export async function POST(request: NextRequest) {
 // =============================================
 
 async function handlePaymentSucceeded(stripeInvoice: Stripe.Invoice) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const invoiceId = stripeInvoice.metadata.invoice_id;
   if (!invoiceId) {
@@ -151,7 +159,7 @@ async function handlePaymentSucceeded(stripeInvoice: Stripe.Invoice) {
 }
 
 async function handlePaymentFailed(stripeInvoice: Stripe.Invoice) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const invoiceId = stripeInvoice.metadata.invoice_id;
   if (!invoiceId) return;
@@ -173,7 +181,7 @@ async function handlePaymentFailed(stripeInvoice: Stripe.Invoice) {
 }
 
 async function handleInvoiceFinalized(stripeInvoice: Stripe.Invoice) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const invoiceId = stripeInvoice.metadata.invoice_id;
   if (!invoiceId) return;
@@ -192,7 +200,7 @@ async function handleInvoiceFinalized(stripeInvoice: Stripe.Invoice) {
 }
 
 async function handleInvoiceSent(stripeInvoice: Stripe.Invoice) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const invoiceId = stripeInvoice.metadata.invoice_id;
   if (!invoiceId) return;
@@ -210,7 +218,7 @@ async function handleInvoiceSent(stripeInvoice: Stripe.Invoice) {
 }
 
 async function handleInvoiceVoided(stripeInvoice: Stripe.Invoice) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const invoiceId = stripeInvoice.metadata.invoice_id;
   if (!invoiceId) return;

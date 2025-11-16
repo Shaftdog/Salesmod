@@ -10,6 +10,14 @@ import {
   PAYMENT_TYPE_OPTIONS,
   COD_COLLECTION_METHOD_OPTIONS,
 } from '@/types/invoicing';
+import {
+  MAX_PAGE_LIMIT,
+  MAX_PAGE_NUMBER,
+  DEFAULT_PAGE,
+  DEFAULT_PAGE_LIMIT,
+  DEFAULT_SORT_BY,
+  DEFAULT_SORT_ORDER,
+} from '@/lib/constants/invoicing';
 
 // =============================================
 // BASE SCHEMAS
@@ -75,9 +83,9 @@ export const CreateInvoiceSchema = z.object({
   client_id: z.string().uuid('Invalid client ID'),
   payment_method: PaymentMethodSchema,
 
-  // Dates
-  invoice_date: z.string().datetime().optional(),
-  due_date: z.string().datetime().optional(),
+  // Dates (YYYY-MM-DD format to match database DATE columns)
+  invoice_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
+  due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
 
   // Financial
   tax_rate: z.number().min(0).max(1).optional().default(0),
@@ -129,7 +137,7 @@ export const CreateInvoiceSchema = z.object({
 
 export const UpdateInvoiceSchema = z.object({
   status: InvoiceStatusSchema.optional(),
-  due_date: z.string().datetime().optional(),
+  due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
   tax_rate: z.number().min(0).max(1).optional(),
   discount_amount: z.number().nonnegative().optional(),
   notes: z.string().max(2000).optional(),
@@ -142,7 +150,7 @@ export const UpdateInvoiceSchema = z.object({
   stripe_payment_intent_id: z.string().optional(),
   stripe_metadata: z.record(z.any()).optional(),
 
-  // COD updates
+  // COD updates (cod_collected_at is TIMESTAMPTZ so uses datetime)
   cod_collected_at: z.string().datetime().optional(),
   cod_receipt_number: z.string().max(100).optional(),
   cod_notes: z.string().max(1000).optional(),
@@ -155,7 +163,7 @@ export const UpdateInvoiceSchema = z.object({
 export const CreatePaymentSchema = z.object({
   amount: z.number().positive('Payment amount must be positive'),
   payment_method: PaymentTypeSchema,
-  payment_date: z.string().datetime().optional(),
+  payment_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
   reference_number: z.string().max(200).optional(),
   stripe_payment_intent_id: z.string().optional(),
   stripe_charge_id: z.string().optional(),
@@ -165,7 +173,7 @@ export const CreatePaymentSchema = z.object({
 export const UpdatePaymentSchema = z.object({
   amount: z.number().positive().optional(),
   payment_method: PaymentTypeSchema.optional(),
-  payment_date: z.string().datetime().optional(),
+  payment_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
   reference_number: z.string().max(200).optional(),
   notes: z.string().max(1000).optional(),
   is_reconciled: z.boolean().optional(),
@@ -234,10 +242,10 @@ export const InvoiceFiltersSchema = z.object({
 });
 
 export const PaginationSchema = z.object({
-  page: z.number().int().positive().optional().default(1),
-  limit: z.number().int().positive().max(100).optional().default(20),
-  sort_by: z.string().optional().default('created_at'),
-  sort_order: z.enum(['asc', 'desc']).optional().default('desc'),
+  page: z.number().int().positive().max(MAX_PAGE_NUMBER).optional().default(DEFAULT_PAGE),
+  limit: z.number().int().positive().max(MAX_PAGE_LIMIT).optional().default(DEFAULT_PAGE_LIMIT),
+  sort_by: z.string().optional().default(DEFAULT_SORT_BY),
+  sort_order: z.enum(['asc', 'desc']).optional().default(DEFAULT_SORT_ORDER),
 });
 
 export const InvoiceListQuerySchema = InvoiceFiltersSchema.merge(PaginationSchema);

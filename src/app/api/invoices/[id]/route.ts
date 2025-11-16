@@ -22,6 +22,7 @@ import {
   verifyResourceOwnership,
 } from '@/lib/errors/api-errors';
 import type { InvoiceWithDetails } from '@/types/invoicing';
+import { isValidStatusTransition, InvoiceStatus } from '@/lib/constants/invoicing';
 
 // =============================================
 // GET /api/invoices/[id] - Get invoice details
@@ -99,11 +100,24 @@ export async function PATCH(
       throw fetchError;
     }
 
-    // Prevent editing paid, cancelled, or voided invoices
+    // Validate status transition if status is being changed
+    if (body.status && body.status !== currentInvoice.status) {
+      if (!isValidStatusTransition(currentInvoice.status as InvoiceStatus, body.status as InvoiceStatus)) {
+        throw new BadRequestError(
+          `Invalid status transition from '${currentInvoice.status}' to '${body.status}'`
+        );
+      }
+    }
+
+    // Prevent editing paid, cancelled, or voided invoices (except for status changes)
     if (['paid', 'cancelled', 'void'].includes(currentInvoice.status)) {
-      throw new BadRequestError(
-        `Cannot edit invoice with status: ${currentInvoice.status}`
-      );
+      // Only allow status changes for paid invoices (to void)
+      const isOnlyStatusChange = Object.keys(body).length === 1 && 'status' in body;
+      if (!isOnlyStatusChange) {
+        throw new BadRequestError(
+          `Cannot edit invoice with status: ${currentInvoice.status}. Only status changes are allowed.`
+        );
+      }
     }
 
     // Prevent changing amounts if payments exist

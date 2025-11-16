@@ -148,13 +148,9 @@ CREATE TABLE IF NOT EXISTS public.invoices (
   -- Constraints
   CONSTRAINT unique_invoice_number_per_org UNIQUE (org_id, invoice_number),
   CONSTRAINT valid_amounts CHECK (total_amount = subtotal + tax_amount - discount_amount),
-  CONSTRAINT valid_payment CHECK (amount_paid <= total_amount),
-  CONSTRAINT stripe_fields_for_stripe_method CHECK (
-    payment_method != 'stripe_link' OR stripe_payment_link_url IS NOT NULL
-  ),
-  CONSTRAINT cod_fields_for_cod_method CHECK (
-    payment_method != 'cod' OR (cod_collected_by IS NOT NULL AND cod_collection_method IS NOT NULL)
-  )
+  CONSTRAINT valid_payment CHECK (amount_paid <= total_amount)
+  -- Note: COD and Stripe fields are nullable to support workflow where invoice is created first,
+  -- then payment details are added later (e.g., when payment link is generated or payment is collected)
 );
 
 COMMENT ON TABLE public.invoices IS 'Main invoices table supporting COD, Stripe, and Net Terms payment methods';
@@ -279,7 +275,13 @@ BEGIN
   VALUES (p_org_id)
   ON CONFLICT (org_id) DO NOTHING;
 
-  -- Lock the row and increment
+  -- Lock the row FIRST to prevent race conditions
+  SELECT * INTO v_sequence
+  FROM public.invoice_number_sequences
+  WHERE org_id = p_org_id
+  FOR UPDATE;
+
+  -- Then increment
   UPDATE public.invoice_number_sequences
   SET last_invoice_number = last_invoice_number + 1,
       updated_at = NOW()

@@ -19,8 +19,13 @@ import {
   verifyResourceOwnership,
 } from '@/lib/errors/api-errors';
 
+// Validate environment variables
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('STRIPE_SECRET_KEY environment variable is required');
+}
+
 // Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2024-11-20.acacia',
 });
 
@@ -101,7 +106,7 @@ export async function POST(
         .eq('id', id);
     }
 
-    // Create Stripe invoice
+    // Create Stripe invoice with idempotency key
     const stripeInvoice = await stripe.invoices.create({
       customer: stripeCustomerId,
       auto_advance: true,
@@ -116,6 +121,8 @@ export async function POST(
         invoice_number: invoice.invoice_number,
         ...body.metadata,
       },
+    }, {
+      idempotencyKey: `invoice_create_${id}_${Date.now()}`,
     });
 
     // Add line items to Stripe invoice
@@ -127,6 +134,8 @@ export async function POST(
         quantity: lineItem.quantity,
         unit_amount: Math.round(lineItem.unit_price * 100), // Convert to cents
         tax_rates: lineItem.tax_rate > 0 ? undefined : undefined, // TODO: Create tax rates in Stripe
+      }, {
+        idempotencyKey: `invoice_item_${lineItem.id}_${Date.now()}`,
       });
     }
 
@@ -137,11 +146,19 @@ export async function POST(
         invoice: stripeInvoice.id,
         description: 'Discount',
         amount: -Math.round(invoice.discount_amount * 100), // Negative for discount
+      }, {
+        idempotencyKey: `invoice_discount_${id}_${Date.now()}`,
       });
     }
 
     // Finalize invoice to generate payment link
-    const finalizedInvoice = await stripe.invoices.finalizeInvoice(stripeInvoice.id);
+    const finalizedInvoice = await stripe.invoices.finalizeInvoice(
+      stripeInvoice.id,
+      undefined,
+      {
+        idempotencyKey: `invoice_finalize_${id}_${Date.now()}`,
+      }
+    );
 
     // Update our invoice with Stripe data
     const { data: updatedInvoice, error: updateError } = await supabase
