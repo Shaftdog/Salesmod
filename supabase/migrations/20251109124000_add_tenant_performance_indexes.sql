@@ -42,9 +42,10 @@ CREATE INDEX IF NOT EXISTS idx_borrower_access_expires
   ON public.borrower_order_access(borrower_id, expires_at)
   WHERE expires_at IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_borrower_access_active
-  ON public.borrower_order_access(borrower_id, order_id)
-  WHERE expires_at IS NULL OR expires_at > NOW();
+-- Note: Cannot create partial index with NOW() in predicate (not IMMUTABLE)
+-- Instead, create simple composite index for access checks
+CREATE INDEX IF NOT EXISTS idx_borrower_access_lookup
+  ON public.borrower_order_access(borrower_id, order_id, expires_at);
 
 -- Performance comments
 COMMENT ON INDEX idx_orders_tenant_status IS
