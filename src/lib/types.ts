@@ -492,3 +492,516 @@ export interface BackfillResult {
     data?: any;
   }>;
 }
+
+// =============================================
+// FIELD SERVICES MODULE
+// =============================================
+
+// Skill Types
+export const skillCategories = ['certification', 'property_type', 'specialization', 'software', 'equipment'] as const;
+export type SkillCategory = typeof skillCategories[number];
+
+export interface SkillType {
+  id: string;
+  name: string;
+  description?: string;
+  category?: SkillCategory;
+  isRequired: boolean;
+  isActive: boolean;
+  metadata?: any;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Service Territories
+export const territoryTypes = ['primary', 'secondary', 'extended'] as const;
+export type TerritoryType = typeof territoryTypes[number];
+
+export interface ServiceTerritory {
+  id: string;
+  orgId: string;
+  name: string;
+  description?: string;
+  territoryType: TerritoryType;
+  zipCodes?: string[];
+  counties?: string[];
+  cities?: string[];
+  radiusMiles?: number;
+  centerLat?: number;
+  centerLng?: number;
+  boundaryPolygon?: any; // GeoJSON
+  baseTravelTimeMinutes: number;
+  mileageRate: number;
+  travelFee: number;
+  isActive: boolean;
+  colorHex: string;
+  metadata?: any;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Bookable Resources
+export const resourceTypes = ['appraiser', 'equipment', 'vehicle', 'facility'] as const;
+export type ResourceType = typeof resourceTypes[number];
+
+export const employmentTypes = ['staff', 'contractor', 'vendor'] as const;
+export type EmploymentType = typeof employmentTypes[number];
+
+export interface WorkingHours {
+  enabled: boolean;
+  start: string; // HH:mm format
+  end: string;   // HH:mm format
+}
+
+export interface DefaultWorkingHours {
+  monday: WorkingHours;
+  tuesday: WorkingHours;
+  wednesday: WorkingHours;
+  thursday: WorkingHours;
+  friday: WorkingHours;
+  saturday: WorkingHours;
+  sunday: WorkingHours;
+}
+
+export interface BookableResource {
+  id: string;
+  resourceType: ResourceType;
+  employmentType?: EmploymentType;
+  isBookable: boolean;
+  bookingBufferMinutes: number;
+  maxDailyAppointments: number;
+  maxWeeklyHours: number;
+  primaryTerritoryId?: string;
+  serviceTerritoryIds?: string[];
+  hourlyRate?: number;
+  overtimeRate?: number;
+  perInspectionRate?: number;
+  splitPercentage?: number;
+  assignedEquipmentIds?: string[];
+  licenseNumber?: string;
+  licenseState?: string;
+  licenseExpiry?: string;
+  errorsAndOmissionsCarrier?: string;
+  errorsAndOmissionsExpiry?: string;
+  errorsAndOmissionsAmount?: number;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  preferredContactMethod: 'email' | 'sms' | 'phone';
+  avgInspectionDurationMinutes?: number;
+  avgDriveTimeMinutes?: number;
+  completionRate?: number;
+  avgCustomerRating?: number;
+  totalInspectionsCompleted: number;
+  defaultWorkingHours: DefaultWorkingHours;
+  timezone: string;
+  metadata?: any;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  profile?: User;
+  primaryTerritory?: ServiceTerritory;
+  skills?: ResourceSkill[];
+  availability?: ResourceAvailability[];
+}
+
+// Resource Skills
+export const proficiencyLevels = ['beginner', 'intermediate', 'advanced', 'expert'] as const;
+export type ProficiencyLevel = typeof proficiencyLevels[number];
+
+export interface ResourceSkill {
+  id: string;
+  resourceId: string;
+  skillTypeId: string;
+  proficiencyLevel: ProficiencyLevel;
+  certificationNumber?: string;
+  certifiedDate?: string;
+  expiryDate?: string;
+  issuingAuthority?: string;
+  isVerified: boolean;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  skillType?: SkillType;
+  resource?: BookableResource;
+  verifier?: User;
+}
+
+// Resource Availability
+export const availabilityTypes = ['working_hours', 'time_off', 'blocked', 'override'] as const;
+export type AvailabilityType = typeof availabilityTypes[number];
+
+export const availabilityStatuses = ['pending', 'approved', 'rejected'] as const;
+export type AvailabilityStatus = typeof availabilityStatuses[number];
+
+export interface ResourceAvailability {
+  id: string;
+  resourceId: string;
+  availabilityType: AvailabilityType;
+  startDatetime: string;
+  endDatetime: string;
+  isAvailable: boolean;
+  isRecurring: boolean;
+  recurrenceRule?: string;
+  recurrenceEndDate?: string;
+  reason?: string;
+  notes?: string;
+  isAllDay: boolean;
+  status: AvailabilityStatus;
+  approvedBy?: string;
+  approvedAt?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  resource?: BookableResource;
+  approver?: User;
+  creator?: User;
+}
+
+// Equipment Catalog
+export const equipmentTypes = ['camera', 'drone', 'measuring_device', 'laptop', 'tablet', 'vehicle', 'software_license', 'other'] as const;
+export type EquipmentType = typeof equipmentTypes[number];
+
+export const equipmentStatuses = ['available', 'in_use', 'maintenance', 'retired', 'lost', 'damaged'] as const;
+export type EquipmentStatus = typeof equipmentStatuses[number];
+
+export interface Equipment {
+  id: string;
+  orgId: string;
+  name: string;
+  equipmentType: EquipmentType;
+  serialNumber?: string;
+  assetTag?: string;
+  make?: string;
+  model?: string;
+  purchaseDate?: string;
+  purchasePrice?: number;
+  purchaseCost?: number; // Alias for purchasePrice
+  currentValue?: number;
+  depreciationSchedule?: string;
+  status: EquipmentStatus;
+  condition?: EquipmentCondition; // Current condition
+  assignedTo?: string;
+  assignedDate?: string;
+  location?: string;
+  lastMaintenanceDate?: string;
+  nextMaintenanceDate?: string;
+  maintenanceIntervalDays?: number;
+  maintenanceSchedule?: string;
+  maintenanceNotes?: string;
+  notes?: string; // General notes
+  warrantyExpiry?: string;
+  insurancePolicy?: string;
+  insuranceExpiry?: string;
+  isActive: boolean;
+  metadata?: any;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  assignedResource?: BookableResource;
+  currentAssignment?: EquipmentAssignment[];
+  assignments?: EquipmentAssignment[];
+}
+
+// Equipment Assignments
+export const equipmentConditions = ['excellent', 'good', 'fair', 'poor'] as const;
+export type EquipmentCondition = typeof equipmentConditions[number];
+
+export interface EquipmentAssignment {
+  id: string;
+  equipmentId: string;
+  resourceId: string;
+  assignedDate: string;
+  expectedReturnDate?: string;
+  actualReturnDate?: string;
+  conditionAtCheckout?: EquipmentCondition;
+  conditionAtReturn?: EquipmentCondition;
+  checkoutNotes?: string;
+  returnNotes?: string;
+  damageReported: boolean;
+  damageDescription?: string;
+  damageCost?: number;
+  assignedBy: string;
+  returnedTo?: string;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  equipment?: Equipment;
+  resource?: BookableResource;
+  assigner?: User;
+  receiver?: User;
+}
+
+// =============================================
+// PHASE 2: SCHEDULING & DISPATCH
+// =============================================
+
+// Bookings
+export const bookingTypes = ['inspection', 'follow_up', 'reinspection', 'consultation', 'maintenance', 'training', 'other'] as const;
+export type BookingType = typeof bookingTypes[number];
+
+export const bookingStatuses = ['requested', 'scheduled', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show', 'rescheduled'] as const;
+export type BookingStatus = typeof bookingStatuses[number];
+
+export interface Booking {
+  id: string;
+  orgId: string;
+  orderId?: string;
+  resourceId: string;
+  territoryId?: string;
+  bookingNumber: string;
+  bookingType: BookingType;
+  scheduledStart: string;
+  scheduledEnd: string;
+  actualStart?: string;
+  actualEnd?: string;
+  durationMinutes?: number;
+  actualDurationMinutes?: number;
+  status: BookingStatus;
+  propertyAddress: string;
+  propertyCity?: string;
+  propertyState?: string;
+  propertyZip?: string;
+  latitude?: number;
+  longitude?: number;
+  accessInstructions?: string;
+  specialInstructions?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  estimatedTravelTimeMinutes?: number;
+  actualTravelTimeMinutes?: number;
+  estimatedMileage?: number;
+  actualMileage?: number;
+  routeData?: any;
+  originalBookingId?: string;
+  rescheduledBookingId?: string;
+  rescheduleReason?: string;
+  rescheduleCount: number;
+  cancelledAt?: string;
+  cancelledBy?: string;
+  cancellationReason?: string;
+  completedAt?: string;
+  completionNotes?: string;
+  customerSignature?: string;
+  customerRating?: number;
+  customerFeedback?: string;
+  confirmationSentAt?: string;
+  reminderSentAt?: string;
+  reminderCount: number;
+  assignedBy?: string;
+  assignedAt?: string;
+  autoAssigned: boolean;
+  metadata?: any;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  order?: Order;
+  resource?: BookableResource;
+  territory?: ServiceTerritory;
+  assigner?: User;
+  canceller?: User;
+  originalBooking?: Booking;
+  rescheduledBooking?: Booking;
+}
+
+// Booking Conflicts
+export const conflictTypes = ['time_overlap', 'travel_time', 'double_booked', 'capacity_exceeded', 'territory_mismatch', 'skill_missing'] as const;
+export type ConflictType = typeof conflictTypes[number];
+
+export const conflictSeverities = ['info', 'warning', 'error'] as const;
+export type ConflictSeverity = typeof conflictSeverities[number];
+
+export interface BookingConflict {
+  id: string;
+  bookingId1: string;
+  bookingId2: string;
+  conflictType: ConflictType;
+  severity: ConflictSeverity;
+  overlapMinutes?: number;
+  requiredTravelMinutes?: number;
+  details?: any;
+  resolved: boolean;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  resolutionNotes?: string;
+  createdAt: string;
+
+  // Relations
+  booking1?: Booking;
+  booking2?: Booking;
+  resolver?: User;
+}
+
+// Time Entries
+export const timeEntryTypes = ['clock_in', 'clock_out', 'break_start', 'break_end', 'travel_start', 'travel_end'] as const;
+export type TimeEntryType = typeof timeEntryTypes[number];
+
+export interface TimeEntry {
+  id: string;
+  bookingId: string;
+  resourceId: string;
+  entryType: TimeEntryType;
+  timestamp: string;
+  latitude?: number;
+  longitude?: number;
+  locationAccuracyMeters?: number;
+  deviceType?: string;
+  deviceId?: string;
+  ipAddress?: string;
+  notes?: string;
+  metadata?: any;
+  createdAt: string;
+
+  // Computed/derived fields (may be added by API)
+  startTime?: string;
+  endTime?: string;
+  durationMinutes?: number;
+  isBillable?: boolean;
+
+  // Relations
+  booking?: Booking;
+  resource?: BookableResource;
+}
+
+// Route Plans
+export const routeOptimizationStatuses = ['pending', 'optimizing', 'optimized', 'failed'] as const;
+export type RouteOptimizationStatus = typeof routeOptimizationStatuses[number];
+
+export interface RoutePlan {
+  id: string;
+  resourceId: string;
+  planDate: string;
+  optimizationStatus: RouteOptimizationStatus;
+  optimizedAt?: string;
+  totalDistanceMiles?: number;
+  totalDriveTimeMinutes?: number;
+  totalOnSiteTimeMinutes?: number;
+  totalBreaksMinutes?: number;
+  bookingIds?: string[];
+  waypoints?: any;
+  routePolyline?: string;
+  routeData?: any;
+  metadata?: any;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  resource?: BookableResource;
+  bookings?: Booking[];
+}
+
+// Phase 4: Route Optimization & Mobile Support
+
+// Mileage Logs
+export const mileagePurposes = ['business', 'personal', 'commute'] as const;
+export type MileagePurpose = typeof mileagePurposes[number];
+
+export interface MileageLog {
+  id: string;
+  orgId: string;
+  resourceId: string;
+  bookingId?: string;
+  routePlanId?: string;
+  logDate: string;
+  startTime?: string;
+  endTime?: string;
+  startLocation?: string;
+  endLocation?: string;
+  startCoordinates?: { lat: number; lng: number };
+  endCoordinates?: { lat: number; lng: number };
+  distanceMiles?: number;
+  distanceKm?: number;
+  purpose: MileagePurpose;
+  isBillable: boolean;
+  vehicleId?: string;
+  odometerStart?: number;
+  odometerEnd?: number;
+  ratePerMile?: number;
+  reimbursementAmount?: number;
+  isReimbursed: boolean;
+  reimbursedDate?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  resource?: BookableResource;
+  booking?: Booking;
+  routePlan?: RoutePlan;
+  vehicle?: Equipment;
+}
+
+// GPS Tracking
+export interface GpsTracking {
+  id: string;
+  resourceId: string;
+  bookingId?: string;
+  timestamp: string;
+  coordinates: { lat: number; lng: number; accuracy?: number };
+  speed?: number;
+  heading?: number;
+  altitude?: number;
+  batteryLevel?: number;
+  isOnline: boolean;
+  createdAt: string;
+
+  // Relations
+  resource?: BookableResource;
+  booking?: Booking;
+}
+
+// Route Waypoints
+export interface RouteWaypoint {
+  id: string;
+  routePlanId: string;
+  bookingId?: string;
+  sequenceOrder: number;
+  locationName?: string;
+  address: string;
+  coordinates?: { lat: number; lng: number };
+  arrivalTime?: string;
+  departureTime?: string;
+  durationMinutes?: number;
+  distanceFromPrevious?: number;
+  travelTimeMinutes?: number;
+  isCompleted: boolean;
+  completedAt?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+
+  // Relations
+  routePlan?: RoutePlan;
+  booking?: Booking;
+}
+
+// Offline Sync Queue
+export const syncOperations = ['create', 'update', 'delete'] as const;
+export type SyncOperation = typeof syncOperations[number];
+
+export interface OfflineSyncQueue {
+  id: string;
+  resourceId: string;
+  entityType: string;
+  entityId?: string;
+  operation: SyncOperation;
+  data: any;
+  isSynced: boolean;
+  syncedAt?: string;
+  syncError?: string;
+  createdAt: string;
+  deviceId?: string;
+
+  // Relations
+  resource?: BookableResource;
+}
