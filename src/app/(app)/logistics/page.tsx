@@ -16,7 +16,6 @@ export default function LogisticsDashboard() {
   const { data: equipment = [] } = useEquipment();
   const { data: territories = [] } = useTerritories();
 
-  const activeResources = resources.filter(r => r.isActive);
   const bookableResources = resources.filter(r => r.isBookable);
   const activeEquipment = equipment.filter(e => e.status === "active");
 
@@ -32,7 +31,7 @@ export default function LogisticsDashboard() {
     {
       title: "Active Resources",
       value: bookableResources.length.toString(),
-      change: activeResources.length + " available",
+      change: resources.length + " total",
       note: "field staff",
       icon: UserCog,
       color: "text-purple-600"
