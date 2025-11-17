@@ -3,6 +3,7 @@ import { buildContext } from './context-builder';
 import { generatePlan, validatePlan, ProposedAction } from './planner';
 import { executeCard, ExecutionResult } from './executor';
 import { planNextBatch, expandTaskToCards } from './job-planner';
+import { filterCards, logFilteredCards } from './card-filter';
 import { Job, JobTask } from '@/types/jobs';
 
 /**
@@ -255,13 +256,23 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
       console.warn(`[${run.id}] Plan warnings:`, validation.warnings);
     }
 
-    // Step 4: Create kanban cards
-    console.log(`[${run.id}] Creating ${plan.actions.length} kanban cards...`);
-    const cards = await createKanbanCards(orgId, run.id, plan.actions);
+    // Step 4: Filter actions based on learning rules
+    console.log(`[${run.id}] Filtering ${plan.actions.length} actions against learning rules...`);
+    const filterResult = await filterCards(orgId, plan.actions);
 
-    // Step 5: Update run with results
+    // Log filtered actions for transparency
+    if (filterResult.filteredActions.length > 0) {
+      console.log(`[${run.id}] Filtered ${filterResult.filteredActions.length} actions based on learning rules`);
+      await logFilteredCards(orgId, filterResult.filteredActions);
+    }
+
+    // Step 5: Create kanban cards (only for allowed actions)
+    console.log(`[${run.id}] Creating ${filterResult.allowedActions.length} kanban cards...`);
+    const cards = await createKanbanCards(orgId, run.id, filterResult.allowedActions);
+
+    // Step 6: Update run with results
     const emailsSent = approvedResults.filter(r => r.success && r.metadata?.simulated === false).length;
-    
+
     await supabase
       .from('agent_runs')
       .update({
@@ -275,12 +286,12 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
       })
       .eq('id', run.id);
 
-    // Step 6: Create reflection (async, don't wait)
+    // Step 7: Create reflection (async, don't wait)
     createReflection(run.id, context, plan, validation).catch(err => {
       console.error(`[${run.id}] Failed to create reflection:`, err);
     });
 
-    console.log(`[${run.id}] Work block completed. Executed ${executedCount} approved cards, created ${cards.length} new cards.`);
+    console.log(`[${run.id}] Work block completed. Executed ${executedCount} approved cards, created ${cards.length} new cards (${filterResult.filteredActions.length} filtered by rules).`);
 
     return {
       ...run,
