@@ -1,5 +1,6 @@
 -- =====================================================
--- Security & Performance Patches for Phases 4-8
+-- Security & Performance Patches for Phases 4-8 (FIXED)
+-- Adapted for existing schema using auth.uid() directly
 -- =====================================================
 
 -- =====================================================
@@ -41,17 +42,29 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 1.3: Add CHECK constraints for data integrity
 ALTER TABLE public.mileage_logs
+  DROP CONSTRAINT IF EXISTS check_distance_miles_positive,
+  DROP CONSTRAINT IF EXISTS check_distance_km_positive,
+  DROP CONSTRAINT IF EXISTS check_rate_per_mile_positive,
+  DROP CONSTRAINT IF EXISTS check_reimbursement_positive,
   ADD CONSTRAINT check_distance_miles_positive CHECK (distance_miles IS NULL OR distance_miles >= 0),
   ADD CONSTRAINT check_distance_km_positive CHECK (distance_km IS NULL OR distance_km >= 0),
   ADD CONSTRAINT check_rate_per_mile_positive CHECK (rate_per_mile IS NULL OR rate_per_mile >= 0),
   ADD CONSTRAINT check_reimbursement_positive CHECK (reimbursement_amount IS NULL OR reimbursement_amount >= 0);
 
 ALTER TABLE public.gps_tracking
+  DROP CONSTRAINT IF EXISTS check_speed_positive,
+  DROP CONSTRAINT IF EXISTS check_battery_level_range,
+  DROP CONSTRAINT IF EXISTS check_heading_range,
   ADD CONSTRAINT check_speed_positive CHECK (speed IS NULL OR speed >= 0),
   ADD CONSTRAINT check_battery_level_range CHECK (battery_level IS NULL OR (battery_level >= 0 AND battery_level <= 100)),
   ADD CONSTRAINT check_heading_range CHECK (heading IS NULL OR (heading >= 0 AND heading < 360));
 
 ALTER TABLE public.customer_feedback
+  DROP CONSTRAINT IF EXISTS check_rating_range,
+  DROP CONSTRAINT IF EXISTS check_punctuality_rating_range,
+  DROP CONSTRAINT IF EXISTS check_professionalism_rating_range,
+  DROP CONSTRAINT IF EXISTS check_communication_rating_range,
+  DROP CONSTRAINT IF EXISTS check_overall_rating_range,
   ADD CONSTRAINT check_rating_range CHECK (rating >= 1 AND rating <= 5),
   ADD CONSTRAINT check_punctuality_rating_range CHECK (punctuality_rating IS NULL OR (punctuality_rating >= 1 AND punctuality_rating <= 5)),
   ADD CONSTRAINT check_professionalism_rating_range CHECK (professionalism_rating IS NULL OR (professionalism_rating >= 1 AND professionalism_rating <= 5)),
@@ -64,14 +77,14 @@ ALTER TABLE public.customer_feedback
 DROP POLICY IF EXISTS "Users can view GPS tracking in their org" ON public.gps_tracking;
 DROP POLICY IF EXISTS "Users can insert GPS tracking" ON public.gps_tracking;
 
--- Recreate with optimized queries
+-- Recreate with optimized queries (using auth.uid() directly instead of org_id)
 CREATE POLICY "Users can view GPS tracking in their org"
   ON public.gps_tracking FOR SELECT
   USING (
     EXISTS (
       SELECT 1 FROM public.bookable_resources br
       WHERE br.id = gps_tracking.resource_id
-      AND br.org_id = (auth.jwt()->>'org_id')::uuid
+      AND br.org_id = auth.uid()
     )
   );
 
@@ -81,7 +94,7 @@ CREATE POLICY "Users can insert GPS tracking"
     EXISTS (
       SELECT 1 FROM public.bookable_resources br
       WHERE br.id = gps_tracking.resource_id
-      AND br.org_id = (auth.jwt()->>'org_id')::uuid
+      AND br.org_id = auth.uid()
     )
   );
 
@@ -99,18 +112,13 @@ CREATE OR REPLACE FUNCTION send_notification(
 ) RETURNS UUID AS $$
 DECLARE
   notification_id UUID;
-  user_org_id UUID;
+  user_id UUID;
 BEGIN
   -- Validate user is authenticated
-  IF auth.uid() IS NULL THEN
+  user_id := auth.uid();
+
+  IF user_id IS NULL THEN
     RAISE EXCEPTION 'Authentication required';
-  END IF;
-
-  -- Get user's org_id
-  user_org_id := (auth.jwt()->>'org_id')::uuid;
-
-  IF user_org_id IS NULL THEN
-    RAISE EXCEPTION 'Organization ID required';
   END IF;
 
   INSERT INTO public.notifications (
@@ -125,7 +133,7 @@ BEGIN
     related_entity_id,
     status
   ) VALUES (
-    user_org_id,
+    user_id,
     p_type,
     'customer',
     p_recipient_email,
@@ -149,24 +157,20 @@ CREATE OR REPLACE FUNCTION queue_webhook(
 ) RETURNS void AS $$
 DECLARE
   webhook_record RECORD;
-  user_org_id UUID;
+  user_id UUID;
 BEGIN
   -- Validate user is authenticated
-  IF auth.uid() IS NULL THEN
+  user_id := auth.uid();
+
+  IF user_id IS NULL THEN
     RAISE EXCEPTION 'Authentication required';
-  END IF;
-
-  user_org_id := (auth.jwt()->>'org_id')::uuid;
-
-  IF user_org_id IS NULL THEN
-    RAISE EXCEPTION 'Organization ID required';
   END IF;
 
   FOR webhook_record IN
     SELECT id FROM public.webhooks
     WHERE is_active = true
     AND p_event_type = ANY(event_types)
-    AND org_id = user_org_id
+    AND org_id = user_id
   LOOP
     INSERT INTO public.webhook_deliveries (
       webhook_id,
@@ -238,31 +242,40 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_severity_created
   ON public.audit_logs(severity, created_at DESC)
   WHERE severity IN ('error', 'critical');
 
--- 2.2: Add indexes to materialized view
-CREATE INDEX IF NOT EXISTS idx_resource_util_org_resource
-  ON resource_utilization_summary(org_id, resource_id);
+-- 2.2: Add indexes to materialized view (if it exists)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_matviews WHERE matviewname = 'resource_utilization_summary') THEN
+    CREATE INDEX IF NOT EXISTS idx_resource_util_org_resource
+      ON resource_utilization_summary(org_id, resource_id);
 
-CREATE INDEX IF NOT EXISTS idx_resource_util_rating
-  ON resource_utilization_summary(avg_customer_rating DESC NULLS LAST);
+    CREATE INDEX IF NOT EXISTS idx_resource_util_rating
+      ON resource_utilization_summary(avg_customer_rating DESC NULLS LAST);
 
-CREATE INDEX IF NOT EXISTS idx_resource_util_bookings
-  ON resource_utilization_summary(completed_bookings DESC);
+    CREATE INDEX IF NOT EXISTS idx_resource_util_bookings
+      ON resource_utilization_summary(completed_bookings DESC);
+
+    -- Add unique index for concurrent refresh
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_resource_util_unique
+      ON resource_utilization_summary(resource_id);
+  END IF;
+END $$;
 
 -- 2.3: Create function for concurrent materialized view refresh
 CREATE OR REPLACE FUNCTION refresh_resource_utilization_concurrent()
 RETURNS void AS $$
 BEGIN
-  REFRESH MATERIALIZED VIEW CONCURRENTLY resource_utilization_summary;
-EXCEPTION
-  WHEN OTHERS THEN
-    -- Fallback to non-concurrent if unique index doesn't exist
-    REFRESH MATERIALIZED VIEW resource_utilization_summary;
+  IF EXISTS (SELECT 1 FROM pg_matviews WHERE matviewname = 'resource_utilization_summary') THEN
+    BEGIN
+      REFRESH MATERIALIZED VIEW CONCURRENTLY resource_utilization_summary;
+    EXCEPTION
+      WHEN OTHERS THEN
+        -- Fallback to non-concurrent if unique index doesn't exist
+        REFRESH MATERIALIZED VIEW resource_utilization_summary;
+    END;
+  END IF;
 END;
 $$ LANGUAGE plpgsql;
-
--- Add unique index for concurrent refresh
-CREATE UNIQUE INDEX IF NOT EXISTS idx_resource_util_unique
-  ON resource_utilization_summary(resource_id);
 
 -- 2.4: Add trigger to auto-refresh utilization on booking changes
 CREATE OR REPLACE FUNCTION trigger_refresh_utilization()
@@ -302,6 +315,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS prevent_circular_bookings ON public.bookings;
 CREATE TRIGGER prevent_circular_bookings
   BEFORE INSERT OR UPDATE ON public.bookings
   FOR EACH ROW
@@ -344,6 +358,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS webhook_delivery_update_stats ON public.webhook_deliveries;
 CREATE TRIGGER webhook_delivery_update_stats
   AFTER UPDATE ON public.webhook_deliveries
   FOR EACH ROW
@@ -448,7 +463,7 @@ BEGIN
   FROM public.system_settings
   WHERE category = 'mileage'
   AND setting_key = 'irs_rate_current'
-  AND (org_id IS NULL OR org_id = (auth.jwt()->>'org_id')::uuid);
+  AND (org_id IS NULL OR org_id = auth.uid());
 
   -- Fallback to default 2024 rate
   RETURN COALESCE(v_rate, 0.67);
@@ -495,12 +510,12 @@ GRANT EXECUTE ON FUNCTION refresh_resource_utilization_concurrent TO authenticat
 -- ✅ Added token hashing for portal access (access_token_hash, access_token_prefix)
 -- ✅ Added encryption functions for sensitive data (encrypt_sensitive_data, decrypt_sensitive_data)
 -- ✅ Added CHECK constraints for data validation
--- ✅ Fixed RLS policies with proper UUID casting and optimization
+-- ✅ Fixed RLS policies to use auth.uid() directly (adapted for existing schema)
 -- ✅ Added permission checks to SECURITY DEFINER functions
 --
 -- PERFORMANCE OPTIMIZATIONS:
 -- ✅ Added 15+ composite indexes for common query patterns
--- ✅ Added indexes to materialized views
+-- ✅ Added indexes to materialized views (if they exist)
 -- ✅ Created concurrent refresh function for materialized views
 -- ✅ Optimized RLS policies with EXISTS instead of IN
 --
@@ -515,5 +530,10 @@ GRANT EXECUTE ON FUNCTION refresh_resource_utilization_concurrent TO authenticat
 -- ✅ Token verification function
 -- ✅ Configurable mileage rate from system settings
 -- ✅ Added comprehensive comments for documentation
+--
+-- SCHEMA ADAPTATIONS:
+-- ✅ Replaced auth.jwt()->>'org_id' with auth.uid() to match existing schema
+-- ✅ Added DROP IF EXISTS for idempotent constraint creation
+-- ✅ Added conditional logic for materialized view operations
 --
 -- =====================================================

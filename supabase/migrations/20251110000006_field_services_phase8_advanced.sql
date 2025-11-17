@@ -1,5 +1,6 @@
 -- =====================================================
--- Field Services Phase 8: Advanced Features & Polish
+-- Field Services Phase 8: Advanced Features & Polish (FIXED)
+-- Adapted for existing schema without org_id column
 -- =====================================================
 
 -- Audit logs for complete activity tracking
@@ -171,11 +172,11 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_user_created
 CREATE INDEX IF NOT EXISTS idx_audit_logs_entity
   ON public.audit_logs(entity_type, entity_id, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_role_permissions_org_active
-  ON public.role_permissions(org_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_field_service_roles_org_active
+  ON public.field_service_roles(org_id, is_active);
 
-CREATE INDEX IF NOT EXISTS idx_user_roles_user
-  ON public.user_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_field_service_user_roles_user
+  ON public.field_service_user_roles(user_id);
 
 CREATE INDEX IF NOT EXISTS idx_scheduling_suggestions_booking
   ON public.scheduling_suggestions(booking_id, confidence_score DESC);
@@ -193,16 +194,137 @@ CREATE INDEX IF NOT EXISTS idx_cached_calculations_lookup
 -- =====================================================
 -- RLS Policies
 -- =====================================================
--- TODO: Add proper RLS policies for Phase 8 tables
--- Temporarily disabled to complete migration - will add in follow-up migration
 
--- ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE public.field_service_roles ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE public.field_service_user_roles ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE public.scheduling_suggestions ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE public.batch_operations ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE public.cached_calculations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.field_service_roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.field_service_user_roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.scheduling_suggestions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.batch_operations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cached_calculations ENABLE ROW LEVEL SECURITY;
+
+-- Audit logs policies
+CREATE POLICY audit_logs_select ON public.audit_logs
+  FOR SELECT
+  USING (org_id = auth.uid());
+
+CREATE POLICY audit_logs_insert ON public.audit_logs
+  FOR INSERT
+  WITH CHECK (org_id = auth.uid());
+
+-- Field service roles policies
+CREATE POLICY field_service_roles_select ON public.field_service_roles
+  FOR SELECT
+  USING (org_id = auth.uid());
+
+CREATE POLICY field_service_roles_insert ON public.field_service_roles
+  FOR INSERT
+  WITH CHECK (org_id = auth.uid());
+
+CREATE POLICY field_service_roles_update ON public.field_service_roles
+  FOR UPDATE
+  USING (org_id = auth.uid())
+  WITH CHECK (org_id = auth.uid());
+
+CREATE POLICY field_service_roles_delete ON public.field_service_roles
+  FOR DELETE
+  USING (org_id = auth.uid() AND is_system_role = false);
+
+-- Field service user roles policies
+CREATE POLICY field_service_user_roles_select ON public.field_service_user_roles
+  FOR SELECT
+  USING (
+    user_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM public.field_service_roles r
+      JOIN public.field_service_user_roles ur ON ur.role_id = r.id
+      WHERE ur.user_id = auth.uid() AND r.org_id = auth.uid()
+    )
+  );
+
+CREATE POLICY field_service_user_roles_insert ON public.field_service_user_roles
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.field_service_roles r
+      JOIN public.field_service_user_roles ur ON ur.role_id = r.id
+      WHERE ur.user_id = auth.uid() AND r.org_id = auth.uid()
+    )
+  );
+
+CREATE POLICY field_service_user_roles_delete ON public.field_service_user_roles
+  FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.field_service_roles r
+      JOIN public.field_service_user_roles ur ON ur.role_id = r.id
+      WHERE ur.user_id = auth.uid() AND r.org_id = auth.uid()
+    )
+  );
+
+-- Scheduling suggestions policies
+CREATE POLICY scheduling_suggestions_select ON public.scheduling_suggestions
+  FOR SELECT
+  USING (org_id = auth.uid());
+
+CREATE POLICY scheduling_suggestions_insert ON public.scheduling_suggestions
+  FOR INSERT
+  WITH CHECK (org_id = auth.uid());
+
+CREATE POLICY scheduling_suggestions_update ON public.scheduling_suggestions
+  FOR UPDATE
+  USING (org_id = auth.uid())
+  WITH CHECK (org_id = auth.uid());
+
+-- Batch operations policies
+CREATE POLICY batch_operations_select ON public.batch_operations
+  FOR SELECT
+  USING (org_id = auth.uid());
+
+CREATE POLICY batch_operations_insert ON public.batch_operations
+  FOR INSERT
+  WITH CHECK (org_id = auth.uid());
+
+CREATE POLICY batch_operations_update ON public.batch_operations
+  FOR UPDATE
+  USING (org_id = auth.uid())
+  WITH CHECK (org_id = auth.uid());
+
+-- System settings policies
+CREATE POLICY system_settings_select ON public.system_settings
+  FOR SELECT
+  USING (org_id = auth.uid() OR (org_id IS NULL AND is_public = true));
+
+CREATE POLICY system_settings_insert ON public.system_settings
+  FOR INSERT
+  WITH CHECK (org_id = auth.uid());
+
+CREATE POLICY system_settings_update ON public.system_settings
+  FOR UPDATE
+  USING (org_id = auth.uid())
+  WITH CHECK (org_id = auth.uid());
+
+CREATE POLICY system_settings_delete ON public.system_settings
+  FOR DELETE
+  USING (org_id = auth.uid());
+
+-- Cached calculations policies
+CREATE POLICY cached_calculations_select ON public.cached_calculations
+  FOR SELECT
+  USING (org_id = auth.uid());
+
+CREATE POLICY cached_calculations_insert ON public.cached_calculations
+  FOR INSERT
+  WITH CHECK (org_id = auth.uid());
+
+CREATE POLICY cached_calculations_update ON public.cached_calculations
+  FOR UPDATE
+  USING (org_id = auth.uid())
+  WITH CHECK (org_id = auth.uid());
+
+CREATE POLICY cached_calculations_delete ON public.cached_calculations
+  FOR DELETE
+  USING (org_id = auth.uid());
 
 -- =====================================================
 -- Functions
@@ -227,7 +349,7 @@ BEGIN
     new_values
   ) VALUES (
     auth.uid(),
-    auth.uid()::uuid,
+    auth.uid(),
     p_action,
     p_entity_type,
     p_entity_id,
@@ -248,8 +370,8 @@ DECLARE
 BEGIN
   SELECT EXISTS (
     SELECT 1
-    FROM public.user_roles ur
-    JOIN public.role_permissions rp ON ur.role_id = rp.id
+    FROM public.field_service_user_roles ur
+    JOIN public.field_service_roles rp ON ur.role_id = rp.id
     WHERE ur.user_id = p_user_id
     AND rp.is_active = true
     AND (ur.expires_at IS NULL OR ur.expires_at > now())
