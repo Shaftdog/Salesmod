@@ -17,7 +17,7 @@ export default function LogisticsDashboard() {
   const { data: territories = [] } = useTerritories();
 
   const bookableResources = resources.filter(r => r.isBookable);
-  const activeEquipment = equipment.filter(e => e.status === "active");
+  const activeEquipment = equipment.filter(e => e.status === "available");
 
   const stats = [
     {
