@@ -628,9 +628,14 @@ async function getTargetContacts(
     console.log(`[getTargetContacts] Filtering by client_type: ${filter.client_type}`);
     query = query.eq('clients.client_type', filter.client_type);
   }
-  if (filter.primary_role_code) {
+  if (filter.target_role_codes && filter.target_role_codes.length > 0) {
+    console.log(`[getTargetContacts] Filtering by contact target_role_codes: ${filter.target_role_codes.join(', ')}`);
+    // Filter on the CONTACT's primary_role_code using multi-select
+    query = query.in('primary_role_code', filter.target_role_codes);
+  }
+  // Backwards compatibility: support single primary_role_code
+  else if (filter.primary_role_code) {
     console.log(`[getTargetContacts] Filtering by contact primary_role_code: ${filter.primary_role_code}`);
-    // Filter on the CONTACT's primary_role_code, not the client's
     query = query.eq('primary_role_code', filter.primary_role_code);
   }
   if (filter.is_active !== undefined) {
