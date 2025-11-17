@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { executeAsAdmin } from '@/lib/supabase/admin';
+import { executeAsAdmin, deleteOrphanedUser } from '@/lib/supabase/admin';
 import { registerSchema } from '@/lib/validations/auth';
 import { z } from 'zod';
 
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     const { email, password, name, tenantName, tenantType } = validation.data;
 
     // 2. Create user with Supabase Auth
-    const supabase = createClient();
+    const supabase = await createClient();
 
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
@@ -46,11 +46,16 @@ export async function POST(request: NextRequest) {
     });
 
     if (authError) {
-      // Handle specific Supabase errors
+      // Handle specific Supabase errors - prevent email enumeration
       if (authError.message.includes('already registered')) {
+        // Return generic success message to prevent email enumeration
+        console.log('[Registration] Email already registered', { email });
         return NextResponse.json(
-          { error: 'This email is already registered. Please sign in instead.' },
-          { status: 409 }
+          {
+            success: true,
+            message: 'If this email is not already registered, you will receive a confirmation email.',
+          },
+          { status: 200 }
         );
       }
 
@@ -133,12 +138,21 @@ export async function POST(request: NextRequest) {
       });
 
     } catch (tenantError) {
-      // If tenant creation fails, we should ideally delete the auth user
-      // However, Supabase doesn't allow auth deletion from client
-      // The user will exist but won't be able to do anything without a tenant
-      // They can re-register with a different email or contact support
+      // Delete the orphaned auth user to allow re-registration
+      try {
+        await deleteOrphanedUser(
+          userId,
+          `Tenant creation failed: ${tenantError instanceof Error ? tenantError.message : 'Unknown error'}`
+        );
+      } catch (deleteError) {
+        console.error('[Registration] Failed to delete orphaned user', {
+          userId,
+          email,
+          deleteError: deleteError instanceof Error ? deleteError.message : 'Unknown error',
+        });
+      }
 
-      console.error('[Registration] Tenant creation failed after user created', {
+      console.error('[Registration] Tenant creation failed, user deleted', {
         userId,
         email,
         error: tenantError instanceof Error ? tenantError.message : 'Unknown error',
@@ -146,9 +160,8 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json(
         {
-          error: 'Registration incomplete. Please contact support with this error code.',
+          error: 'Registration failed. Please try again.',
           code: 'TENANT_CREATION_FAILED',
-          userId, // Include for support debugging
         },
         { status: 500 }
       );

@@ -110,7 +110,9 @@ export default function ClientOrderDetailPage() {
           notes: orderData.notes,
           borrower_name: orderData.borrower_name,
           loan_number: orderData.loan_number,
-          property: orderData.properties,
+          property: Array.isArray(orderData.properties)
+            ? orderData.properties[0]
+            : orderData.properties,
         });
       }
     } catch (error) {

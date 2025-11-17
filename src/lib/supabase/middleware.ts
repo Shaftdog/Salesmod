@@ -58,7 +58,7 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   // Protect routes that require authentication
-  const protectedRoutes = ['/dashboard', '/orders', '/clients', '/deals', '/tasks', '/settings', '/migrations', '/admin'];
+  const protectedRoutes = ['/dashboard', '/orders', '/clients', '/deals', '/tasks', '/settings', '/migrations', '/admin', '/client-portal', '/borrower'];
   const isProtectedRoute = protectedRoutes.some(route =>
     request.nextUrl.pathname.startsWith(route)
   );

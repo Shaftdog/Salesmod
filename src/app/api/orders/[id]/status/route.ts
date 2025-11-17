@@ -27,9 +27,10 @@ const statusSchema = z.object({
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
 
     // Verify authentication
@@ -60,7 +61,7 @@ export async function PATCH(
         notes: notes || null,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("tenant_id", profile.tenant_id)
       .select()
       .single();
@@ -77,7 +78,7 @@ export async function PATCH(
 
     // Log status change
     await supabase.from("order_status_history").insert({
-      order_id: params.id,
+      order_id: id,
       old_status: order.status,
       new_status: status,
       changed_by: session.user.id,
@@ -112,9 +113,10 @@ export async function PATCH(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
 
     // Verify authentication
@@ -134,19 +136,46 @@ export async function GET(
       return NextResponse.json({ error: "User profile not found" }, { status: 400 });
     }
 
-    // Verify access to order
-    const { data: order } = await supabase
+    // Verify access to order - check tenant ownership first
+    let { data: order } = await supabase
       .from("orders")
       .select("id, status")
-      .eq("id", params.id)
-      .or(`tenant_id.eq.${profile.tenant_id},id.in.(select order_id from borrower_order_access where borrower_id = '${session.user.id}')`)
+      .eq("id", id)
+      .eq("tenant_id", profile.tenant_id)
       .single();
 
+    // If not found via tenant, check borrower access separately
     if (!order) {
-      return NextResponse.json(
-        { error: "Order not found or access denied" },
-        { status: 404 }
-      );
+      const { data: borrowerAccess } = await supabase
+        .from("borrower_order_access")
+        .select("order_id")
+        .eq("borrower_id", session.user.id)
+        .eq("order_id", id)
+        .single();
+
+      if (!borrowerAccess) {
+        return NextResponse.json(
+          { error: "Order not found or access denied" },
+          { status: 404 }
+        );
+      }
+
+      // Get order data for borrower
+      const { data: borrowerOrder } = await supabase
+        .from("orders")
+        .select("id, status")
+        .eq("id", id)
+        .single();
+
+      if (!borrowerOrder) {
+        return NextResponse.json(
+          { error: "Order not found or access denied" },
+          { status: 404 }
+        );
+      }
+
+      // Assign to order variable for consistent access below
+      order = borrowerOrder;
     }
 
     // Get status history
@@ -164,7 +193,7 @@ export async function GET(
           email
         )
       `)
-      .eq("order_id", params.id)
+      .eq("order_id", id)
       .order("created_at", { ascending: false });
 
     if (historyError) {

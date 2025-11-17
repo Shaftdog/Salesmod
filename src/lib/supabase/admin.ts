@@ -78,7 +78,7 @@ export async function executeAsAdmin<T>(
   fn: (adminClient: ReturnType<typeof getAdminClient>) => Promise<T>
 ): Promise<T> {
   // 1. Verify user is authenticated via regular client
-  const supabase = createRegularClient();
+  const supabase = await createRegularClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
 
   if (authError || !user) {
@@ -213,5 +213,43 @@ export async function sendBorrowerMagicLink(
     email,
     orderId,
     timestamp: new Date().toISOString(),
+  });
+}
+
+/**
+ * Delete orphaned auth user (for registration rollback)
+ *
+ * SECURITY: This bypasses the authentication check since we're cleaning up
+ * a failed registration. Only call this in error handlers.
+ *
+ * @param userId - User ID to delete
+ * @param reason - Reason for deletion (for logging)
+ */
+export async function deleteOrphanedUser(
+  userId: string,
+  reason: string
+): Promise<void> {
+  const adminClient = getAdminClient();
+
+  console.log('[ORPHANED USER CLEANUP START]', {
+    userId,
+    reason,
+    timestamp: new Date().toISOString(),
+  });
+
+  const { error } = await adminClient.auth.admin.deleteUser(userId);
+
+  if (error) {
+    console.error('[ORPHANED USER CLEANUP FAILED]', {
+      userId,
+      reason,
+      error: error.message,
+    });
+    throw new Error(`Failed to delete orphaned user: ${error.message}`);
+  }
+
+  console.log('[ORPHANED USER CLEANUP SUCCESS]', {
+    userId,
+    reason,
   });
 }

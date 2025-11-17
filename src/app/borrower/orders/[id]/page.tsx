@@ -110,7 +110,9 @@ export default function BorrowerOrderViewPage() {
           ordered_date: orderData.ordered_date,
           due_date: orderData.due_date,
           order_type: orderData.order_type,
-          property: orderData.properties,
+          property: Array.isArray(orderData.properties)
+            ? orderData.properties[0]
+            : orderData.properties,
         });
       }
     } catch (error) {

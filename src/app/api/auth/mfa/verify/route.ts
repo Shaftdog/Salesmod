@@ -11,7 +11,7 @@ import { mfaVerifySchema } from '@/lib/validations/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Verify user is authenticated
     const { data: { user }, error: userError } = await supabase.auth.getUser();

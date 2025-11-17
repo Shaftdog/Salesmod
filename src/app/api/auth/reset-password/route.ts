@@ -11,7 +11,7 @@ import { resetPasswordSchema } from '@/lib/validations/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Parse and validate request
     const body = await request.json();

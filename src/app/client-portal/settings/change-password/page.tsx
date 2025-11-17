@@ -17,9 +17,11 @@ import Link from "next/link";
 const passwordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
   newPassword: z.string()
-    .min(8, "Password must be at least 8 characters")
+    .min(12, "Password must be at least 12 characters")
     .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-    .regex(/[0-9]/, "Password must contain at least one number"),
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number")
+    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
   confirmPassword: z.string().min(1, "Please confirm your password"),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: "Passwords don't match",
@@ -47,7 +49,30 @@ export default function ChangePasswordPage() {
     setIsLoading(true);
 
     try {
-      // Update password
+      // First, get current user to verify their email
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user?.email) {
+        throw new Error("User not found");
+      }
+
+      // Verify current password by attempting to re-authenticate
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: data.currentPassword,
+      });
+
+      if (verifyError) {
+        toast({
+          variant: "destructive",
+          title: "Incorrect Password",
+          description: "Your current password is incorrect.",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Now update password
       const { error } = await supabase.auth.updateUser({
         password: data.newPassword,
       });
@@ -136,7 +161,7 @@ export default function ChangePasswordPage() {
                 <p className="text-sm text-destructive">{errors.newPassword.message}</p>
               )}
               <p className="text-xs text-muted-foreground">
-                Password must be at least 8 characters with one uppercase letter and one number
+                Password must be at least 12 characters with uppercase, lowercase, number, and special character
               </p>
             </div>
 
