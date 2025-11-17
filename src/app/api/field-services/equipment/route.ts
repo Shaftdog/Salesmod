@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { transformEquipment } from '@/lib/supabase/transforms';
+import { getApiContext, handleApiError, requireAdmin } from '@/lib/api-utils';
+import { createEquipmentSchema } from '@/lib/validations/field-services';
 
 /**
  * GET /api/field-services/equipment
@@ -77,11 +79,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ equipment: transformedEquipment });
 
   } catch (error: any) {
-    console.error('Equipment API error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to fetch equipment' },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }
 
@@ -91,44 +89,35 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const context = await getApiContext(request);
+    const { supabase, orgId } = context;
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Check if user is admin
+    await requireAdmin(context);
 
-    // Check if user is admin (you may want to add proper role checking)
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
-
+    // Parse and validate request body
     const body = await request.json();
+    const validated = createEquipmentSchema.parse(body);
 
-    // Convert camelCase to snake_case for database
+    // Convert to database format
     const equipmentData: any = {
-      equipment_type: body.equipmentType,
-      make: body.make,
-      model: body.model,
-      serial_number: body.serialNumber,
-      purchase_date: body.purchaseDate,
-      purchase_cost: body.purchaseCost,
-      current_value: body.currentValue,
-      status: body.status || 'available',
-      condition: body.condition || 'good',
-      maintenance_schedule: body.maintenanceSchedule,
-      last_maintenance_date: body.lastMaintenanceDate,
-      next_maintenance_date: body.nextMaintenanceDate,
-      location: body.location,
-      notes: body.notes,
-      specifications: body.specifications,
-      warranty_expiry: body.warrantyExpiry,
+      org_id: orgId,
+      equipment_type: validated.equipmentType,
+      make: validated.make,
+      model: validated.model,
+      serial_number: validated.serialNumber,
+      purchase_date: validated.purchaseDate,
+      purchase_cost: validated.purchaseCost,
+      current_value: validated.currentValue,
+      status: validated.status,
+      condition: validated.condition,
+      maintenance_schedule: validated.maintenanceSchedule,
+      last_maintenance_date: validated.lastMaintenanceDate,
+      next_maintenance_date: validated.nextMaintenanceDate,
+      location: validated.location,
+      notes: validated.notes,
+      specifications: validated.specifications,
+      warranty_expiry: validated.warrantyExpiry,
     };
 
     const { data: equipment, error } = await supabase
@@ -158,10 +147,6 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
 
   } catch (error: any) {
-    console.error('Equipment creation error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to create equipment' },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

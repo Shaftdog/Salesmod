@@ -79,7 +79,7 @@ export function useTimeOffRequests(resourceId?: string) {
  */
 export function usePendingTimeOffRequests() {
   const { data: allTimeOff = [] } = useTimeOffRequests();
-  return allTimeOff.filter(entry => !entry.isApproved);
+  return allTimeOff.filter(entry => !entry.approvedBy);
 }
 
 /**
@@ -221,19 +221,20 @@ export function useRequestTimeOff() {
   return useMutation({
     mutationFn: async (params: {
       resourceId: string;
-      dateFrom: string;
-      dateTo: string;
+      startDatetime: string;
+      endDatetime: string;
       reason: string;
       notes?: string;
     }) => {
       return createAvailability({
         resourceId: params.resourceId,
-        dateFrom: params.dateFrom,
-        dateTo: params.dateTo,
+        startDatetime: params.startDatetime,
+        endDatetime: params.endDatetime,
         availabilityType: 'time_off',
         reason: params.reason,
         notes: params.notes,
-        isApproved: false, // Requires approval
+        status: 'pending', // Requires approval
+        isAvailable: false,
       });
     },
   });
@@ -254,7 +255,7 @@ export function useApproveTimeOff() {
     }) => {
       return updateAvailability({
         id: params.id,
-        isApproved: true,
+        status: 'approved',
         approvedBy: params.approvedBy,
       });
     },
@@ -285,23 +286,20 @@ export function useBlockTime() {
   return useMutation({
     mutationFn: async (params: {
       resourceId: string;
-      dateFrom: string;
-      dateTo: string;
-      timeFrom?: string;
-      timeTo?: string;
+      startDatetime: string;
+      endDatetime: string;
       reason: string;
       notes?: string;
     }) => {
       return createAvailability({
         resourceId: params.resourceId,
-        dateFrom: params.dateFrom,
-        dateTo: params.dateTo,
-        timeFrom: params.timeFrom,
-        timeTo: params.timeTo,
+        startDatetime: params.startDatetime,
+        endDatetime: params.endDatetime,
         availabilityType: 'blocked',
         reason: params.reason,
         notes: params.notes,
-        isApproved: true,
+        status: 'approved',
+        isAvailable: false,
       });
     },
   });
@@ -316,24 +314,23 @@ export function useSetRecurringAvailability() {
   return useMutation({
     mutationFn: async (params: {
       resourceId: string;
-      dateFrom: string;
-      dateTo: string;
-      timeFrom: string;
-      timeTo: string;
-      recurrencePattern: any;
+      startDatetime: string;
+      endDatetime: string;
+      recurrenceRule: string;
+      recurrenceEndDate?: string;
       notes?: string;
     }) => {
       return createAvailability({
         resourceId: params.resourceId,
-        dateFrom: params.dateFrom,
-        dateTo: params.dateTo,
-        timeFrom: params.timeFrom,
-        timeTo: params.timeTo,
-        availabilityType: 'available',
+        startDatetime: params.startDatetime,
+        endDatetime: params.endDatetime,
+        availabilityType: 'working_hours',
         isRecurring: true,
-        recurrencePattern: params.recurrencePattern,
+        recurrenceRule: params.recurrenceRule,
+        recurrenceEndDate: params.recurrenceEndDate,
         notes: params.notes,
-        isApproved: true,
+        status: 'approved',
+        isAvailable: true,
       });
     },
   });

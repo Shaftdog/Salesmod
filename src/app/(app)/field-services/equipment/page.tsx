@@ -245,12 +245,14 @@ export default function EquipmentCatalogPage() {
                       <Badge variant="secondary">{equipment.status}</Badge>
                     </div>
 
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Condition</span>
-                      <Badge className={getConditionBadge(equipment.condition)}>
-                        {equipment.condition}
-                      </Badge>
-                    </div>
+                    {equipment.condition && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Condition</span>
+                        <Badge className={getConditionBadge(equipment.condition)}>
+                          {equipment.condition}
+                        </Badge>
+                      </div>
+                    )}
 
                     {equipment.location && (
                       <div className="flex items-center justify-between text-sm">

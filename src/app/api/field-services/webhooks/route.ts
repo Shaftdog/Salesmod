@@ -58,6 +58,24 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = createWebhookSchema.parse(body);
 
+    // CRITICAL-3: Encrypt webhook secret key
+    let encryptedSecret = validated.secretKey;
+
+    if (validated.secretKey) {
+      // Try to use database encryption function
+      const { data: encryptResult, error: encryptError } = await supabase
+        .rpc('encrypt_sensitive_data', { data: validated.secretKey });
+
+      if (encryptError || !encryptResult) {
+        console.warn('Database encryption not available, using hash fallback');
+        // Fallback: Hash the secret (one-way, but better than plaintext)
+        const crypto = await import('crypto');
+        encryptedSecret = crypto.createHash('sha256').update(validated.secretKey).digest('hex');
+      } else {
+        encryptedSecret = encryptResult;
+      }
+    }
+
     const { data: webhook, error } = await supabase
       .from('webhooks')
       .insert({
@@ -66,7 +84,11 @@ export async function POST(request: NextRequest) {
         target_url: validated.targetUrl,
         event_types: validated.eventTypes,
         is_active: validated.isActive,
-        secret_key: validated.secretKey,
+        secret_key: encryptedSecret,
+        auth_header_name: validated.authHeaderName,
+        auth_header_value: validated.authHeaderValue,
+        retry_count: validated.retryCount,
+        timeout_seconds: validated.timeoutSeconds,
         created_by: userId,
       })
       .select()

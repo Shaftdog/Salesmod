@@ -679,16 +679,20 @@ export interface Equipment {
   model?: string;
   purchaseDate?: string;
   purchasePrice?: number;
+  purchaseCost?: number; // Alias for purchasePrice
   currentValue?: number;
   depreciationSchedule?: string;
   status: EquipmentStatus;
+  condition?: EquipmentCondition; // Current condition
   assignedTo?: string;
   assignedDate?: string;
   location?: string;
   lastMaintenanceDate?: string;
   nextMaintenanceDate?: string;
   maintenanceIntervalDays?: number;
+  maintenanceSchedule?: string;
   maintenanceNotes?: string;
+  notes?: string; // General notes
   warrantyExpiry?: string;
   insurancePolicy?: string;
   insuranceExpiry?: string;
@@ -699,6 +703,8 @@ export interface Equipment {
 
   // Relations
   assignedResource?: BookableResource;
+  currentAssignment?: EquipmentAssignment[];
+  assignments?: EquipmentAssignment[];
 }
 
 // Equipment Assignments
@@ -852,6 +858,12 @@ export interface TimeEntry {
   notes?: string;
   metadata?: any;
   createdAt: string;
+
+  // Computed/derived fields (may be added by API)
+  startTime?: string;
+  endTime?: string;
+  durationMinutes?: number;
+  isBillable?: boolean;
 
   // Relations
   booking?: Booking;

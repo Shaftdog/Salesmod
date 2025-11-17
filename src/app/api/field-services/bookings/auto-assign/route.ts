@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     if (requiredSkills.length > 0) {
       skillFilteredResources = candidateResources.filter((resource: any) => {
         const resourceSkillIds = resource.resource_skills.map((rs: any) => rs.skill_type_id);
-        return requiredSkills.every(reqSkill => resourceSkillIds.includes(reqSkill));
+        return requiredSkills.every((reqSkill: any) => resourceSkillIds.includes(reqSkill));
       });
 
       if (skillFilteredResources.length === 0) {
@@ -197,11 +197,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       resourceId: bestResource.id,
-      resourceName: bestResource.profiles?.name,
+      resourceName: (bestResource as any).profiles?.name,
       score: bestResource.score,
       reason: 'success',
-      message: `Assigned to ${bestResource.profiles?.name} (score: ${bestResource.score})`,
-      alternativeResources: scoredResources.slice(1, 4).map(r => ({
+      message: `Assigned to ${(bestResource as any).profiles?.name} (score: ${bestResource.score})`,
+      alternativeResources: scoredResources.slice(1, 4).map((r: any) => ({
         id: r.id,
         name: r.profiles?.name,
         score: r.score,

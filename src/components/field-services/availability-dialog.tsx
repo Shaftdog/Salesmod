@@ -42,47 +42,69 @@ export function AvailabilityDialog({
     defaultValues: {
       availabilityType: "time_off",
       isRecurring: false,
-      isApproved: false,
+      isAllDay: true,
+      status: "pending",
     },
   });
 
   useEffect(() => {
     if (entry) {
+      const startDate = new Date(entry.startDatetime);
+      const endDate = new Date(entry.endDatetime);
+
       reset({
         resourceId: entry.resourceId,
         availabilityType: entry.availabilityType,
-        dateFrom: new Date(entry.dateFrom).toISOString().split("T")[0],
-        dateTo: new Date(entry.dateTo).toISOString().split("T")[0],
-        timeFrom: entry.timeFrom || "",
-        timeTo: entry.timeTo || "",
+        dateFrom: startDate.toISOString().split("T")[0],
+        dateTo: endDate.toISOString().split("T")[0],
+        timeFrom: entry.isAllDay ? "" : startDate.toTimeString().slice(0, 5),
+        timeTo: entry.isAllDay ? "" : endDate.toTimeString().slice(0, 5),
         reason: entry.reason,
         notes: entry.notes,
         isRecurring: entry.isRecurring,
-        isApproved: entry.isApproved,
+        isAllDay: entry.isAllDay,
+        status: entry.status,
       });
     } else {
       reset({
         resourceId: resourceId || "",
         availabilityType: "time_off",
         isRecurring: false,
-        isApproved: false,
+        isAllDay: true,
+        status: "pending",
       });
     }
   }, [entry, resourceId, reset]);
 
   const onSubmit = async (data: any) => {
     try {
+      // Combine date and time into datetime strings
+      const isAllDay = data.isAllDay || !data.timeFrom || !data.timeTo;
+
+      let startDatetime: string;
+      let endDatetime: string;
+
+      if (isAllDay) {
+        // For all-day events, use start of day to end of day
+        startDatetime = new Date(`${data.dateFrom}T00:00:00`).toISOString();
+        endDatetime = new Date(`${data.dateTo}T23:59:59`).toISOString();
+      } else {
+        // Combine date with time
+        startDatetime = new Date(`${data.dateFrom}T${data.timeFrom}:00`).toISOString();
+        endDatetime = new Date(`${data.dateTo}T${data.timeTo}:00`).toISOString();
+      }
+
       const availabilityData = {
         resourceId: data.resourceId,
         availabilityType: data.availabilityType,
-        dateFrom: data.dateFrom,
-        dateTo: data.dateTo,
-        timeFrom: data.timeFrom || undefined,
-        timeTo: data.timeTo || undefined,
+        startDatetime,
+        endDatetime,
+        isAllDay,
+        isAvailable: data.availabilityType === 'working_hours',
         reason: data.reason,
         notes: data.notes,
         isRecurring: data.isRecurring,
-        isApproved: data.isApproved,
+        status: data.status || (data.availabilityType === 'time_off' ? 'pending' : 'approved'),
       };
 
       if (entry) {
@@ -150,9 +172,10 @@ export function AvailabilityDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="available">Available</SelectItem>
+                  <SelectItem value="working_hours">Working Hours</SelectItem>
                   <SelectItem value="time_off">Time Off</SelectItem>
                   <SelectItem value="blocked">Blocked</SelectItem>
+                  <SelectItem value="override">Schedule Override</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -178,26 +201,40 @@ export function AvailabilityDialog({
               </div>
             </div>
 
-            {/* Time Range (optional) */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="timeFrom">From Time (Optional)</Label>
-                <Input
-                  id="timeFrom"
-                  type="time"
-                  {...register("timeFrom")}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="timeTo">To Time (Optional)</Label>
-                <Input
-                  id="timeTo"
-                  type="time"
-                  {...register("timeTo")}
-                />
-              </div>
+            {/* All Day Checkbox */}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="isAllDay"
+                checked={watch("isAllDay")}
+                onCheckedChange={(checked) => setValue("isAllDay", checked)}
+              />
+              <Label htmlFor="isAllDay" className="font-normal">
+                All day event
+              </Label>
             </div>
+
+            {/* Time Range (only if not all day) */}
+            {!watch("isAllDay") && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="timeFrom">From Time *</Label>
+                  <Input
+                    id="timeFrom"
+                    type="time"
+                    {...register("timeFrom", { required: !watch("isAllDay") })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="timeTo">To Time *</Label>
+                  <Input
+                    id="timeTo"
+                    type="time"
+                    {...register("timeTo", { required: !watch("isAllDay") })}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Reason */}
             <div className="space-y-2">
@@ -242,15 +279,21 @@ export function AvailabilityDialog({
               </div>
 
               {availabilityType === "time_off" && (
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="isApproved"
-                    checked={watch("isApproved")}
-                    onCheckedChange={(checked) => setValue("isApproved", checked)}
-                  />
-                  <Label htmlFor="isApproved" className="font-normal">
-                    Pre-approved (admin only)
-                  </Label>
+                <div className="space-y-2">
+                  <Label htmlFor="status">Approval Status</Label>
+                  <Select
+                    value={watch("status")}
+                    onValueChange={(value) => setValue("status", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="approved">Approved</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
             </div>

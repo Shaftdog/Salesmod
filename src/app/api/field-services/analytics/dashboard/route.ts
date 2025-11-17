@@ -63,17 +63,17 @@ export async function GET(request: NextRequest) {
 
     // Calculate metrics
     const totalBookings = bookings?.length || 0;
-    const completedBookings = bookings?.filter(b => b.status === 'completed').length || 0;
-    const cancelledBookings = bookings?.filter(b => b.status === 'cancelled').length || 0;
+    const completedBookings = bookings?.filter((b: any) => b.status === 'completed').length || 0;
+    const cancelledBookings = bookings?.filter((b: any) => b.status === 'cancelled').length || 0;
 
-    const totalHours = (timeEntries?.reduce((sum, t) => sum + (t.duration_minutes || 0), 0) || 0) / 60;
-    const billableHours = (timeEntries?.filter(t => t.is_billable).reduce((sum, t) => sum + (t.duration_minutes || 0), 0) || 0) / 60;
+    const totalHours = (timeEntries?.reduce((sum: number, t: any) => sum + (t.duration_minutes || 0), 0) || 0) / 60;
+    const billableHours = (timeEntries?.filter((t: any) => t.is_billable).reduce((sum: number, t: any) => sum + (t.duration_minutes || 0), 0) || 0) / 60;
 
-    const totalMiles = mileageLogs?.reduce((sum, m) => sum + (m.distance_miles || 0), 0) || 0;
-    const totalReimbursement = mileageLogs?.reduce((sum, m) => sum + (m.reimbursement_amount || 0), 0) || 0;
+    const totalMiles = mileageLogs?.reduce((sum: number, m: any) => sum + (m.distance_miles || 0), 0) || 0;
+    const totalReimbursement = mileageLogs?.reduce((sum: number, m: any) => sum + (m.reimbursement_amount || 0), 0) || 0;
 
     const avgRating = feedback?.length > 0
-      ? feedback.reduce((sum, f) => sum + (f.rating || 0), 0) / feedback.length
+      ? feedback.reduce((sum: number, f: any) => sum + (f.rating || 0), 0) / feedback.length
       : 0;
 
     const completionRate = totalBookings > 0

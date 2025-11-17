@@ -30,7 +30,7 @@ export default function EquipmentDetailPage({
   const { data: allAssignments = [] } = useEquipmentAssignments(id);
   const { mutateAsync: retireEquipment } = useRetireEquipment();
 
-  const activeAssignment = allAssignments.find(a => !a.returnedDate);
+  const activeAssignment = allAssignments.find(a => !a.actualReturnDate);
 
   const getStatusColor = (status: EquipmentStatus) => {
     switch (status) {
@@ -112,9 +112,11 @@ export default function EquipmentDetailPage({
           <div className="flex items-center gap-2">
             <div className={`w-3 h-3 rounded-full ${getStatusColor(equipment.status)}`} />
             <Badge variant="secondary">{equipment.status}</Badge>
-            <Badge className={getConditionBadge(equipment.condition)}>
-              {equipment.condition}
-            </Badge>
+            {equipment.condition && (
+              <Badge className={getConditionBadge(equipment.condition)}>
+                {equipment.condition}
+              </Badge>
+            )}
           </div>
         </div>
         <div className="flex gap-2">
@@ -273,7 +275,7 @@ export default function EquipmentDetailPage({
                             {assignment.resource?.profile?.email}
                           </p>
                         </div>
-                        {!assignment.returnedDate && (
+                        {!assignment.actualReturnDate && (
                           <Badge>Currently Assigned</Badge>
                         )}
                       </div>
@@ -284,11 +286,11 @@ export default function EquipmentDetailPage({
                           <p>{format(new Date(assignment.assignedDate), "MMM d, yyyy h:mm a")}</p>
                         </div>
 
-                        {assignment.returnedDate && (
+                        {assignment.actualReturnDate && (
                           <div>
                             <p className="text-muted-foreground">Checked In</p>
                             <p>
-                              {format(new Date(assignment.returnedDate), "MMM d, yyyy h:mm a")}
+                              {format(new Date(assignment.actualReturnDate), "MMM d, yyyy h:mm a")}
                             </p>
                           </div>
                         )}
@@ -312,10 +314,15 @@ export default function EquipmentDetailPage({
                         )}
                       </div>
 
-                      {assignment.notes && (
+                      {(assignment.checkoutNotes || assignment.returnNotes) && (
                         <div>
                           <p className="text-sm text-muted-foreground">Notes</p>
-                          <p className="text-sm">{assignment.notes}</p>
+                          {assignment.checkoutNotes && (
+                            <p className="text-sm"><strong>Checkout:</strong> {assignment.checkoutNotes}</p>
+                          )}
+                          {assignment.returnNotes && (
+                            <p className="text-sm"><strong>Return:</strong> {assignment.returnNotes}</p>
+                          )}
                         </div>
                       )}
                     </div>

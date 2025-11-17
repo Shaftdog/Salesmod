@@ -37,18 +37,18 @@ export async function GET(request: NextRequest) {
           profiles(id, name, email, avatar_url)
         )
       `)
-      .order('date_from', { ascending: true });
+      .order('start_datetime', { ascending: true });
 
     if (resourceId) {
       query = query.eq('resource_id', resourceId);
     }
 
     if (dateFrom) {
-      query = query.gte('date_from', dateFrom);
+      query = query.gte('start_datetime', dateFrom);
     }
 
     if (dateTo) {
-      query = query.lte('date_to', dateTo);
+      query = query.lte('end_datetime', dateTo);
     }
 
     if (availabilityType) {
@@ -91,9 +91,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // Validate required fields
-    if (!body.resourceId || !body.dateFrom || !body.dateTo) {
+    if (!body.resourceId || !body.startDatetime || !body.endDatetime) {
       return NextResponse.json(
-        { error: 'Missing required fields: resourceId, dateFrom, dateTo' },
+        { error: 'Missing required fields: resourceId, startDatetime, endDatetime' },
         { status: 400 }
       );
     }
@@ -101,26 +101,29 @@ export async function POST(request: NextRequest) {
     // Convert camelCase to snake_case
     const availabilityData: any = {
       resource_id: body.resourceId,
-      date_from: body.dateFrom,
-      date_to: body.dateTo,
-      availability_type: body.availabilityType || 'available',
-      time_from: body.timeFrom,
-      time_to: body.timeTo,
+      start_datetime: body.startDatetime,
+      end_datetime: body.endDatetime,
+      availability_type: body.availabilityType || 'working_hours',
+      is_available: body.isAvailable !== undefined ? body.isAvailable : true,
       is_recurring: body.isRecurring || false,
-      recurrence_pattern: body.recurrencePattern,
+      recurrence_rule: body.recurrenceRule,
+      recurrence_end_date: body.recurrenceEndDate,
       reason: body.reason,
       notes: body.notes,
-      is_approved: body.isApproved !== undefined ? body.isApproved : true,
+      is_all_day: body.isAllDay || false,
+      status: body.status || 'approved',
       approved_by: body.approvedBy,
+      approved_at: body.approvedAt,
+      created_by: user.id,
     };
 
     // Check for overlapping availability entries
     const { data: overlaps } = await supabase
       .from('resource_availability')
-      .select('id, date_from, date_to')
+      .select('id, start_datetime, end_datetime')
       .eq('resource_id', body.resourceId)
-      .lt('date_from', body.dateTo)
-      .gt('date_to', body.dateFrom);
+      .lt('start_datetime', body.endDatetime)
+      .gt('end_datetime', body.startDatetime);
 
     if (overlaps && overlaps.length > 0) {
       return NextResponse.json(

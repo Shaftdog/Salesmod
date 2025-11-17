@@ -118,9 +118,9 @@ export async function POST(
       const { data: assignment, error: updateError } = await supabase
         .from('equipment_assignments')
         .update({
-          returned_date: new Date().toISOString(),
+          actual_return_date: new Date().toISOString(),
           condition_at_return: conditionAtReturn,
-          notes: notes || existingAssignment.notes,
+          return_notes: notes || (existingAssignment as any).return_notes,
         })
         .eq('id', assignmentId)
         .select(`

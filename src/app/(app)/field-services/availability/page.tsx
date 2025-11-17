@@ -81,9 +81,9 @@ export default function AvailabilityPage() {
   // Group entries by type
   const timeOff = availability.filter(a => a.availabilityType === "time_off");
   const blockedTime = availability.filter(a => a.availabilityType === "blocked");
-  const availableTime = availability.filter(a => a.availabilityType === "available");
+  const workingHours = availability.filter(a => a.availabilityType === "working_hours");
 
-  const pendingApprovals = timeOff.filter(a => !a.isApproved);
+  const pendingApprovals = timeOff.filter(a => !a.approvedBy);
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -219,8 +219,8 @@ export default function AvailabilityPage() {
                       {entry.resource?.profile?.name || "Unknown"}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {format(new Date(entry.dateFrom), "MMM d")} -{" "}
-                      {format(new Date(entry.dateTo), "MMM d, yyyy")}
+                      {format(new Date(entry.startDatetime), "MMM d")} -{" "}
+                      {format(new Date(entry.endDatetime), "MMM d, yyyy")}
                     </p>
                     <p className="text-sm text-muted-foreground">{entry.reason}</p>
                   </div>
@@ -274,8 +274,13 @@ export default function AvailabilityPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {availability
-            .sort((a, b) => new Date(a.dateFrom).getTime() - new Date(b.dateFrom).getTime())
-            .map((entry) => (
+            .sort((a, b) => new Date(a.startDatetime).getTime() - new Date(b.startDatetime).getTime())
+            .map((entry) => {
+              const startDate = new Date(entry.startDatetime);
+              const endDate = new Date(entry.endDatetime);
+              const showTime = !entry.isAllDay;
+
+              return (
               <Card key={entry.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -297,16 +302,16 @@ export default function AvailabilityPage() {
                   <div className="text-sm">
                     <p className="text-muted-foreground">Dates</p>
                     <p className="font-medium">
-                      {format(new Date(entry.dateFrom), "MMM d")} -{" "}
-                      {format(new Date(entry.dateTo), "MMM d, yyyy")}
+                      {format(startDate, "MMM d")} -{" "}
+                      {format(endDate, "MMM d, yyyy")}
                     </p>
                   </div>
 
-                  {(entry.timeFrom || entry.timeTo) && (
+                  {showTime && (
                     <div className="text-sm">
                       <p className="text-muted-foreground">Time</p>
                       <p className="font-medium">
-                        {entry.timeFrom} - {entry.timeTo}
+                        {format(startDate, "h:mm a")} - {format(endDate, "h:mm a")}
                       </p>
                     </div>
                   )}
@@ -320,7 +325,7 @@ export default function AvailabilityPage() {
 
                   {entry.availabilityType === "time_off" && (
                     <div className="flex items-center gap-2">
-                      {entry.isApproved ? (
+                      {entry.status === 'approved' || entry.approvedBy ? (
                         <Badge className="bg-green-100 text-green-800">
                           <CheckCircle className="mr-1 h-3 w-3" />
                           Approved
@@ -357,7 +362,8 @@ export default function AvailabilityPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            );
+            })}
         </div>
       )}
 

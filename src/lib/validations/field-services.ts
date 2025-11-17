@@ -15,11 +15,140 @@ const coordinatesSchema = z.object({
   accuracy: z.number().positive().optional(),
 });
 
-const uuidSchema = z.string().uuid();
+export const uuidSchema = z.string().uuid();
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const timeSchema = z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/);
 const emailSchema = z.string().email();
 const phoneSchema = z.string().regex(/^\+?[\d\s\-\(\)]+$/).optional();
+
+// =====================================================
+// Phase 1-3: Core Schemas (Bookings, Resources, Territories, Equipment)
+// =====================================================
+
+export const createBookingSchema = z.object({
+  resourceId: uuidSchema,
+  orderId: uuidSchema.optional(),
+  territoryId: uuidSchema.optional(),
+  bookingType: z.enum(['inspection', 'meeting', 'other']).default('inspection'),
+  scheduledStart: z.string().datetime(),
+  scheduledEnd: z.string().datetime(),
+  durationMinutes: z.number().int().positive().optional(),
+  propertyAddress: z.string().min(1).max(500),
+  propertyCity: z.string().max(100).optional(),
+  propertyState: z.string().length(2).optional(),
+  propertyZip: z.string().max(10).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  accessInstructions: z.string().max(1000).optional(),
+  specialInstructions: z.string().max(1000).optional(),
+  contactName: z.string().max(200).optional(),
+  contactPhone: z.string().max(20).optional(),
+  contactEmail: z.string().email().optional(),
+  estimatedTravelTimeMinutes: z.number().int().positive().optional(),
+  estimatedMileage: z.number().positive().optional(),
+  autoAssigned: z.boolean().default(false),
+}).refine(
+  (data) => new Date(data.scheduledEnd) > new Date(data.scheduledStart),
+  { message: 'scheduledEnd must be after scheduledStart', path: ['scheduledEnd'] }
+);
+
+export const createTerritorySchema = z.object({
+  name: z.string().min(1).max(255),
+  description: z.string().max(1000).optional(),
+  territoryType: z.enum(['primary', 'secondary', 'extended']).default('primary'),
+  zipCodes: z.array(z.string().max(10)).default([]),
+  counties: z.array(z.string().max(100)).default([]),
+  cities: z.array(z.string().max(100)).default([]),
+  radiusMiles: z.number().positive().max(500).optional(),
+  centerLat: z.number().min(-90).max(90).optional(),
+  centerLng: z.number().min(-180).max(180).optional(),
+  boundaryPolygon: z.any().optional(), // GeoJSON polygon
+  baseTravelTimeMinutes: z.number().int().nonnegative().max(999).default(0),
+  mileageRate: z.number().positive().max(10).default(0.67),
+  travelFee: z.number().nonnegative().max(10000).default(0),
+  isActive: z.boolean().default(true),
+  colorHex: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#3b82f6'),
+  metadata: z.record(z.any()).default({}),
+}).refine(
+  (data) => {
+    // At least one geographic definition required
+    return (
+      (data.zipCodes && data.zipCodes.length > 0) ||
+      (data.counties && data.counties.length > 0) ||
+      (data.cities && data.cities.length > 0) ||
+      data.radiusMiles ||
+      data.boundaryPolygon
+    );
+  },
+  {
+    message: 'At least one geographic definition required (zipCodes, counties, cities, radius, or polygon)',
+    path: ['zipCodes'],
+  }
+).refine(
+  (data) => {
+    // If using radius, require center coordinates
+    if (data.radiusMiles) {
+      return data.centerLat !== undefined && data.centerLng !== undefined;
+    }
+    return true;
+  },
+  {
+    message: 'centerLat and centerLng required when using radiusMiles',
+    path: ['centerLat'],
+  }
+);
+
+export const createResourceSchema = z.object({
+  id: uuidSchema, // Profile ID
+  resourceType: z.enum(['appraiser', 'equipment', 'vehicle', 'facility']).default('appraiser'),
+  employmentType: z.enum(['staff', 'contractor', 'vendor']).optional(),
+  isBookable: z.boolean().default(true),
+  bookingBufferMinutes: z.number().int().nonnegative().max(480).default(30),
+  maxDailyAppointments: z.number().int().positive().max(20).default(4),
+  maxWeeklyHours: z.number().positive().max(168).default(40),
+  primaryTerritoryId: uuidSchema.optional(),
+  serviceTerritoryIds: z.array(uuidSchema).default([]),
+  hourlyRate: z.number().positive().max(10000).optional(),
+  overtimeRate: z.number().positive().max(10000).optional(),
+  perInspectionRate: z.number().positive().max(10000).optional(),
+  splitPercentage: z.number().min(0).max(100).optional(),
+  assignedEquipmentIds: z.array(uuidSchema).default([]),
+  licenseNumber: z.string().max(100).optional(),
+  licenseState: z.string().length(2).optional(),
+  licenseExpiry: z.string().date().optional(),
+  errorsAndOmissionsCarrier: z.string().max(255).optional(),
+  errorsAndOmissionsExpiry: z.string().date().optional(),
+  errorsAndOmissionsAmount: z.number().positive().max(100000000).optional(),
+  emergencyContactName: z.string().max(255).optional(),
+  emergencyContactPhone: z.string().max(20).optional(),
+  preferredContactMethod: z.enum(['email', 'phone', 'sms']).default('email'),
+  defaultWorkingHours: z.record(z.object({
+    enabled: z.boolean(),
+    start: z.string().regex(/^\d{2}:\d{2}$/),
+    end: z.string().regex(/^\d{2}:\d{2}$/),
+  })).optional(),
+  timezone: z.string().max(100).default('America/New_York'),
+  metadata: z.record(z.any()).default({}),
+});
+
+export const createEquipmentSchema = z.object({
+  equipmentType: z.string().min(1).max(100),
+  make: z.string().max(100).optional(),
+  model: z.string().max(100).optional(),
+  serialNumber: z.string().max(100).optional(),
+  purchaseDate: z.string().date().optional(),
+  purchaseCost: z.number().positive().max(10000000).optional(),
+  currentValue: z.number().nonnegative().max(10000000).optional(),
+  status: z.enum(['available', 'in_use', 'maintenance', 'retired']).default('available'),
+  condition: z.enum(['excellent', 'good', 'fair', 'poor']).default('good'),
+  maintenanceSchedule: z.string().max(500).optional(),
+  lastMaintenanceDate: z.string().date().optional(),
+  nextMaintenanceDate: z.string().date().optional(),
+  location: z.string().max(255).optional(),
+  notes: z.string().max(2000).optional(),
+  specifications: z.record(z.any()).optional(),
+  warrantyExpiry: z.string().date().optional(),
+});
 
 // =====================================================
 // Phase 4: Mileage & Route Schemas

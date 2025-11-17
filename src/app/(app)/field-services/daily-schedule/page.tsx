@@ -105,7 +105,7 @@ export default function DailySchedulePage() {
     ? equipment.filter(e =>
         e.currentAssignment &&
         e.currentAssignment.length > 0 &&
-        e.currentAssignment.some((a: any) => a.resourceId === selectedResourceId && !a.returnedDate)
+        e.currentAssignment.some((a) => a.resourceId === selectedResourceId && !a.actualReturnDate)
       )
     : [];
 
@@ -251,7 +251,7 @@ export default function DailySchedulePage() {
             <div>
               <p className="font-medium text-yellow-900">Time Off</p>
               <p className="text-sm text-yellow-700">
-                {timeOff[0].reason} - {timeOff[0].isApproved ? "Approved" : "Pending Approval"}
+                {timeOff[0].reason} - {timeOff[0].status === 'approved' || timeOff[0].approvedBy ? "Approved" : "Pending Approval"}
               </p>
             </div>
           </CardContent>

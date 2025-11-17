@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { transformBooking } from '@/lib/supabase/transforms';
+import { getApiContext, handleApiError, requireAdmin, ApiError } from '@/lib/api-utils';
+import { createBookingSchema } from '@/lib/validations/field-services';
 
 /**
  * GET /api/field-services/bookings
@@ -16,12 +18,8 @@ import { transformBooking } from '@/lib/supabase/transforms';
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const context = await getApiContext(request);
+    const { supabase, orgId } = context;
 
     const { searchParams } = new URL(request.url);
     const resourceId = searchParams.get('resourceId');
@@ -43,7 +41,7 @@ export async function GET(request: NextRequest) {
         service_territories:territory_id (*),
         assigner:profiles!bookings_assigned_by_fkey (id, name, email)
       `)
-      .eq('org_id', user.id);
+      .eq('org_id', orgId);
 
     // Apply filters
     if (resourceId) {
@@ -82,11 +80,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ bookings: transformedBookings });
 
   } catch (error: any) {
-    console.error('Bookings list error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to fetch bookings' },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }
 
@@ -96,100 +90,63 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const context = await getApiContext(request);
+    const { supabase, orgId, userId } = context;
 
     // Check if user is admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
+    await requireAdmin(context);
+
+    // Parse and validate request body
+    const body = await request.json();
+    const validated = createBookingSchema.parse(body);
+
+    // HIGH-5: Verify resource belongs to org
+    const { data: resource, error: resourceError } = await supabase
+      .from('bookable_resources')
+      .select('id')
+      .eq('id', validated.resourceId)
+      .eq('org_id', orgId)
       .single();
 
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
-
-    const body = await request.json();
-    const {
-      orderId,
-      resourceId,
-      territoryId,
-      bookingType = 'inspection',
-      scheduledStart,
-      scheduledEnd,
-      durationMinutes,
-      propertyAddress,
-      propertyCity,
-      propertyState,
-      propertyZip,
-      latitude,
-      longitude,
-      accessInstructions,
-      specialInstructions,
-      contactName,
-      contactPhone,
-      contactEmail,
-      estimatedTravelTimeMinutes,
-      estimatedMileage,
-      autoAssigned = false,
-    } = body;
-
-    // Validate required fields
-    if (!resourceId || !scheduledStart || !scheduledEnd || !propertyAddress) {
-      return NextResponse.json(
-        { error: 'Missing required fields: resourceId, scheduledStart, scheduledEnd, propertyAddress' },
-        { status: 400 }
-      );
-    }
-
-    // Validate date range
-    if (new Date(scheduledEnd) <= new Date(scheduledStart)) {
-      return NextResponse.json(
-        { error: 'scheduledEnd must be after scheduledStart' },
-        { status: 400 }
-      );
+    if (resourceError || !resource) {
+      throw new ApiError('Resource not found or not accessible', 403, 'RESOURCE_NOT_FOUND');
     }
 
     // Check for conflicts before creating
     const conflicts = await checkBookingConflicts(supabase, {
-      resourceId,
-      scheduledStart,
-      scheduledEnd,
+      resourceId: validated.resourceId,
+      scheduledStart: validated.scheduledStart,
+      scheduledEnd: validated.scheduledEnd,
     });
 
     // Insert booking
     const { data: booking, error: insertError } = await supabase
       .from('bookings')
       .insert({
-        org_id: user.id,
-        order_id: orderId,
-        resource_id: resourceId,
-        territory_id: territoryId,
-        booking_type: bookingType,
-        scheduled_start: scheduledStart,
-        scheduled_end: scheduledEnd,
-        duration_minutes: durationMinutes,
-        property_address: propertyAddress,
-        property_city: propertyCity,
-        property_state: propertyState,
-        property_zip: propertyZip,
-        latitude,
-        longitude,
-        access_instructions: accessInstructions,
-        special_instructions: specialInstructions,
-        contact_name: contactName,
-        contact_phone: contactPhone,
-        contact_email: contactEmail,
-        estimated_travel_time_minutes: estimatedTravelTimeMinutes,
-        estimated_mileage: estimatedMileage,
-        assigned_by: user.id,
+        org_id: orgId,
+        order_id: validated.orderId,
+        resource_id: validated.resourceId,
+        territory_id: validated.territoryId,
+        booking_type: validated.bookingType,
+        scheduled_start: validated.scheduledStart,
+        scheduled_end: validated.scheduledEnd,
+        duration_minutes: validated.durationMinutes,
+        property_address: validated.propertyAddress,
+        property_city: validated.propertyCity,
+        property_state: validated.propertyState,
+        property_zip: validated.propertyZip,
+        latitude: validated.latitude,
+        longitude: validated.longitude,
+        access_instructions: validated.accessInstructions,
+        special_instructions: validated.specialInstructions,
+        contact_name: validated.contactName,
+        contact_phone: validated.contactPhone,
+        contact_email: validated.contactEmail,
+        estimated_travel_time_minutes: validated.estimatedTravelTimeMinutes,
+        estimated_mileage: validated.estimatedMileage,
+        assigned_by: userId,
         assigned_at: new Date().toISOString(),
-        auto_assigned: autoAssigned,
+        auto_assigned: validated.autoAssigned,
         status: conflicts.length > 0 ? 'requested' : 'scheduled',
       })
       .select(`
@@ -220,11 +177,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Booking create error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to create booking' },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }
 

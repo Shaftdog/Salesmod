@@ -79,43 +79,47 @@ export async function PATCH(
     // Convert camelCase to snake_case
     const updateData: any = {};
 
-    if (body.dateFrom !== undefined) updateData.date_from = body.dateFrom;
-    if (body.dateTo !== undefined) updateData.date_to = body.dateTo;
+    if (body.startDatetime !== undefined) updateData.start_datetime = body.startDatetime;
+    if (body.endDatetime !== undefined) updateData.end_datetime = body.endDatetime;
     if (body.availabilityType !== undefined) updateData.availability_type = body.availabilityType;
-    if (body.timeFrom !== undefined) updateData.time_from = body.timeFrom;
-    if (body.timeTo !== undefined) updateData.time_to = body.timeTo;
+    if (body.isAvailable !== undefined) updateData.is_available = body.isAvailable;
     if (body.isRecurring !== undefined) updateData.is_recurring = body.isRecurring;
-    if (body.recurrencePattern !== undefined) updateData.recurrence_pattern = body.recurrencePattern;
+    if (body.recurrenceRule !== undefined) updateData.recurrence_rule = body.recurrenceRule;
+    if (body.recurrenceEndDate !== undefined) updateData.recurrence_end_date = body.recurrenceEndDate;
     if (body.reason !== undefined) updateData.reason = body.reason;
     if (body.notes !== undefined) updateData.notes = body.notes;
-    if (body.isApproved !== undefined) updateData.is_approved = body.isApproved;
-    if (body.approvedBy !== undefined) updateData.approved_by = body.approvedBy;
+    if (body.isAllDay !== undefined) updateData.is_all_day = body.isAllDay;
+    if (body.status !== undefined) updateData.status = body.status;
+    if (body.approvedBy !== undefined) {
+      updateData.approved_by = body.approvedBy;
+      updateData.approved_at = new Date().toISOString();
+    }
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
 
     // If updating dates, check for overlaps
-    if (updateData.date_from || updateData.date_to) {
+    if (updateData.start_datetime || updateData.end_datetime) {
       // Get current entry
       const { data: current } = await supabase
         .from('resource_availability')
-        .select('resource_id, date_from, date_to')
+        .select('resource_id, start_datetime, end_datetime')
         .eq('id', id)
         .single();
 
       if (current) {
-        const newDateFrom = updateData.date_from || current.date_from;
-        const newDateTo = updateData.date_to || current.date_to;
+        const newStartDatetime = updateData.start_datetime || current.start_datetime;
+        const newEndDatetime = updateData.end_datetime || current.end_datetime;
 
         // Check for overlaps (excluding this entry)
         const { data: overlaps } = await supabase
           .from('resource_availability')
-          .select('id, date_from, date_to')
+          .select('id, start_datetime, end_datetime')
           .eq('resource_id', current.resource_id)
           .neq('id', id)
-          .lt('date_from', newDateTo)
-          .gt('date_to', newDateFrom);
+          .lt('start_datetime', newEndDatetime)
+          .gt('end_datetime', newStartDatetime);
 
         if (overlaps && overlaps.length > 0) {
           return NextResponse.json(
