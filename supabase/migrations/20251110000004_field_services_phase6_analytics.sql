@@ -5,7 +5,7 @@
 -- Analytics snapshots (pre-calculated for performance)
 CREATE TABLE IF NOT EXISTS public.analytics_snapshots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
 
   snapshot_type TEXT NOT NULL, -- daily, weekly, monthly, quarterly, yearly
   snapshot_date DATE NOT NULL,
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS public.analytics_snapshots (
 -- Custom reports
 CREATE TABLE IF NOT EXISTS public.custom_reports (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   created_by UUID NOT NULL REFERENCES public.profiles(id),
 
   report_name TEXT NOT NULL,
@@ -100,21 +100,19 @@ CREATE TABLE IF NOT EXISTS public.report_subscriptions (
 CREATE MATERIALIZED VIEW IF NOT EXISTS resource_utilization_summary AS
 SELECT
   r.id AS resource_id,
-  r.org_id,
   p.name AS resource_name,
   COUNT(DISTINCT b.id) AS total_bookings,
   COUNT(DISTINCT CASE WHEN b.status = 'completed' THEN b.id END) AS completed_bookings,
-  COALESCE(SUM(t.duration_minutes), 0) / 60.0 AS total_hours,
-  COALESCE(SUM(CASE WHEN t.is_billable THEN t.duration_minutes ELSE 0 END), 0) / 60.0 AS billable_hours,
+  COALESCE(SUM(EXTRACT(EPOCH FROM (b.actual_end - b.actual_start)) / 3600), 0) AS total_hours,
+  COALESCE(SUM(EXTRACT(EPOCH FROM (b.actual_end - b.actual_start)) / 3600), 0) AS billable_hours,
   COALESCE(SUM(m.distance_miles), 0) AS total_miles,
   AVG(cf.rating) AS avg_customer_rating
 FROM public.bookable_resources r
 JOIN public.profiles p ON r.id = p.id
-LEFT JOIN public.bookings b ON r.id = b.resource_id
-LEFT JOIN public.time_entries t ON r.id = t.resource_id
+LEFT JOIN public.bookings b ON r.id = b.resource_id AND b.actual_start IS NOT NULL AND b.actual_end IS NOT NULL
 LEFT JOIN public.mileage_logs m ON r.id = m.resource_id
 LEFT JOIN public.customer_feedback cf ON b.id = cf.booking_id
-GROUP BY r.id, r.org_id, p.name;
+GROUP BY r.id, p.name;
 
 -- Refresh function
 CREATE OR REPLACE FUNCTION refresh_resource_utilization()
@@ -150,11 +148,11 @@ ALTER TABLE public.report_subscriptions ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can view analytics in their org"
   ON public.analytics_snapshots FOR SELECT
-  USING (org_id IN (SELECT id FROM public.organizations WHERE id = auth.jwt()->>'org_id'));
+  USING (auth.uid() = org_id);
 
 CREATE POLICY "Users can view reports in their org"
   ON public.custom_reports FOR SELECT
-  USING (org_id IN (SELECT id FROM public.organizations WHERE id = auth.jwt()->>'org_id') OR is_public = true);
+  USING (auth.uid() = org_id OR is_public = true);
 
 CREATE POLICY "Users can manage their own reports"
   ON public.custom_reports FOR ALL

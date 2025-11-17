@@ -5,7 +5,7 @@
 -- Integration configurations
 CREATE TABLE IF NOT EXISTS public.integrations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
 
   integration_type TEXT NOT NULL, -- calendar, accounting, sms, email, crm
   provider TEXT NOT NULL, -- google_calendar, quickbooks, twilio, sendgrid, etc.
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS public.integrations (
 -- Webhook endpoints
 CREATE TABLE IF NOT EXISTS public.webhooks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
 
   webhook_name TEXT NOT NULL,
   target_url TEXT NOT NULL,
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS public.webhook_deliveries (
 -- API keys for external access
 CREATE TABLE IF NOT EXISTS public.api_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   created_by UUID NOT NULL REFERENCES public.profiles(id),
 
   key_name TEXT NOT NULL,
@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
 CREATE TABLE IF NOT EXISTS public.api_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   api_key_id UUID REFERENCES public.api_keys(id) ON DELETE CASCADE,
-  org_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
 
   request_method TEXT NOT NULL,
   request_path TEXT NOT NULL,
@@ -174,23 +174,23 @@ ALTER TABLE public.api_requests ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can view integrations in their org"
   ON public.integrations FOR SELECT
-  USING (org_id IN (SELECT id FROM public.organizations WHERE id = auth.jwt()->>'org_id'));
+  USING (auth.uid() = org_id);
 
 CREATE POLICY "Admins can manage integrations"
   ON public.integrations FOR ALL
-  USING (org_id IN (SELECT id FROM public.organizations WHERE id = auth.jwt()->>'org_id'));
+  USING (auth.uid() = org_id);
 
 CREATE POLICY "Users can view webhooks in their org"
   ON public.webhooks FOR SELECT
-  USING (org_id IN (SELECT id FROM public.organizations WHERE id = auth.jwt()->>'org_id'));
+  USING (auth.uid() = org_id);
 
 CREATE POLICY "Users can view API keys in their org"
   ON public.api_keys FOR SELECT
-  USING (org_id IN (SELECT id FROM public.organizations WHERE id = auth.jwt()->>'org_id'));
+  USING (auth.uid() = org_id);
 
 CREATE POLICY "Users can view API requests in their org"
   ON public.api_requests FOR SELECT
-  USING (org_id IN (SELECT id FROM public.organizations WHERE id = auth.jwt()->>'org_id'));
+  USING (auth.uid() = org_id);
 
 -- =====================================================
 -- Functions
@@ -222,7 +222,7 @@ BEGIN
     SELECT id FROM public.webhooks
     WHERE is_active = true
     AND p_event_type = ANY(event_types)
-    AND org_id = auth.jwt()->>'org_id'
+    AND org_id = auth.uid()
   LOOP
     INSERT INTO public.webhook_deliveries (
       webhook_id,

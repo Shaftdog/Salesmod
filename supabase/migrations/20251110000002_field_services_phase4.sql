@@ -5,7 +5,7 @@
 -- Mileage tracking table
 CREATE TABLE IF NOT EXISTS public.mileage_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
   resource_id UUID NOT NULL REFERENCES public.bookable_resources(id) ON DELETE CASCADE,
   booking_id UUID REFERENCES public.bookings(id) ON DELETE SET NULL,
   route_plan_id UUID REFERENCES public.route_plans(id) ON DELETE SET NULL,
@@ -145,37 +145,37 @@ ALTER TABLE public.offline_sync_queue ENABLE ROW LEVEL SECURITY;
 -- Mileage logs policies
 CREATE POLICY "Users can view mileage logs in their org"
   ON public.mileage_logs FOR SELECT
-  USING (org_id IN (SELECT id FROM public.organizations WHERE id = auth.jwt()->>'org_id'));
+  USING (auth.uid() = org_id);
 
 CREATE POLICY "Users can insert mileage logs in their org"
   ON public.mileage_logs FOR INSERT
-  WITH CHECK (org_id IN (SELECT id FROM public.organizations WHERE id = auth.jwt()->>'org_id'));
+  WITH CHECK (auth.uid() = org_id);
 
 CREATE POLICY "Users can update mileage logs in their org"
   ON public.mileage_logs FOR UPDATE
-  USING (org_id IN (SELECT id FROM public.organizations WHERE id = auth.jwt()->>'org_id'));
+  USING (auth.uid() = org_id);
 
 CREATE POLICY "Users can delete mileage logs in their org"
   ON public.mileage_logs FOR DELETE
-  USING (org_id IN (SELECT id FROM public.organizations WHERE id = auth.jwt()->>'org_id'));
+  USING (auth.uid() = org_id);
 
 -- GPS tracking policies
 CREATE POLICY "Users can view GPS tracking in their org"
   ON public.gps_tracking FOR SELECT
-  USING (resource_id IN (SELECT id FROM public.bookable_resources WHERE org_id = auth.jwt()->>'org_id'));
+  USING (resource_id = auth.uid());
 
 CREATE POLICY "Users can insert GPS tracking"
   ON public.gps_tracking FOR INSERT
-  WITH CHECK (resource_id IN (SELECT id FROM public.bookable_resources WHERE org_id = auth.jwt()->>'org_id'));
+  WITH CHECK (resource_id = auth.uid());
 
 -- Route waypoints policies
 CREATE POLICY "Users can view route waypoints in their org"
   ON public.route_waypoints FOR SELECT
-  USING (route_plan_id IN (SELECT id FROM public.route_plans WHERE org_id = auth.jwt()->>'org_id'));
+  USING (route_plan_id IN (SELECT id FROM public.route_plans WHERE resource_id = auth.uid()));
 
 CREATE POLICY "Users can manage route waypoints in their org"
   ON public.route_waypoints FOR ALL
-  USING (route_plan_id IN (SELECT id FROM public.route_plans WHERE org_id = auth.jwt()->>'org_id'));
+  USING (route_plan_id IN (SELECT id FROM public.route_plans WHERE resource_id = auth.uid()));
 
 -- Offline sync queue policies
 CREATE POLICY "Users can view their own sync queue"

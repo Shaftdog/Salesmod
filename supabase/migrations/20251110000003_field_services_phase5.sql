@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS public.customer_portal_access (
 -- Notifications log
 CREATE TABLE IF NOT EXISTS public.notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
 
   notification_type TEXT NOT NULL, -- sms, email, push
   template_name TEXT,
@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS public.field_photos (
 CREATE TABLE IF NOT EXISTS public.customer_feedback (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   booking_id UUID REFERENCES public.bookings(id) ON DELETE CASCADE,
-  org_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE,
+  org_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
 
   customer_name TEXT,
   customer_email TEXT,
@@ -187,7 +187,7 @@ CREATE POLICY "Portal access by token"
 -- Notifications policies
 CREATE POLICY "Users can view notifications in their org"
   ON public.notifications FOR SELECT
-  USING (org_id IN (SELECT id FROM public.organizations WHERE id = auth.jwt()->>'org_id'));
+  USING (auth.uid() = org_id);
 
 CREATE POLICY "System can insert notifications"
   ON public.notifications FOR INSERT
@@ -196,12 +196,12 @@ CREATE POLICY "System can insert notifications"
 -- Signatures policies
 CREATE POLICY "Users can view signatures in their org"
   ON public.digital_signatures FOR SELECT
-  USING (booking_id IN (SELECT id FROM public.bookings WHERE org_id = auth.jwt()->>'org_id'));
+  USING (booking_id IN (SELECT id FROM public.bookings WHERE org_id = auth.uid()));
 
 -- Photos policies
 CREATE POLICY "Users can view photos for their org"
   ON public.field_photos FOR SELECT
-  USING (booking_id IN (SELECT id FROM public.bookings WHERE org_id = auth.jwt()->>'org_id'));
+  USING (booking_id IN (SELECT id FROM public.bookings WHERE org_id = auth.uid()));
 
 CREATE POLICY "Users can upload photos"
   ON public.field_photos FOR INSERT
@@ -214,7 +214,7 @@ CREATE POLICY "Anyone can submit feedback"
 
 CREATE POLICY "Users can view feedback in their org"
   ON public.customer_feedback FOR SELECT
-  USING (org_id IN (SELECT id FROM public.organizations WHERE id = auth.jwt()->>'org_id'));
+  USING (auth.uid() = org_id);
 
 -- =====================================================
 -- Functions
@@ -261,7 +261,7 @@ BEGIN
     related_entity_id,
     status
   ) VALUES (
-    auth.jwt()->>'org_id',
+    auth.uid(),
     p_type,
     'customer',
     p_recipient_email,
