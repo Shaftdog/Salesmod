@@ -1,30 +1,43 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextRequest } from 'next/server';
+import {
+  getApiContext,
+  handleApiError,
+  createdResponse,
+  applyRateLimit,
+  successResponse,
+  getPaginationParams,
+  buildPaginatedResponse,
+  applyFilters,
+  ApiError,
+} from '@/lib/api-utils';
+import { trackGpsSchema } from '@/lib/validations/field-services';
 
 /**
  * POST /api/field-services/gps/track
  * Record GPS location for resource
+ *
+ * RATE LIMITED: 300 requests per minute per user
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const context = await getApiContext(request);
+    const { supabase, requestId } = context;
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // CRITICAL: Apply rate limiting (GPS tracking is high-frequency)
+    await applyRateLimit(request, context, { maxRequests: 300, windowMs: 60000 });
 
     const body = await request.json();
+    const validated = trackGpsSchema.parse(body);
 
     const trackingData = {
-      resource_id: body.resourceId,
-      booking_id: body.bookingId,
-      coordinates: body.coordinates,
-      speed: body.speed,
-      heading: body.heading,
-      altitude: body.altitude,
-      battery_level: body.batteryLevel,
-      is_online: body.isOnline !== undefined ? body.isOnline : true,
+      resource_id: validated.resourceId,
+      booking_id: validated.bookingId,
+      coordinates: validated.coordinates,
+      speed: validated.speed,
+      heading: validated.heading,
+      altitude: validated.altitude,
+      battery_level: validated.batteryLevel,
+      is_online: validated.isOnline,
     };
 
     const { data: tracking, error } = await supabase
@@ -33,18 +46,11 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) {
-      console.error('GPS tracking error:', error);
-      return NextResponse.json({ error: 'Failed to record GPS location' }, { status: 500 });
-    }
+    if (error) throw error;
 
-    return NextResponse.json({
-      tracking,
-      message: 'Location recorded'
-    }, { status: 201 });
+    return createdResponse({ tracking }, 'Location recorded');
   } catch (error: any) {
-    console.error('GPS tracking error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return handleApiError(error);
   }
 }
 
@@ -54,41 +60,50 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const context = await getApiContext(request);
+    const { supabase, requestId } = context;
 
     const { searchParams } = new URL(request.url);
     const resourceId = searchParams.get('resourceId');
     const bookingId = searchParams.get('bookingId');
-    const since = searchParams.get('since'); // timestamp
+    const since = searchParams.get('since');
 
     if (!resourceId) {
-      return NextResponse.json({ error: 'resourceId required' }, { status: 400 });
+      throw new ApiError('resourceId required', 400, 'MISSING_RESOURCE_ID', requestId);
     }
 
+    const pagination = getPaginationParams(request);
+
+    // Count total
+    let countQuery = supabase
+      .from('gps_tracking')
+      .select('*', { count: 'exact', head: true })
+      .eq('resource_id', resourceId);
+
+    countQuery = applyFilters(countQuery, { booking_id: bookingId });
+    if (since) countQuery = countQuery.gte('timestamp', since);
+
+    const { count } = await countQuery;
+
+    // Fetch data
     let query = supabase
       .from('gps_tracking')
       .select('*')
       .eq('resource_id', resourceId)
       .order('timestamp', { ascending: false })
-      .limit(100);
+      .range(pagination.offset, pagination.offset + pagination.limit - 1);
 
-    if (bookingId) query = query.eq('booking_id', bookingId);
+    query = applyFilters(query, { booking_id: bookingId });
     if (since) query = query.gte('timestamp', since);
 
     const { data: tracking, error } = await query;
 
-    if (error) {
-      console.error('GPS fetch error:', error);
-      return NextResponse.json({ error: 'Failed to fetch GPS data' }, { status: 500 });
-    }
+    if (error) throw error;
 
-    return NextResponse.json({ tracking });
+    return successResponse(
+      buildPaginatedResponse(tracking, count || 0, pagination)
+    );
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return handleApiError(error);
   }
 }

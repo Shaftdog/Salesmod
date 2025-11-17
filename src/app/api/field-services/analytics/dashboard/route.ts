@@ -1,5 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextRequest } from 'next/server';
+import {
+  getApiContext,
+  handleApiError,
+  successResponse,
+} from '@/lib/api-utils';
+import { getAnalyticsDashboardSchema } from '@/lib/validations/field-services';
 
 /**
  * GET /api/field-services/analytics/dashboard
@@ -9,16 +14,16 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const context = await getApiContext(request);
+    const { supabase, orgId } = context;
 
     const { searchParams } = new URL(request.url);
-    const dateFrom = searchParams.get('dateFrom') || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const dateTo = searchParams.get('dateTo') || new Date().toISOString().split('T')[0];
+    const validated = getAnalyticsDashboardSchema.parse({
+      dateFrom: searchParams.get('dateFrom') || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      dateTo: searchParams.get('dateTo') || new Date().toISOString().split('T')[0],
+    });
+
+    const { dateFrom, dateTo } = validated;
 
     // Fetch analytics data
     const [
@@ -30,24 +35,28 @@ export async function GET(request: NextRequest) {
       supabase
         .from('bookings')
         .select('id, status, scheduled_start, scheduled_end, created_at')
+        .eq('org_id', orgId)
         .gte('created_at', dateFrom)
         .lte('created_at', dateTo),
 
       supabase
         .from('time_entries')
         .select('id, duration_minutes, is_billable, entry_date')
+        .eq('org_id', orgId)
         .gte('entry_date', dateFrom)
         .lte('entry_date', dateTo),
 
       supabase
         .from('mileage_logs')
         .select('id, distance_miles, reimbursement_amount, log_date')
+        .eq('org_id', orgId)
         .gte('log_date', dateFrom)
         .lte('log_date', dateTo),
 
       supabase
         .from('customer_feedback')
         .select('id, rating, submitted_at')
+        .eq('org_id', orgId)
         .gte('submitted_at', dateFrom)
         .lte('submitted_at', dateTo)
     ]);
@@ -75,7 +84,7 @@ export async function GET(request: NextRequest) {
       ? (billableHours / totalHours) * 100
       : 0;
 
-    return NextResponse.json({
+    return successResponse({
       summary: {
         totalBookings,
         completedBookings,
@@ -92,7 +101,6 @@ export async function GET(request: NextRequest) {
       dateRange: { from: dateFrom, to: dateTo }
     });
   } catch (error: any) {
-    console.error('Analytics error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return handleApiError(error);
   }
 }

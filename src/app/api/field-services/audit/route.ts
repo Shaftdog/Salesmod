@@ -1,5 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextRequest } from 'next/server';
+import {
+  getApiContext,
+  handleApiError,
+  requireAdmin,
+  successResponse,
+  getPaginationParams,
+  buildPaginatedResponse,
+  applyFilters,
+} from '@/lib/api-utils';
+import { getAuditLogsSchema } from '@/lib/validations/field-services';
 
 /**
  * GET /api/field-services/audit
@@ -9,48 +18,59 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const context = await getApiContext(request);
+    const { supabase, orgId } = context;
 
     // Check admin role
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
+    await requireAdmin(context);
 
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-    const entityType = searchParams.get('entityType');
-    const action = searchParams.get('action');
-    const limit = parseInt(searchParams.get('limit') || '100');
+    const validated = getAuditLogsSchema.parse({
+      userId: searchParams.get('userId') || undefined,
+      entityType: searchParams.get('entityType') || undefined,
+      action: searchParams.get('action') || undefined,
+      page: searchParams.get('page') || undefined,
+      limit: searchParams.get('limit') || undefined,
+    });
 
+    const pagination = getPaginationParams(request);
+
+    // Count total
+    let countQuery = supabase
+      .from('audit_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('org_id', orgId);
+
+    countQuery = applyFilters(countQuery, {
+      user_id: validated.userId,
+      entity_type: validated.entityType,
+      action: validated.action,
+    });
+
+    const { count } = await countQuery;
+
+    // Fetch data
     let query = supabase
       .from('audit_logs')
       .select('*')
+      .eq('org_id', orgId)
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .range(pagination.offset, pagination.offset + pagination.limit - 1);
 
-    if (userId) query = query.eq('user_id', userId);
-    if (entityType) query = query.eq('entity_type', entityType);
-    if (action) query = query.eq('action', action);
+    query = applyFilters(query, {
+      user_id: validated.userId,
+      entity_type: validated.entityType,
+      action: validated.action,
+    });
 
     const { data: logs, error } = await query;
 
-    if (error) {
-      return NextResponse.json({ error: 'Failed to fetch audit logs' }, { status: 500 });
-    }
+    if (error) throw error;
 
-    return NextResponse.json({ logs });
+    return successResponse(
+      buildPaginatedResponse(logs, count || 0, pagination)
+    );
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return handleApiError(error);
   }
 }

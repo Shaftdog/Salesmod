@@ -1,5 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextRequest } from 'next/server';
+import {
+  getApiContext,
+  handleApiError,
+  createdResponse,
+  createAuditLog,
+} from '@/lib/api-utils';
+import { sendNotificationSchema } from '@/lib/validations/field-services';
 
 /**
  * POST /api/field-services/notifications/send
@@ -9,54 +15,49 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const context = await getApiContext(request);
+    const { supabase, orgId } = context;
 
     const body = await request.json();
-    const { type, recipient, subject, message, entityType, entityId } = body;
-
-    if (!type || !recipient || !message) {
-      return NextResponse.json(
-        { error: 'type, recipient, and message are required' },
-        { status: 400 }
-      );
-    }
+    const validated = sendNotificationSchema.parse(body);
 
     // In production, integrate with Twilio (SMS) or SendGrid (Email)
     // For now, log the notification
     const { data: notification, error } = await supabase
       .from('notifications')
       .insert({
-        org_id: body.orgId,
-        notification_type: type,
+        org_id: orgId,
+        notification_type: validated.type,
         recipient_type: 'customer',
-        recipient_email: type === 'email' ? recipient : null,
-        recipient_phone: type === 'sms' ? recipient : null,
-        subject,
-        message,
-        related_entity_type: entityType,
-        related_entity_id: entityId,
+        recipient_email: validated.type === 'email' ? validated.recipient : null,
+        recipient_phone: validated.type === 'sms' ? validated.recipient : null,
+        subject: validated.subject,
+        message: validated.message,
+        related_entity_type: validated.entityType,
+        related_entity_id: validated.entityId,
         status: 'sent', // In production: 'pending' until provider confirms
         sent_at: new Date().toISOString(),
       })
       .select()
       .single();
 
-    if (error) {
-      console.error('Notification error:', error);
-      return NextResponse.json({ error: 'Failed to send notification' }, { status: 500 });
-    }
+    if (error) throw error;
 
-    return NextResponse.json({
-      notification,
-      message: `${type.toUpperCase()} notification queued for delivery`
-    }, { status: 201 });
+    // Audit log
+    await createAuditLog(
+      context,
+      'notification.sent',
+      'notification',
+      notification.id,
+      undefined,
+      { type: validated.type, recipient: validated.recipient }
+    );
+
+    return createdResponse(
+      { notification },
+      `${validated.type.toUpperCase()} notification queued for delivery`
+    );
   } catch (error: any) {
-    console.error('Notification API error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return handleApiError(error);
   }
 }

@@ -1,5 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextRequest } from 'next/server';
+import {
+  getApiContext,
+  handleApiError,
+  successResponse,
+  createdResponse,
+  getPaginationParams,
+  buildPaginatedResponse,
+  createAuditLog,
+} from '@/lib/api-utils';
+import { createWebhookSchema } from '@/lib/validations/field-services';
 
 /**
  * GET /api/field-services/webhooks
@@ -12,62 +21,72 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const context = await getApiContext(request);
+    const { supabase, orgId } = context;
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const pagination = getPaginationParams(request);
 
+    // Count total
+    const { count } = await supabase
+      .from('webhooks')
+      .select('*', { count: 'exact', head: true })
+      .eq('org_id', orgId);
+
+    // Fetch data
     const { data: webhooks, error } = await supabase
       .from('webhooks')
       .select('*')
-      .order('created_at', { ascending: false });
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: false })
+      .range(pagination.offset, pagination.offset + pagination.limit - 1);
 
-    if (error) {
-      return NextResponse.json({ error: 'Failed to fetch webhooks' }, { status: 500 });
-    }
+    if (error) throw error;
 
-    return NextResponse.json({ webhooks });
+    return successResponse(
+      buildPaginatedResponse(webhooks, count || 0, pagination)
+    );
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return handleApiError(error);
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const context = await getApiContext(request);
+    const { supabase, orgId, userId } = context;
 
     const body = await request.json();
+    const validated = createWebhookSchema.parse(body);
 
     const { data: webhook, error } = await supabase
       .from('webhooks')
       .insert({
-        org_id: body.orgId,
-        webhook_name: body.name,
-        target_url: body.targetUrl,
-        event_types: body.eventTypes,
-        is_active: body.isActive !== undefined ? body.isActive : true,
-        secret_key: body.secretKey,
-        created_by: user.id,
+        org_id: orgId,
+        webhook_name: validated.name,
+        target_url: validated.targetUrl,
+        event_types: validated.eventTypes,
+        is_active: validated.isActive,
+        secret_key: validated.secretKey,
+        created_by: userId,
       })
       .select()
       .single();
 
-    if (error) {
-      return NextResponse.json({ error: 'Failed to create webhook' }, { status: 500 });
-    }
+    if (error) throw error;
 
-    return NextResponse.json({
-      webhook,
-      message: 'Webhook created successfully'
-    }, { status: 201 });
+    // Audit log
+    await createAuditLog(
+      context,
+      'webhook.created',
+      'webhook',
+      webhook.id,
+      undefined,
+      { name: validated.name, event_types: validated.eventTypes },
+      'info'
+    );
+
+    return createdResponse({ webhook }, 'Webhook created successfully');
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return handleApiError(error);
   }
 }

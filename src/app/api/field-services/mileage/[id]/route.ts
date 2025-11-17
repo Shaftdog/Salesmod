@@ -1,20 +1,29 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextRequest } from 'next/server';
 import { transformMileageLog } from '@/lib/supabase/transforms';
+import {
+  getApiContext,
+  handleApiError,
+  successResponse,
+  noContentResponse,
+  createAuditLog,
+  isValidUUID,
+  ApiError,
+} from '@/lib/api-utils';
+import { updateMileageLogSchema } from '@/lib/validations/field-services';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const context = await getApiContext(request);
+    const { supabase, requestId } = context;
 
     const { id } = await params;
+
+    if (!isValidUUID(id)) {
+      throw new ApiError('Invalid mileage log ID', 400, 'INVALID_ID', requestId);
+    }
 
     const { data: log, error } = await supabase
       .from('mileage_logs')
@@ -39,13 +48,13 @@ export async function GET(
       .eq('id', id)
       .single();
 
-    if (error) {
-      return NextResponse.json({ error: 'Mileage log not found' }, { status: 404 });
+    if (error || !log) {
+      throw new ApiError('Mileage log not found', 404, 'NOT_FOUND', requestId);
     }
 
-    return NextResponse.json({ mileageLog: transformMileageLog(log) });
+    return successResponse({ mileageLog: transformMileageLog(log) });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return handleApiError(error);
   }
 }
 
@@ -54,23 +63,25 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const context = await getApiContext(request);
+    const { supabase, requestId } = context;
 
     const { id } = await params;
+
+    if (!isValidUUID(id)) {
+      throw new ApiError('Invalid mileage log ID', 400, 'INVALID_ID', requestId);
+    }
+
     const body = await request.json();
+    const validated = updateMileageLogSchema.parse(body);
 
     const updateData: any = {};
-    if (body.distanceMiles !== undefined) updateData.distance_miles = body.distanceMiles;
-    if (body.purpose !== undefined) updateData.purpose = body.purpose;
-    if (body.isBillable !== undefined) updateData.is_billable = body.isBillable;
-    if (body.notes !== undefined) updateData.notes = body.notes;
-    if (body.isReimbursed !== undefined) updateData.is_reimbursed = body.isReimbursed;
-    if (body.reimbursedDate !== undefined) updateData.reimbursed_date = body.reimbursedDate;
+    if (validated.distanceMiles !== undefined) updateData.distance_miles = validated.distanceMiles;
+    if (validated.purpose !== undefined) updateData.purpose = validated.purpose;
+    if (validated.isBillable !== undefined) updateData.is_billable = validated.isBillable;
+    if (validated.notes !== undefined) updateData.notes = validated.notes;
+    if (validated.isReimbursed !== undefined) updateData.is_reimbursed = validated.isReimbursed;
+    if (validated.reimbursedDate !== undefined) updateData.reimbursed_date = validated.reimbursedDate;
 
     const { data: log, error } = await supabase
       .from('mileage_logs')
@@ -86,16 +97,24 @@ export async function PATCH(
       `)
       .single();
 
-    if (error) {
-      return NextResponse.json({ error: 'Failed to update mileage log' }, { status: 500 });
-    }
+    if (error) throw error;
 
-    return NextResponse.json({
-      mileageLog: transformMileageLog(log),
-      message: 'Mileage log updated'
-    });
+    // Audit log
+    await createAuditLog(
+      context,
+      'mileage_log.updated',
+      'mileage_log',
+      log.id,
+      undefined,
+      updateData
+    );
+
+    return successResponse(
+      { mileageLog: transformMileageLog(log) },
+      'Mileage log updated'
+    );
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return handleApiError(error);
   }
 }
 
@@ -104,26 +123,32 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const context = await getApiContext(request);
+    const { supabase, requestId } = context;
 
     const { id } = await params;
+
+    if (!isValidUUID(id)) {
+      throw new ApiError('Invalid mileage log ID', 400, 'INVALID_ID', requestId);
+    }
 
     const { error } = await supabase
       .from('mileage_logs')
       .delete()
       .eq('id', id);
 
-    if (error) {
-      return NextResponse.json({ error: 'Failed to delete mileage log' }, { status: 500 });
-    }
+    if (error) throw error;
 
-    return NextResponse.json({ message: 'Mileage log deleted' });
+    // Audit log
+    await createAuditLog(
+      context,
+      'mileage_log.deleted',
+      'mileage_log',
+      id
+    );
+
+    return noContentResponse();
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return handleApiError(error);
   }
 }

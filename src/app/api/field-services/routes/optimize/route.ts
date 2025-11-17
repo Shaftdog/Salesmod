@@ -1,31 +1,34 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextRequest } from 'next/server';
+import {
+  getApiContext,
+  handleApiError,
+  successResponse,
+  createAuditLog,
+  logWarning,
+} from '@/lib/api-utils';
+import { optimizeRouteSchema } from '@/lib/validations/field-services';
 
 /**
  * POST /api/field-services/routes/optimize
  * Optimize route for multiple bookings
  *
  * Simple greedy nearest-neighbor algorithm
- * For production, integrate with Google Maps Directions API or similar
+ * TODO: For production, integrate with Google Maps Directions API or similar
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const context = await getApiContext(request);
+    const { supabase, requestId } = context;
 
     const body = await request.json();
-    const { resourceId, planDate, bookingIds, startLocation } = body;
+    const validated = optimizeRouteSchema.parse(body);
 
-    if (!resourceId || !planDate || !bookingIds || bookingIds.length === 0) {
-      return NextResponse.json(
-        { error: 'resourceId, planDate, and bookingIds required' },
-        { status: 400 }
-      );
-    }
+    const { resourceId, planDate, bookingIds, startLocation } = validated;
+
+    logWarning('Using placeholder route optimization algorithm', {
+      requestId,
+      message: 'Replace with Google Maps Directions API or similar for production',
+    });
 
     // Fetch bookings with addresses
     const { data: bookings, error: bookingsError } = await supabase
@@ -33,12 +36,12 @@ export async function POST(request: NextRequest) {
       .select('id, booking_number, property_address, property_zip, scheduled_start, scheduled_end')
       .in('id', bookingIds);
 
-    if (bookingsError || !bookings) {
-      return NextResponse.json({ error: 'Failed to fetch bookings' }, { status: 500 });
+    if (bookingsError || !bookings || bookings.length === 0) {
+      throw new Error('Failed to fetch bookings or no bookings found');
     }
 
     // Simple nearest-neighbor optimization
-    // In production, use real routing API with traffic data
+    // TODO: In production, use real routing API with traffic data
     const optimizedOrder = simpleNearestNeighbor(bookings, startLocation);
 
     // Calculate total estimated distance and time
@@ -85,10 +88,7 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (routeError) {
-      console.error('Route plan creation error:', routeError);
-      return NextResponse.json({ error: 'Failed to create route plan' }, { status: 500 });
-    }
+    if (routeError) throw routeError;
 
     // Create waypoints
     const waypointsWithPlanId = waypoints.map(w => ({
@@ -101,22 +101,33 @@ export async function POST(request: NextRequest) {
       .insert(waypointsWithPlanId);
 
     if (waypointsError) {
-      console.error('Waypoints creation error:', waypointsError);
+      logWarning('Failed to create waypoints', { requestId, error: waypointsError });
     }
 
-    return NextResponse.json({
-      routePlan: {
-        id: routePlan.id,
-        totalDistanceMiles: totalDistance,
-        totalDriveTimeMinutes: totalDriveTime,
-        waypointsCount: waypoints.length,
+    // Audit log
+    await createAuditLog(
+      context,
+      'route_plan.created',
+      'route_plan',
+      routePlan.id,
+      undefined,
+      { booking_count: bookingIds.length, total_distance: totalDistance }
+    );
+
+    return successResponse(
+      {
+        routePlan: {
+          id: routePlan.id,
+          totalDistanceMiles: totalDistance,
+          totalDriveTimeMinutes: totalDriveTime,
+          waypointsCount: waypoints.length,
+        },
+        waypoints,
       },
-      waypoints,
-      message: 'Route optimized successfully'
-    });
+      'Route optimized successfully (using placeholder algorithm)'
+    );
   } catch (error: any) {
-    console.error('Route optimization error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return handleApiError(error);
   }
 }
 
