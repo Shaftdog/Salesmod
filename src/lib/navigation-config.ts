@@ -1,6 +1,6 @@
 import {
   Home,
-  Package,
+  Package as PackageIcon,
   Settings,
   Briefcase,
   Target,
@@ -38,6 +38,8 @@ import {
   Video,
   CalendarDays,
   Star,
+  Clock,
+  Package,
 } from "lucide-react";
 
 export interface NavItem {
@@ -62,7 +64,7 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     dashboardHref: "/sales",
     items: [
       { href: "/sales", icon: LayoutDashboard, label: "Dashboard" },
-      { href: "/orders", icon: Package, label: "Orders" },
+      { href: "/orders", icon: PackageIcon, label: "Orders" },
       { href: "/clients", icon: Briefcase, label: "Clients" },
       { href: "/contacts", icon: Users, label: "Contacts" },
       { href: "/deals", icon: Target, label: "Deals" },
@@ -120,9 +122,12 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     dashboardHref: "/logistics",
     items: [
       { href: "/logistics", icon: LayoutDashboard, label: "Dashboard" },
-      { href: "/logistics/scheduling", icon: CalendarClock, label: "Scheduling" },
-      { href: "/logistics/inspections", icon: MapPinned, label: "Inspections" },
-      { href: "/logistics/assignments", icon: UserCog, label: "Assignments" },
+      { href: "/logistics/resources", icon: UserCog, label: "Resources" },
+      { href: "/logistics/equipment", icon: Package, label: "Equipment" },
+      { href: "/logistics/territories", icon: MapPinned, label: "Territories" },
+      { href: "/logistics/availability", icon: Calendar, label: "Availability" },
+      { href: "/logistics/bookings", icon: CalendarClock, label: "Bookings" },
+      { href: "/logistics/daily-schedule", icon: Clock, label: "Daily View" },
     ],
   },
   {
