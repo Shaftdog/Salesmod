@@ -45,7 +45,7 @@ export async function GET(
         client:clients(id, company_name, email, payment_terms, address, phone),
         line_items:invoice_line_items(
           *,
-          order:orders(id, order_number, property_address, status, completed_at)
+          order:orders(id, order_number, property_address, status, completed_date)
         ),
         payments(*)
       `)

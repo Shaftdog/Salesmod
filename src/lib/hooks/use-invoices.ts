@@ -47,7 +47,8 @@ export function useInvoice(id: string | null) {
       if (!id) return null;
       const response = await fetch(`/api/invoices/${id}`);
       if (!response.ok) throw new Error('Failed to fetch invoice');
-      return response.json();
+      const result = await response.json();
+      return result.data;
     },
     enabled: !!id,
   });
