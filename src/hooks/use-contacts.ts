@@ -111,21 +111,34 @@ export function useCreateContact() {
 
   return useMutation({
     mutationFn: async (contact: any) => {
+      // Get current user to set org_id
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (!user) {
+        throw new Error('User not authenticated')
+      }
+
+      // Ensure org_id is set for RLS policies
+      const contactData = {
+        ...contact,
+        org_id: contact.org_id || user.id,
+      }
+
       const { data, error } = await supabase
         .from('contacts')
-        .insert(contact)
+        .insert(contactData)
         .select('*, clients!contacts_client_id_fkey(*), party_roles(*)')
         .single()
-      
+
       if (error) throw error
-      
+
       // Normalize
       const normalized = {
         ...data,
         client: data?.clients || null,
       };
       delete normalized.clients;
-      
+
       return transformContact(normalized)
     },
     onSuccess: (data) => {
