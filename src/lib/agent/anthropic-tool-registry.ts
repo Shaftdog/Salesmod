@@ -947,4 +947,29 @@ export const anthropicTools: Anthropic.Messages.Tool[] = [
       required: ['cardIds', 'action', 'reason'],
     },
   },
+
+  // ===== Web Search =====
+  {
+    name: 'searchWeb',
+    description: 'Search the internet for current information, news, articles, and data. Use this when you need up-to-date information not in your knowledge base.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Search query (e.g., "current mortgage rates 2025", "Florida housing market trends")',
+        },
+        maxResults: {
+          type: 'number',
+          description: 'Maximum number of results to return (default: 5, max: 10)',
+        },
+        searchDepth: {
+          type: 'string',
+          enum: ['basic', 'advanced'],
+          description: 'Search depth: "basic" for quick results, "advanced" for more comprehensive search (default: basic)',
+        },
+      },
+      required: ['query'],
+    },
+  },
 ];

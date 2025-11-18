@@ -79,6 +79,11 @@ Your capabilities:
 - Search for code patterns across the codebase (searchCode)
 - Run shell commands, tests, and npm scripts (runCommand)
 
+**Web Search:**
+- Search the internet for current information (searchWeb)
+- Get up-to-date news, market trends, and data
+- Research industry information and best practices
+
 **Activity Logging:**
 - Log completed activities (calls, emails, meetings, notes) (createActivity)
 

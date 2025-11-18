@@ -1739,6 +1739,70 @@ export async function executeAnthropicTool(
       };
     }
 
+    // ===== Web Search =====
+    case 'searchWeb': {
+      const { query, maxResults = 5, searchDepth = 'basic' } = toolInput;
+
+      try {
+        const tavilyApiKey = process.env.TAVILY_API_KEY;
+
+        if (!tavilyApiKey) {
+          return {
+            error: 'Web search is not configured. Please add TAVILY_API_KEY to environment variables.',
+            suggestion: 'Get your free API key at https://tavily.com',
+          };
+        }
+
+        // Call Tavily API
+        const response = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            api_key: tavilyApiKey,
+            query,
+            max_results: Math.min(maxResults, 10),
+            search_depth: searchDepth,
+            include_answer: true,
+            include_raw_content: false,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          return {
+            error: `Search API error: ${response.status} ${response.statusText}`,
+            details: errorData,
+          };
+        }
+
+        const data = await response.json();
+
+        // Format results
+        const results = (data.results || []).map((result: any) => ({
+          title: result.title,
+          url: result.url,
+          content: result.content,
+          score: result.score,
+        }));
+
+        return {
+          success: true,
+          query,
+          answer: data.answer || null,
+          results,
+          resultsCount: results.length,
+          message: `Found ${results.length} results for: "${query}"`,
+        };
+      } catch (error: any) {
+        return {
+          error: `Web search failed: ${error.message}`,
+          query,
+        };
+      }
+    }
+
     default:
       return { error: `Unknown tool: ${toolName}` };
   }
