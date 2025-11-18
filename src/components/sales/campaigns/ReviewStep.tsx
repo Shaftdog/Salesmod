@@ -29,6 +29,7 @@ export function ReviewStep({ formData }: ReviewStepProps) {
       const response = await fetch('/api/campaigns/test-send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           subject: formData.email_subject,
           body: formData.email_body,
