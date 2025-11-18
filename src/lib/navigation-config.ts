@@ -70,6 +70,7 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
       { href: "/deals", icon: Target, label: "Deals" },
       { href: "/cases", icon: LifeBuoy, label: "Cases" },
       { href: "/properties", icon: MapPin, label: "Properties" },
+      { href: "/sales/campaigns", icon: Mail, label: "Campaigns" },
       { href: "/sales/products", icon: ShoppingBag, label: "Products" },
     ],
   },
@@ -197,4 +198,5 @@ export const DEPARTMENT_PAGES: Record<string, Department> = {
   deals: 'sales',
   cases: 'sales',
   properties: 'sales',
+  campaigns: 'sales',
 };
