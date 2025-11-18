@@ -6,6 +6,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { classifyResponse } from './classifier';
 import { generateTasksForDisposition } from './task-generator';
+import { getGmailMessage } from './gmail-client';
 
 /**
  * Process an email response to a campaign
@@ -53,11 +54,23 @@ export async function processResponse({
     throw new Error('Campaign not found');
   }
 
-  // TODO: Get Gmail message
-  // For now, using mock data
+  // Get Gmail message
+  const gmailMessage = await getGmailMessage(gmailMessageId);
+
+  if (!gmailMessage) {
+    console.warn('[Process Response] Gmail API not configured, using fallback mock data');
+    // Fallback for when Gmail API is not configured
+    const message = {
+      body: 'Mock response body - Gmail API not configured. Configure Google OAuth credentials to enable real message fetching.',
+      receivedAt: new Date().toISOString(),
+    };
+    // Still process with mock data for testing
+    gmailMessage = { ...message, from: 'mock@example.com', subject: 'Mock Reply' } as any;
+  }
+
   const message = {
-    body: 'Mock response body - TODO: Fetch from Gmail API',
-    receivedAt: new Date().toISOString(),
+    body: gmailMessage.body,
+    receivedAt: gmailMessage.receivedAt,
   };
 
   // Get original message from task metadata

@@ -1,17 +1,18 @@
 /**
  * Email Sending Service for Campaigns
  *
- * V1 Mode: SIMULATION
- * - Logs email sends without actually sending
- * - Generates fake message IDs for testing
- * - Records sends in database
- *
- * Production Mode (Phase 7):
- * - Replace simulation with real email service (Resend/SendGrid)
- * - Keep the same interface
+ * Uses Resend for actual email delivery
+ * Falls back to simulation mode if:
+ * - RESEND_API_KEY not configured
+ * - EMAIL_SERVICE_ENABLED = false
+ * - NODE_ENV = test
  */
 
+import { Resend } from 'resend';
 import { createClient } from '@/lib/supabase/server';
+
+// Initialize Resend client
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export interface EmailSendRequest {
   to: string;
@@ -31,36 +32,46 @@ export interface EmailSendResult {
 }
 
 /**
- * Send an email (simulation mode in V1)
+ * Send an email using Resend (or simulation mode)
  */
 export async function sendEmail(request: EmailSendRequest): Promise<EmailSendResult> {
   // Check if we should use simulation mode
-  const useSimulation = !process.env.EMAIL_SERVICE_ENABLED || process.env.NODE_ENV === 'test';
+  const useSimulation =
+    !process.env.RESEND_API_KEY ||
+    process.env.EMAIL_SERVICE_ENABLED === 'false' ||
+    process.env.NODE_ENV === 'test';
 
   if (useSimulation) {
+    console.log('[Email Sender] Using simulation mode (RESEND_API_KEY not configured or disabled)');
     return simulateEmailSend(request);
   }
 
-  // TODO Phase 7: Replace with real email service
-  // Example for Resend:
-  // const resend = new Resend(process.env.RESEND_API_KEY);
-  // const { data, error } = await resend.emails.send({
-  //   from: request.from || 'campaigns@salesmod.com',
-  //   to: request.to,
-  //   subject: request.subject,
-  //   html: request.html,
-  //   text: request.text,
-  //   reply_to: request.replyTo,
-  //   tags: request.metadata
-  // });
-  //
-  // if (error) {
-  //   return { success: false, error: error.message };
-  // }
-  //
-  // return { success: true, messageId: data.id };
+  // Send via Resend
+  try {
+    const { data, error} = await resend.emails.send({
+      from: request.from || 'Salesmod <campaigns@salesmod.com>',
+      to: request.to,
+      subject: request.subject,
+      html: request.html,
+      text: request.text,
+      replyTo: request.replyTo,
+      tags: request.metadata ? Object.entries(request.metadata).map(([name, value]) => ({
+        name,
+        value: String(value)
+      })) : undefined
+    });
 
-  return simulateEmailSend(request);
+    if (error) {
+      console.error('[Email Sender] Resend error:', error);
+      return { success: false, error: error.message };
+    }
+
+    console.log('[Email Sender] Email sent successfully via Resend:', data?.id);
+    return { success: true, messageId: data?.id, simulation: false };
+  } catch (error: any) {
+    console.error('[Email Sender] Unexpected error:', error);
+    return { success: false, error: error.message || 'Unknown email sending error' };
+  }
 }
 
 /**
