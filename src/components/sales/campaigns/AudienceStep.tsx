@@ -63,12 +63,19 @@ export function AudienceStep({ formData, updateFormData }: AudienceStepProps) {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to preview audience');
+      if (!response.ok) {
+        // Don't crash - gracefully handle API failures
+        console.warn('Preview API failed:', response.status);
+        setAudiencePreview({ count: 0, sample: [] });
+        return;
+      }
 
       const data = await response.json();
       setAudiencePreview(data);
     } catch (error) {
+      // Don't crash - gracefully handle errors
       console.error('Error loading preview:', error);
+      setAudiencePreview({ count: 0, sample: [] });
     } finally {
       setLoadingPreview(false);
     }
@@ -76,8 +83,14 @@ export function AudienceStep({ formData, updateFormData }: AudienceStepProps) {
 
   useEffect(() => {
     // Auto-load preview when filters change (debounced)
+    // Only load if there are actual filter values set
+    const hasFilters =
+      (filters.client_types && filters.client_types.length > 0) ||
+      filters.last_order_days_ago_min !== undefined ||
+      filters.last_order_days_ago_max !== undefined;
+
     const timer = setTimeout(() => {
-      if (Object.keys(filters).length > 0) {
+      if (hasFilters) {
         loadPreview();
       }
     }, 500);

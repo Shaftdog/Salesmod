@@ -94,7 +94,7 @@ export function EmailContentStep({ formData, updateFormData }: EmailContentStepP
           onChange={(e) => handleSubjectChange(e.target.value)}
         />
         <p className="text-xs text-muted-foreground">
-          Use merge tokens like {{'{first_name}'}} to personalize
+          Use merge tokens like {`{{first_name}}`} to personalize
         </p>
       </div>
 
@@ -118,7 +118,7 @@ export function EmailContentStep({ formData, updateFormData }: EmailContentStepP
                 title={description}
               >
                 <Code className="h-3 w-3 mr-1" />
-                {{token}}
+                {token}
               </Button>
             ))}
           </div>
