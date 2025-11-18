@@ -108,6 +108,28 @@ export async function requireAdmin(context: ApiContext): Promise<void> {
 }
 
 /**
+ * Check if user can manage campaigns (admin or sales_manager)
+ */
+export async function canManageCampaigns(context: ApiContext): Promise<void> {
+  const { supabase, userId, requestId } = context;
+
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single();
+
+  if (error || !profile || !['admin', 'sales_manager'].includes(profile.role)) {
+    throw new ApiError(
+      'Campaign management requires admin or sales manager role',
+      403,
+      'CAMPAIGN_MANAGEMENT_REQUIRED',
+      requestId
+    );
+  }
+}
+
+/**
  * Check if user has specific permission
  */
 export async function requirePermission(
