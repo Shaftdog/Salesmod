@@ -4,7 +4,7 @@
  * Returns count and sample of recipients for a target segment
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import {
   getApiContext,
   canManageCampaigns,
@@ -23,9 +23,10 @@ export async function POST(request: NextRequest) {
     const body: PreviewAudienceRequest = await request.json();
 
     if (!body.target_segment) {
-      return successResponse({
-        error: 'target_segment is required',
-      });
+      return NextResponse.json(
+        { error: 'target_segment is required' },
+        { status: 400 }
+      );
     }
 
     // Resolve full audience
