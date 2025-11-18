@@ -3,7 +3,13 @@
  * Classifies email responses for sentiment and disposition
  */
 
+import OpenAI from 'openai';
 import type { ClassificationResult } from './types';
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 /**
  * Classify an email response using AI
@@ -114,31 +120,42 @@ Return ONLY the email body text (no subject, no formatting instructions):
 }
 
 /**
- * Call LLM service
- * TODO: Implement actual AI service integration
+ * Call LLM service (OpenAI GPT-4)
  */
 async function callLLM(prompt: string): Promise<string> {
-  // For development, you'll need to integrate with your AI service
-  // Examples:
+  if (!process.env.OPENAI_API_KEY) {
+    console.warn('[Classifier] OPENAI_API_KEY not configured, using fallback');
+    throw new Error('OpenAI API key not configured');
+  }
 
-  // Option 1: OpenAI
-  // const response = await openai.chat.completions.create({
-  //   model: 'gpt-4',
-  //   messages: [{ role: 'user', content: prompt }],
-  //   temperature: 0.3,
-  // });
-  // return response.choices[0].message.content;
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini', // Using gpt-4o-mini for cost efficiency
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an expert email classifier for customer service. Analyze emails and return structured JSON responses only. Be concise and accurate.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 1024,
+      response_format: { type: 'json_object' } // Ensures JSON response
+    });
 
-  // Option 2: Anthropic Claude
-  // const response = await anthropic.messages.create({
-  //   model: 'claude-3-sonnet-20240229',
-  //   max_tokens: 1024,
-  //   messages: [{ role: 'user', content: prompt }],
-  // });
-  // return response.content[0].text;
+    const content = response.choices[0].message.content;
+    if (!content) {
+      throw new Error('OpenAI returned empty response');
+    }
 
-  // For now, throw an error to indicate this needs implementation
-  throw new Error('LLM integration not yet implemented. Please configure your AI service.');
+    return content;
+  } catch (error) {
+    console.error('[Classifier] OpenAI API error:', error);
+    throw error;
+  }
 }
 
 /**
