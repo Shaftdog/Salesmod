@@ -9,7 +9,7 @@
 -- =====================================================
 CREATE TABLE campaigns (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  org_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 
   -- Basic info
   name TEXT NOT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE campaigns (
   n8n_list_id TEXT,
 
   -- Metadata
-  created_by UUID NOT NULL REFERENCES users(id),
+  created_by UUID NOT NULL REFERENCES auth.users(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   launched_at TIMESTAMPTZ,
   completed_at TIMESTAMPTZ,
@@ -61,9 +61,12 @@ CREATE POLICY campaigns_org_isolation ON campaigns
 -- =====================================================
 -- EMAIL SUPPRESSIONS (now campaigns exists for FK)
 -- =====================================================
+-- Drop and recreate to add campaign_id FK
+DROP TABLE IF EXISTS email_suppressions CASCADE;
+
 CREATE TABLE email_suppressions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  org_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 
   email_address TEXT NOT NULL,
   reason TEXT, -- 'unsubscribed', 'bounced', 'spam_complaint', 'manual'
@@ -89,9 +92,12 @@ CREATE POLICY email_suppressions_org_isolation ON email_suppressions
 -- =====================================================
 -- EMAIL TEMPLATES
 -- =====================================================
+-- Drop and recreate to ensure proper schema
+DROP TABLE IF EXISTS email_templates CASCADE;
+
 CREATE TABLE email_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  org_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 
   name TEXT NOT NULL,
   subject TEXT NOT NULL,
@@ -101,7 +107,7 @@ CREATE TABLE email_templates (
   merge_tokens TEXT[], -- ['first_name', 'company_name', 'last_order_date']
 
   -- Metadata
-  created_by UUID NOT NULL REFERENCES users(id),
+  created_by UUID NOT NULL REFERENCES auth.users(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   is_active BOOLEAN DEFAULT TRUE
@@ -124,7 +130,7 @@ ALTER TABLE campaigns ADD CONSTRAINT campaigns_email_template_id_fkey
 -- =====================================================
 CREATE TABLE campaign_responses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  org_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 
   campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
 
@@ -135,7 +141,7 @@ CREATE TABLE campaign_responses (
 
   -- Attribution (first-class columns, not just metadata)
   job_id UUID REFERENCES jobs(id) ON DELETE SET NULL,
-  job_task_id UUID REFERENCES job_tasks(id) ON DELETE SET NULL,
+  job_task_id BIGINT REFERENCES job_tasks(id) ON DELETE SET NULL,
   gmail_message_id TEXT,
 
   -- Classification
@@ -171,7 +177,7 @@ CREATE POLICY campaign_responses_org_isolation ON campaign_responses
 -- =====================================================
 CREATE TABLE campaign_contact_status (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  org_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 
   campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
 
@@ -195,7 +201,7 @@ CREATE TABLE campaign_contact_status (
   open_tasks_count INT DEFAULT 0,
 
   -- Attribution
-  job_task_id UUID REFERENCES job_tasks(id) ON DELETE SET NULL,
+  job_task_id BIGINT REFERENCES job_tasks(id) ON DELETE SET NULL,
   latest_response_id UUID REFERENCES campaign_responses(id) ON DELETE SET NULL,
 
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -288,8 +294,8 @@ CREATE INDEX IF NOT EXISTS jobs_campaign_id_idx ON jobs(campaign_id);
 ALTER TABLE job_tasks ADD COLUMN IF NOT EXISTS campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS job_tasks_campaign_id_idx ON job_tasks(campaign_id);
 
--- Add campaign tracking to cards
-ALTER TABLE cards ADD COLUMN IF NOT EXISTS campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL;
-ALTER TABLE cards ADD COLUMN IF NOT EXISTS campaign_response_id UUID REFERENCES campaign_responses(id) ON DELETE SET NULL;
-CREATE INDEX IF NOT EXISTS cards_campaign_id_idx ON cards(campaign_id);
-CREATE INDEX IF NOT EXISTS cards_campaign_response_id_idx ON cards(campaign_response_id);
+-- Add campaign tracking to kanban_cards
+ALTER TABLE kanban_cards ADD COLUMN IF NOT EXISTS campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL;
+ALTER TABLE kanban_cards ADD COLUMN IF NOT EXISTS campaign_response_id UUID REFERENCES campaign_responses(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS kanban_cards_campaign_id_idx ON kanban_cards(campaign_id);
+CREATE INDEX IF NOT EXISTS kanban_cards_campaign_response_id_idx ON kanban_cards(campaign_response_id);
