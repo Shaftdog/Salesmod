@@ -34,7 +34,9 @@ export function ResponsesList({ campaignId }: ResponsesListProps) {
 
   async function fetchResponses() {
     try {
-      const response = await fetch(`/api/campaigns/${campaignId}/responses`);
+      const response = await fetch(`/api/campaigns/${campaignId}/responses`, {
+        credentials: 'include',
+      });
       if (!response.ok) throw new Error('Failed to fetch responses');
 
       const { responses } = await response.json();

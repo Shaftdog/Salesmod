@@ -55,11 +55,14 @@ export default function CampaignsListPage() {
         params.set('status', statusFilter);
       }
 
-      const response = await fetch(`/api/campaigns?${params.toString()}`);
+      const response = await fetch(`/api/campaigns?${params.toString()}`, {
+        credentials: 'include', // Send authentication cookies
+      });
       if (!response.ok) throw new Error('Failed to fetch campaigns');
 
-      const { campaigns } = await response.json();
-      setCampaigns(campaigns);
+      const result = await response.json();
+      // API returns { success: true, data: { data: [...], pagination: {...} } }
+      setCampaigns(result.data.data || []);
     } catch (error) {
       console.error('Error fetching campaigns:', error);
       toast({

@@ -92,7 +92,9 @@ export default function CampaignDetailPage({
 
   async function fetchCampaign() {
     try {
-      const response = await fetch(`/api/campaigns/${resolvedParams.id}`);
+      const response = await fetch(`/api/campaigns/${resolvedParams.id}`, {
+        credentials: 'include',
+      });
       if (!response.ok) throw new Error('Failed to fetch campaign');
 
       const { campaign } = await response.json();
@@ -111,7 +113,9 @@ export default function CampaignDetailPage({
 
   async function fetchMetrics() {
     try {
-      const response = await fetch(`/api/campaigns/${resolvedParams.id}/metrics`);
+      const response = await fetch(`/api/campaigns/${resolvedParams.id}/metrics`, {
+        credentials: 'include',
+      });
       if (!response.ok) throw new Error('Failed to fetch metrics');
 
       const data = await response.json();
@@ -126,6 +130,7 @@ export default function CampaignDetailPage({
       const response = await fetch(`/api/campaigns/${resolvedParams.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ status: newStatus }),
       });
 
@@ -152,6 +157,7 @@ export default function CampaignDetailPage({
     try {
       const response = await fetch(`/api/campaigns/${resolvedParams.id}/execute`, {
         method: 'POST',
+        credentials: 'include',
       });
 
       if (!response.ok) throw new Error('Failed to execute campaign');
@@ -182,6 +188,7 @@ export default function CampaignDetailPage({
     try {
       const response = await fetch(`/api/campaigns/${resolvedParams.id}`, {
         method: 'DELETE',
+        credentials: 'include',
       });
 
       if (!response.ok) throw new Error('Failed to delete');

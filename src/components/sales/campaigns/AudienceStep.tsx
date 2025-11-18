@@ -58,6 +58,7 @@ export function AudienceStep({ formData, updateFormData }: AudienceStepProps) {
       const response = await fetch('/api/campaigns/preview-audience', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           target_segment: formData.target_segment,
         }),
