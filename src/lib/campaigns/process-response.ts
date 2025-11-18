@@ -108,15 +108,16 @@ export async function processResponse({
 
     await supabase
       .from('email_suppressions')
-      .insert({
+      .upsert({
         org_id: orgId,
         email_address: task.email_address,
         reason: classification.is_unsubscribe ? 'unsubscribed' : 'not_interested',
         campaign_id: task.campaign_id,
         contact_id: task.contact_id,
-      })
-      .onConflict('org_id, email_address')
-      .ignoreDuplicates();
+      }, {
+        onConflict: 'org_id, email_address',
+        ignoreDuplicates: true
+      });
 
     // Update contact status
     await supabase
