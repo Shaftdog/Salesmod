@@ -323,6 +323,7 @@ export const agentTools = {
       const { data, error } = await supabase
         .from('contacts')
         .insert({
+          org_id: user.id,
           client_id: params.clientId,
           first_name: params.firstName,
           last_name: params.lastName,
@@ -1668,6 +1669,7 @@ export const agentTools = {
       const { data, error } = await supabase
         .from('clients')
         .insert({
+          org_id: user.id,
           company_name: params.companyName,
           primary_contact: params.primaryContact,
           email: params.email,

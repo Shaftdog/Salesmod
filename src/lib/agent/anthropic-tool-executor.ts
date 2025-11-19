@@ -257,6 +257,7 @@ export async function executeAnthropicTool(
       const { data, error } = await supabase
         .from('contacts')
         .insert({
+          org_id: userId,
           client_id: clientId,
           first_name: firstName,
           last_name: lastName,
@@ -354,6 +355,7 @@ export async function executeAnthropicTool(
       const { data, error } = await supabase
         .from('clients')
         .insert({
+          org_id: userId,
           company_name: companyName,
           primary_contact: primaryContact,
           email,
