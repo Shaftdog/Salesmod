@@ -4,6 +4,27 @@ import type { Contact } from '@/lib/types'
 import { useToast } from './use-toast'
 import { transformContact } from '@/lib/supabase/transforms'
 
+// Query configuration constants
+const CONTACTS_STALE_TIME_MS = 2 * 60 * 1000 // 2 minutes
+
+/**
+ * Hook to fetch contacts for the current organization
+ *
+ * Retrieves contacts with their associated client and party role data.
+ * Results are ordered by primary status and last name.
+ *
+ * @param clientId - Optional client ID to filter contacts by specific client
+ * @returns Query result containing contacts array, loading state, and error
+ *
+ * @example
+ * ```tsx
+ * // Get all contacts
+ * const { data: contacts, isLoading } = useContacts()
+ *
+ * // Get contacts for specific client
+ * const { data: clientContacts } = useContacts('client-123')
+ * ```
+ */
 export function useContacts(clientId?: string) {
   const supabase = createClient()
 
@@ -67,10 +88,23 @@ export function useContacts(clientId?: string) {
       return normalizedData.map(transformContact)
     },
     enabled: !clientId || !!clientId,
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    staleTime: CONTACTS_STALE_TIME_MS,
   })
 }
 
+/**
+ * Hook to fetch a single contact by ID
+ *
+ * Retrieves a specific contact with their associated client and party role data.
+ *
+ * @param id - The contact ID to fetch
+ * @returns Query result containing the contact object, loading state, and error
+ *
+ * @example
+ * ```tsx
+ * const { data: contact, isLoading } = useContact('contact-123')
+ * ```
+ */
 export function useContact(id: string) {
   const supabase = createClient()
 
@@ -115,6 +149,26 @@ export function useContact(id: string) {
   })
 }
 
+/**
+ * Hook to create a new contact
+ *
+ * Creates a new contact in the database and automatically sets the org_id
+ * from the current user's profile. Invalidates relevant queries on success.
+ *
+ * @returns Mutation object with mutate function to create contacts
+ *
+ * @example
+ * ```tsx
+ * const createContact = useCreateContact()
+ *
+ * createContact.mutate({
+ *   client_id: 'client-123',
+ *   first_name: 'John',
+ *   last_name: 'Doe',
+ *   email: 'john@example.com'
+ * })
+ * ```
+ */
 export function useCreateContact() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
@@ -184,6 +238,25 @@ export function useCreateContact() {
   })
 }
 
+/**
+ * Hook to update an existing contact
+ *
+ * Updates a contact's fields in the database. Invalidates all relevant queries
+ * on success to ensure UI stays in sync.
+ *
+ * @returns Mutation object with mutate function to update contacts
+ *
+ * @example
+ * ```tsx
+ * const updateContact = useUpdateContact()
+ *
+ * updateContact.mutate({
+ *   id: 'contact-123',
+ *   email: 'newemail@example.com',
+ *   phone: '555-1234'
+ * })
+ * ```
+ */
 export function useUpdateContact() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
@@ -229,6 +302,23 @@ export function useUpdateContact() {
   })
 }
 
+/**
+ * Hook to delete a contact
+ *
+ * Permanently removes a contact from the database. Invalidates contact queries
+ * on success.
+ *
+ * **Warning**: This is a destructive operation and cannot be undone.
+ *
+ * @returns Mutation object with mutate function to delete contacts
+ *
+ * @example
+ * ```tsx
+ * const deleteContact = useDeleteContact()
+ *
+ * deleteContact.mutate('contact-123')
+ * ```
+ */
 export function useDeleteContact() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
