@@ -62,22 +62,28 @@ export async function executeCampaignJobs(): Promise<JobExecutionResult[]> {
   const results: JobExecutionResult[] = [];
 
   for (const job of jobs) {
-    const campaign = job.campaigns;
+    // Handle campaigns as either object or array (Supabase type inference)
+    const campaignData = Array.isArray(job.campaigns) ? job.campaigns[0] : job.campaigns;
+
+    if (!campaignData) {
+      console.log(`No campaign data for job ${job.id}, skipping`);
+      continue;
+    }
 
     // Skip if scheduled for future
-    if (campaign.start_at && new Date(campaign.start_at) > new Date()) {
-      console.log(`Campaign ${campaign.id} scheduled for ${campaign.start_at}, skipping`);
+    if (campaignData.start_at && new Date(campaignData.start_at) > new Date()) {
+      console.log(`Campaign ${campaignData.id} scheduled for ${campaignData.start_at}, skipping`);
       continue;
     }
 
     // Process this job
     const result = await executeJobWithRateLimit({
       jobId: job.id,
-      campaignId: campaign.id,
-      sendRatePerHour: campaign.send_rate_per_hour || 75,
-      batchSize: campaign.send_batch_size || 25,
-      emailSubject: campaign.email_subject!,
-      emailBody: campaign.email_body!,
+      campaignId: campaignData.id,
+      sendRatePerHour: campaignData.send_rate_per_hour || 75,
+      batchSize: campaignData.send_batch_size || 25,
+      emailSubject: campaignData.email_subject!,
+      emailBody: campaignData.email_body!,
     });
 
     results.push(result);

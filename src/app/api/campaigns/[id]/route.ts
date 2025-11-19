@@ -22,14 +22,14 @@ import { extractAndValidateTokens } from '@/lib/campaigns/merge-tokens';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const context = await getApiContext(request);
     await canManageCampaigns(context);
 
     const { supabase, orgId } = context;
-    const { id } = params;
+    const { id } = await params;
 
     const { data: campaign, error } = await supabase
       .from('campaigns')
@@ -57,14 +57,14 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const context = await getApiContext(request);
     await canManageCampaigns(context);
 
     const { supabase, orgId } = context;
-    const { id } = params;
+    const { id } = await params;
     const body: UpdateCampaignRequest = await request.json();
 
     // Check campaign exists and belongs to org
@@ -161,14 +161,14 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const context = await getApiContext(request);
     await canManageCampaigns(context);
 
     const { supabase, orgId } = context;
-    const { id } = params;
+    const { id } = await params;
 
     // Check campaign exists and is not active
     const { data: existing, error: fetchError } = await supabase

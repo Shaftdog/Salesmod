@@ -55,7 +55,7 @@ export async function processResponse({
   }
 
   // Get Gmail message
-  const gmailMessage = await getGmailMessage(gmailMessageId);
+  let gmailMessage = await getGmailMessage(gmailMessageId);
 
   if (!gmailMessage) {
     console.warn('[Process Response] Gmail API not configured, using fallback mock data');
@@ -69,8 +69,8 @@ export async function processResponse({
   }
 
   const message = {
-    body: gmailMessage.body,
-    receivedAt: gmailMessage.receivedAt,
+    body: gmailMessage!.body,
+    receivedAt: gmailMessage!.receivedAt,
   };
 
   // Get original message from task metadata

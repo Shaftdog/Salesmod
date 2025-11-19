@@ -15,14 +15,14 @@ import { launchCampaign } from '@/lib/campaigns/launch';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const context = await getApiContext(request);
     await canManageCampaigns(context);
 
     const { orgId } = context;
-    const { id } = params;
+    const { id } = await params;
 
     // Launch campaign
     const result = await launchCampaign(id, orgId);

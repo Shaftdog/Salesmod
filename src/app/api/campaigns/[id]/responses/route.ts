@@ -4,34 +4,23 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import {
+  getApiContext,
+  canManageCampaigns,
+  handleApiError,
+  successResponse,
+} from '@/lib/api-utils';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const context = await getApiContext(request);
+    await canManageCampaigns(context);
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+    const { supabase, orgId } = context;
     const { id } = await params;
-
-    // Get profile for org_id
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile) {
-      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
-    }
-
-    const orgId = profile.id;
 
     // Parse query params
     const searchParams = request.nextUrl.searchParams;
@@ -55,12 +44,8 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ responses: responses || [] });
+    return successResponse({ responses: responses || [] });
   } catch (error: any) {
-    console.error('Error in GET /api/campaigns/:id/responses:', error);
-    return NextResponse.json(
-      { error: error.message || 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

@@ -151,7 +151,7 @@ export function EmailContentStep({ formData, updateFormData }: EmailContentStepP
             <div className="flex flex-wrap gap-2">
               {formData.used_merge_tokens.map((token: string) => (
                 <Badge key={token} variant="secondary" className="font-mono">
-                  {{token}}
+                  {token}
                 </Badge>
               ))}
             </div>

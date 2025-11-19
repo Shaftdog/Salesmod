@@ -15,14 +15,14 @@ import { getCampaignMetrics } from '@/lib/campaigns/metrics';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const context = await getApiContext(request);
     await canManageCampaigns(context);
 
     const { supabase, orgId } = context;
-    const { id } = params;
+    const { id } = await params;
 
     // Verify campaign exists
     const { data: campaign, error } = await supabase
