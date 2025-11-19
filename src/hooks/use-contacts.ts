@@ -30,23 +30,30 @@ export function useContacts(clientId?: string) {
         error = result.error;
       }
       
-      // Fallback if party_roles doesn't exist yet
+      // Only fallback if party_roles column doesn't exist (error code 42703)
+      // Don't silently hide other real errors
       if (error) {
-        console.warn('Falling back to contacts without party_roles:', error.message)
-        let fallbackQuery = supabase
-          .from('contacts')
-          .select('*, clients!contacts_client_id_fkey(*)')
-          .order('is_primary', { ascending: false })
-          .order('last_name')
-        
-        if (clientId) {
-          fallbackQuery = fallbackQuery.eq('client_id', clientId)
+        // Check if this is a "column does not exist" error
+        const isColumnError = error.code === '42703' || error.message?.includes('party_roles')
+
+        if (isColumnError) {
+          console.warn('party_roles column not found, falling back to query without it')
+          let fallbackQuery = supabase
+            .from('contacts')
+            .select('*, clients!contacts_client_id_fkey(*)')
+            .order('is_primary', { ascending: false })
+            .order('last_name')
+
+          if (clientId) {
+            fallbackQuery = fallbackQuery.eq('client_id', clientId)
+          }
+
+          const fallbackResult = await fallbackQuery
+          data = fallbackResult.data
+          error = fallbackResult.error
         }
-        
-        const fallbackResult = await fallbackQuery
-        data = fallbackResult.data
-        error = fallbackResult.error
-        
+
+        // Throw any remaining errors (either from fallback or non-column errors)
         if (error) throw error
       }
       
@@ -76,18 +83,22 @@ export function useContact(id: string) {
         .eq('id', id)
         .single()
       
-      // Fallback if party_roles column doesn't exist
+      // Only fallback if party_roles column doesn't exist (error code 42703)
       if (error) {
-        console.warn('Falling back to contact without party_roles:', error.message)
-        const fallbackResult = await supabase
-          .from('contacts')
-          .select('*, clients!contacts_client_id_fkey(*)')
-          .eq('id', id)
-          .single()
-        
-        data = fallbackResult.data
-        error = fallbackResult.error
-        
+        const isColumnError = error.code === '42703' || error.message?.includes('party_roles')
+
+        if (isColumnError) {
+          console.warn('party_roles column not found, falling back to query without it')
+          const fallbackResult = await supabase
+            .from('contacts')
+            .select('*, clients!contacts_client_id_fkey(*)')
+            .eq('id', id)
+            .single()
+
+          data = fallbackResult.data
+          error = fallbackResult.error
+        }
+
         if (error) throw error
       }
       
@@ -110,7 +121,8 @@ export function useCreateContact() {
   const supabase = createClient()
 
   return useMutation({
-    mutationFn: async (contact: any) => {
+    // Accept snake_case database format for insertion
+    mutationFn: async (contact: Record<string, any>) => {
       // Get current user to set org_id
       const { data: { user } } = await supabase.auth.getUser()
 
@@ -118,10 +130,22 @@ export function useCreateContact() {
         throw new Error('User not authenticated')
       }
 
+      // Get user's profile to get the correct org_id
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile) {
+        throw new Error('User profile not found')
+      }
+
       // Ensure org_id is set for RLS policies
+      // Use the profile's id as org_id (profiles.id is the organization identifier)
       const contactData = {
         ...contact,
-        org_id: contact.org_id || user.id,
+        org_id: contact.org_id || profile.id,
       }
 
       const { data, error } = await supabase

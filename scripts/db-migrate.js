@@ -9,7 +9,15 @@ const { readFileSync } = require('fs');
 const { Client } = require('pg');
 
 async function applyMigration(migrationFile) {
-  const connectionString = 'postgresql://postgres.zqhenxhgcjxslpfezybm:NsjCsuLJfBswVhdI@aws-1-us-east-1.pooler.supabase.com:5432/postgres';
+  // Get connection string from environment variable
+  const connectionString = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
+
+  if (!connectionString) {
+    console.error('❌ Error: DATABASE_URL environment variable not set');
+    console.error('   Please set DATABASE_URL in your .env.local file');
+    console.error('   Example: DATABASE_URL=postgresql://user:pass@host:port/database');
+    process.exit(1);
+  }
 
   console.log(`📦 Reading migration: ${migrationFile}`);
   const sql = readFileSync(migrationFile, 'utf8');
