@@ -485,17 +485,33 @@ export const agentTools = {
             title: params.title,
             rationale: params.rationale,
           });
-          return { error: 'send_email actions must include emailDraft with subject, body, and to fields' };
+          return {
+            success: false,
+            error: 'send_email actions must include emailDraft with subject, body, and to fields',
+            card: null
+          };
         }
         if (!params.emailDraft.to || !params.emailDraft.to.includes('@')) {
           console.error('ERROR: emailDraft missing or invalid to field!', params.emailDraft);
-          return { error: 'Email must include a valid to address' };
+          return {
+            success: false,
+            error: 'Email must include a valid to address',
+            card: null
+          };
         }
         if (!params.emailDraft.subject || params.emailDraft.subject.length < 5) {
-          return { error: 'Email subject must be at least 5 characters' };
+          return {
+            success: false,
+            error: 'Email subject must be at least 5 characters',
+            card: null
+          };
         }
         if (!params.emailDraft.body || params.emailDraft.body.length < 20) {
-          return { error: 'Email body must be at least 20 characters' };
+          return {
+            success: false,
+            error: 'Email body must be at least 20 characters',
+            card: null
+          };
         }
       }
 
@@ -533,17 +549,54 @@ export const agentTools = {
         .single();
 
       if (error) {
-        return { error: error.message };
+        console.error('ERROR: Failed to create card in database:', error);
+        return {
+          success: false,
+          error: error.message,
+          card: null
+        };
       }
+
+      if (!data || !data.id) {
+        console.error('ERROR: Card insert succeeded but no data returned');
+        return {
+          success: false,
+          error: 'Card creation returned no data',
+          card: null
+        };
+      }
+
+      // Verify card was actually created by reading it back
+      const { data: verifyCard, error: verifyError } = await supabase
+        .from('kanban_cards')
+        .select('id, title, type, state, created_at')
+        .eq('id', data.id)
+        .single();
+
+      if (verifyError || !verifyCard) {
+        console.error('ERROR: Card was not found after creation. Possible database issue.', verifyError);
+        return {
+          success: false,
+          error: 'Card creation verification failed - card was not found in database',
+          card: null
+        };
+      }
+
+      console.log('✓ Card successfully created and verified:', {
+        id: verifyCard.id,
+        title: verifyCard.title,
+        type: verifyCard.type,
+      });
 
       return {
         success: true,
         card: {
-          id: data.id,
-          title: data.title,
-          type: data.type,
-          state: data.state,
+          id: verifyCard.id,
+          title: verifyCard.title,
+          type: verifyCard.type,
+          state: verifyCard.state,
         },
+        error: null,
       };
     },
   }),

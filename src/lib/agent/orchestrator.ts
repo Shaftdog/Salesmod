@@ -610,20 +610,120 @@ async function processActiveJobs(orgId: string, runId: string): Promise<number> 
 
       const currentBatch = latestTask?.batch || 0;
 
-      // Check if current batch is complete (all tasks done or skipped)
-      const { data: pendingTasks } = await supabase
+      // Get pending tasks in current batch
+      const { data: pendingTasksData } = await supabase
         .from('job_tasks')
-        .select('id')
+        .select('*')
         .eq('job_id', job.id)
         .eq('batch', currentBatch)
         .in('status', ['pending', 'running']);
 
-      if (pendingTasks && pendingTasks.length > 0) {
-        console.log(`[Jobs] Job ${job.name} still has ${pendingTasks.length} pending tasks in batch ${currentBatch}, skipping`);
-        continue;
+      // Process pending tasks in current batch
+      if (pendingTasksData && pendingTasksData.length > 0) {
+        console.log(`[Jobs] Job ${job.name} has ${pendingTasksData.length} pending tasks in batch ${currentBatch}, processing them...`);
+
+        // Expand each pending task to cards
+        for (const task of (pendingTasksData as JobTask[])) {
+          try {
+            // Handle send_email tasks separately (they don't create cards)
+            if (task.kind === 'send_email') {
+              console.log(`[Jobs] Marking send_email task ${task.id} as done (no cards to create)`);
+
+              // Mark task as done immediately since send_email tasks don't create cards
+              await supabase
+                .from('job_tasks')
+                .update({
+                  status: 'done',
+                  output: {
+                    cards_created: 0,
+                    note: 'send_email tasks execute existing cards, no new cards created',
+                  },
+                  finished_at: new Date().toISOString(),
+                })
+                .eq('id', task.id);
+
+              continue;
+            }
+
+            console.log(`[Jobs] Expanding task ${task.id} (${task.kind})...`);
+            const { cards } = await expandTaskToCards(task, job);
+            console.log(`[Jobs] Task ${task.id} expanded to ${cards.length} cards`);
+
+            if (cards.length === 0) {
+              console.error(`[Jobs] Task ${task.id} (${task.kind}) expanded to 0 cards - marking as error`);
+
+              // Mark task as error instead of leaving it pending
+              await supabase
+                .from('job_tasks')
+                .update({
+                  status: 'error',
+                  error_message: 'Expansion returned 0 cards - check target filter and contact query',
+                  finished_at: new Date().toISOString(),
+                })
+                .eq('id', task.id);
+
+              continue;
+            }
+
+            // Insert cards with job_id and task_id
+            const { data: insertedCards, error: cardsError } = await supabase
+              .from('kanban_cards')
+              .insert(cards.map(card => ({ ...card, org_id: orgId, run_id: runId })))
+              .select('id');
+
+            if (cardsError) {
+              console.error(`[Jobs] Failed to create cards for task ${task.id}:`, cardsError);
+
+              // Mark task as error
+              await supabase
+                .from('job_tasks')
+                .update({
+                  status: 'error',
+                  error_message: cardsError.message,
+                  finished_at: new Date().toISOString(),
+                })
+                .eq('id', task.id);
+            } else {
+              totalCardsCreated += cards.length;
+
+              // Mark task as done
+              await supabase
+                .from('job_tasks')
+                .update({
+                  status: 'done',
+                  output: {
+                    cards_created: cards.length,
+                    card_ids: (insertedCards || []).map((c: any) => c.id),
+                  },
+                  finished_at: new Date().toISOString(),
+                })
+                .eq('id', task.id);
+            }
+          } catch (taskError: any) {
+            console.error(`[Jobs] Error expanding task ${task.id}:`, taskError);
+
+            // Mark task as error
+            await supabase
+              .from('job_tasks')
+              .update({
+                status: 'error',
+                error_message: taskError.message,
+                finished_at: new Date().toISOString(),
+              })
+              .eq('id', task.id);
+          }
+        }
+
+        // Update job's last_run_at
+        await supabase
+          .from('jobs')
+          .update({ last_run_at: new Date().toISOString() })
+          .eq('id', job.id);
+
+        continue; // Move to next job after processing pending tasks
       }
 
-      // Plan next batch
+      // Current batch is complete - plan next batch
       const { tasks: newTasks, batch_number } = await planNextBatch(job, currentBatch);
 
       if (newTasks.length === 0) {
