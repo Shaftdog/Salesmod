@@ -70,7 +70,8 @@ export async function getApiContext(request: NextRequest): Promise<ApiContext> {
   }
 
   // Extract org ID from user metadata or app metadata
-  const orgId = user.user_metadata?.org_id || user.app_metadata?.org_id;
+  // Fallback to user.id if org_id is not set (ensures single-user orgs work)
+  const orgId = user.user_metadata?.org_id || user.app_metadata?.org_id || user.id;
 
   if (!orgId) {
     throw new ApiError('Organization ID required', 403, 'ORG_ID_REQUIRED', requestId);
