@@ -52,13 +52,27 @@ If tests fail:
 - Re-run tests after fixes
 - Iterate until all tests pass
 
-### 7. Final Verification
+### 7. Security Audit (security-auditor agent)
+After all tests pass, perform comprehensive security review:
+- Authentication and authorization flaws
+- SQL injection vulnerabilities
+- XSS and CSRF vulnerabilities
+- Sensitive data exposure
+- Security misconfigurations
+- API security issues
+- Dependency vulnerabilities
+- OWASP Top 10 compliance
+- Provide specific file:line references for any security issues
+- Fix all critical and high-severity security issues before proceeding
+
+### 8. Final Verification
 - Confirm all code review issues resolved
 - Confirm all migrations run successfully
 - Confirm all tests passing
+- Confirm all security audit issues resolved
 - Generate production readiness report
 
-### 8. Git Operations
+### 9. Git Operations
 Once everything passes:
 - Commit changes with descriptive message
 - Push to branch: claude/gmail-agent-card-workflow-013RDtjAPefARTTLHFcLhApt
@@ -71,6 +85,7 @@ Only report production ready when:
 - ✅ Zero critical/high priority code review issues
 - ✅ All migrations run successfully
 - ✅ All automated tests passing
+- ✅ Zero critical/high severity security vulnerabilities
 - ✅ No console errors or warnings
 - ✅ Changes committed and pushed to branch
 
@@ -80,5 +95,6 @@ Provide a final summary with:
 - Code review status and issues resolved
 - Migrations run
 - Test results (pass/fail counts)
+- Security audit status and issues resolved
 - Commit hash and branch
 - Ready for Vercel deployment: YES/NO
