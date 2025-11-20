@@ -1,10 +1,17 @@
 # Project Context for Claude Code
 
-## Agent Memory
-Agents should read/update files in `.claude/memory/`:
-- `preferences.json` - My valuation preferences and standards
-- `market-conditions.json` - Current market data
-- `lessons-learned.json` - Past decisions and improvements
+## Long-Term Memory (Vector Database)
+
+**Primary memory system**: Use the MCP memory tools (`mcp__memory__*`) for persistent, searchable memory across sessions. See `~/.claude/CLAUDE.md` for auto-store/retrieve instructions.
+
+- Semantic search finds relevant memories without keyword matching
+- Memories tagged by project with global scope option
+- Categories: decision, pattern, preference, lesson, context
+
+**Legacy file-based memory** (still available):
+- `.claude/memory/preferences.json` - Valuation preferences and standards
+- `.claude/memory/market-conditions.json` - Current market data
+- `.claude/memory/lessons-learned.json` - Past decisions and improvements
 
 ## Project-Specific Instructions
 
