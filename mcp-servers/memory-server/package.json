@@ -1,0 +1,26 @@
+{
+  "name": "claude-memory-server",
+  "version": "1.0.0",
+  "description": "MCP server for Claude Code long-term memory with Supabase vector search",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "openai": "^4.20.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "tsx": "^4.6.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
