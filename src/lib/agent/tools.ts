@@ -19,6 +19,14 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 
 /**
+ * Sanitize input for Supabase ilike queries to prevent SQL injection
+ * Escapes special characters that have meaning in LIKE patterns
+ */
+function sanitizeForIlike(input: string): string {
+  return input.replace(/[%_\\]/g, '\\$&');
+}
+
+/**
  * Format email body with proper HTML
  * Converts plain text or poorly formatted text into proper HTML
  */
@@ -190,7 +198,10 @@ export const agentTools = {
     // @ts-ignore - AI SDK type mismatch
     execute: async ({ query }: { query: string }) => {
       const supabase = await createClient();
-      
+
+      // Sanitize query to prevent SQL injection
+      const sanitizedQuery = sanitizeForIlike(query);
+
       const { data, error } = await supabase
         .from('clients')
         .select(`
@@ -202,7 +213,7 @@ export const agentTools = {
           is_active,
           created_at
         `)
-        .or(`company_name.ilike.%${query}%,primary_contact.ilike.%${query}%,email.ilike.%${query}%`)
+        .or(`company_name.ilike.%${sanitizedQuery}%,primary_contact.ilike.%${sanitizedQuery}%,email.ilike.%${sanitizedQuery}%`)
         .eq('is_active', true)
         .limit(10);
 
@@ -231,6 +242,9 @@ export const agentTools = {
     execute: async ({ query, clientId }: { query: string; clientId?: string }) => {
       const supabase = await createClient();
 
+      // Sanitize query to prevent SQL injection
+      const sanitizedQuery = sanitizeForIlike(query);
+
       let queryBuilder = supabase
         .from('contacts')
         .select(`
@@ -248,7 +262,7 @@ export const agentTools = {
           ),
           created_at
         `)
-        .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%,title.ilike.%${query}%`)
+        .or(`first_name.ilike.%${sanitizedQuery}%,last_name.ilike.%${sanitizedQuery}%,email.ilike.%${sanitizedQuery}%,title.ilike.%${sanitizedQuery}%`)
         .limit(10);
 
       if (clientId) {
@@ -992,22 +1006,24 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
-      // Get contact info first
+      // Get contact info first and verify ownership
       const { data: contact, error: fetchError } = await supabase
         .from('contacts')
-        .select('id, first_name, last_name, email')
+        .select('id, first_name, last_name, email, org_id')
         .eq('id', params.contactId)
+        .eq('org_id', user.id)
         .single();
 
       if (fetchError || !contact) {
-        return { error: 'Contact not found' };
+        return { error: 'Contact not found or access denied' };
       }
 
-      // Delete the contact
+      // Delete the contact (with org_id verification for security)
       const { error: deleteError } = await supabase
         .from('contacts')
         .delete()
-        .eq('id', params.contactId);
+        .eq('id', params.contactId)
+        .eq('org_id', user.id);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -1039,15 +1055,16 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
-      // Get client info first
+      // Get client info first and verify ownership
       const { data: client, error: fetchError } = await supabase
         .from('clients')
-        .select('id, company_name, email, primary_contact')
+        .select('id, company_name, email, primary_contact, org_id')
         .eq('id', params.clientId)
+        .eq('org_id', user.id)
         .single();
 
       if (fetchError || !client) {
-        return { error: 'Client not found' };
+        return { error: 'Client not found or access denied' };
       }
 
       // Count related records
@@ -1061,11 +1078,12 @@ export const agentTools = {
         .select('*', { count: 'exact', head: true })
         .eq('client_id', params.clientId);
 
-      // Delete the client (cascade should handle related records)
+      // Delete the client (cascade should handle related records, org_id for security)
       const { error: deleteError } = await supabase
         .from('clients')
         .delete()
-        .eq('id', params.clientId);
+        .eq('id', params.clientId)
+        .eq('org_id', user.id);
 
       if (deleteError) {
         return { error: deleteError.message };

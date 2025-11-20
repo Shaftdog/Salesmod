@@ -7,6 +7,14 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 
 /**
+ * Sanitize input for Supabase ilike queries to prevent SQL injection
+ * Escapes special characters that have meaning in LIKE patterns
+ */
+function sanitizeForIlike(input: string): string {
+  return input.replace(/[%_\\]/g, '\\$&');
+}
+
+/**
  * Format email body with proper HTML
  */
 function formatEmailBody(body: string): string {
@@ -70,10 +78,12 @@ export async function executeAnthropicTool(
     // ===== Search & Query Tools =====
     case 'searchClients': {
       const { query } = toolInput;
+      // Sanitize query to prevent SQL injection
+      const sanitizedQuery = sanitizeForIlike(query);
       const { data, error } = await supabase
         .from('clients')
         .select('id, company_name, primary_contact, email, phone, is_active')
-        .or(`company_name.ilike.%${query}%,primary_contact.ilike.%${query}%,email.ilike.%${query}%`)
+        .or(`company_name.ilike.%${sanitizedQuery}%,primary_contact.ilike.%${sanitizedQuery}%,email.ilike.%${sanitizedQuery}%`)
         .eq('is_active', true)
         .limit(10);
 
@@ -88,6 +98,9 @@ export async function executeAnthropicTool(
     case 'searchContacts': {
       const { query, clientId } = toolInput;
 
+      // Sanitize query to prevent SQL injection
+      const sanitizedQuery = sanitizeForIlike(query);
+
       let queryBuilder = supabase
         .from('contacts')
         .select(`
@@ -101,7 +114,7 @@ export async function executeAnthropicTool(
           client_id,
           client:clients!contacts_client_id_fkey(id, company_name)
         `)
-        .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%,title.ilike.%${query}%`)
+        .or(`first_name.ilike.%${sanitizedQuery}%,last_name.ilike.%${sanitizedQuery}%,email.ilike.%${sanitizedQuery}%,title.ilike.%${sanitizedQuery}%`)
         .limit(10);
 
       if (clientId) {
@@ -351,20 +364,24 @@ export async function executeAnthropicTool(
     case 'deleteContact': {
       const { contactId } = toolInput;
 
+      // Get contact info first and verify ownership
       const { data: contact, error: fetchError } = await supabase
         .from('contacts')
-        .select('id, first_name, last_name, email')
+        .select('id, first_name, last_name, email, org_id')
         .eq('id', contactId)
+        .eq('org_id', userId)
         .single();
 
       if (fetchError || !contact) {
-        return { error: 'Contact not found' };
+        return { error: 'Contact not found or access denied' };
       }
 
+      // Delete the contact (with org_id verification for security)
       const { error: deleteError } = await supabase
         .from('contacts')
         .delete()
-        .eq('id', contactId);
+        .eq('id', contactId)
+        .eq('org_id', userId);
 
       if (deleteError) return { error: deleteError.message };
 
@@ -426,14 +443,16 @@ export async function executeAnthropicTool(
     case 'deleteClient': {
       const { clientId } = toolInput;
 
+      // Get client info first and verify ownership
       const { data: client, error: fetchError } = await supabase
         .from('clients')
-        .select('id, company_name, email, primary_contact')
+        .select('id, company_name, email, primary_contact, org_id')
         .eq('id', clientId)
+        .eq('org_id', userId)
         .single();
 
       if (fetchError || !client) {
-        return { error: 'Client not found' };
+        return { error: 'Client not found or access denied' };
       }
 
       const { count: contactsCount } = await supabase
@@ -446,10 +465,12 @@ export async function executeAnthropicTool(
         .select('*', { count: 'exact', head: true })
         .eq('client_id', clientId);
 
+      // Delete the client (with org_id verification for security)
       const { error: deleteError } = await supabase
         .from('clients')
         .delete()
-        .eq('id', clientId);
+        .eq('id', clientId)
+        .eq('org_id', userId);
 
       if (deleteError) return { error: deleteError.message };
 
