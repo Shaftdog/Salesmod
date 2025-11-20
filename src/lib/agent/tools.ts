@@ -1120,22 +1120,24 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
-      // Get task info first
+      // Get task info first and verify ownership
       const { data: task, error: fetchError } = await supabase
         .from('activities')
-        .select('id, activity_type, subject, status')
+        .select('id, activity_type, subject, status, created_by')
         .eq('id', params.taskId)
+        .eq('created_by', user.id)
         .single();
 
       if (fetchError || !task) {
-        return { error: 'Task not found' };
+        return { error: 'Task not found or access denied' };
       }
 
-      // Delete the task
+      // Delete the task (with ownership verification)
       const { error: deleteError } = await supabase
         .from('activities')
         .delete()
-        .eq('id', params.taskId);
+        .eq('id', params.taskId)
+        .eq('created_by', user.id);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -1168,22 +1170,24 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
-      // Get opportunity info first
+      // Get opportunity info first and verify ownership
       const { data: opportunity, error: fetchError } = await supabase
         .from('deals')
-        .select('id, name, amount, stage, client_id, client:clients(company_name)')
+        .select('id, name, amount, stage, client_id, org_id, client:clients(company_name)')
         .eq('id', params.opportunityId)
+        .eq('org_id', user.id)
         .single();
 
       if (fetchError || !opportunity) {
-        return { error: 'Opportunity not found' };
+        return { error: 'Opportunity not found or access denied' };
       }
 
-      // Delete the opportunity
+      // Delete the opportunity (with ownership verification)
       const { error: deleteError } = await supabase
         .from('deals')
         .delete()
-        .eq('id', params.opportunityId);
+        .eq('id', params.opportunityId)
+        .eq('org_id', user.id);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -1217,15 +1221,16 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
-      // Get order info first
+      // Get order info first and verify ownership
       const { data: order, error: fetchError } = await supabase
         .from('orders')
-        .select('id, order_number, status, order_type, client_id, client:clients(company_name)')
+        .select('id, order_number, status, order_type, client_id, org_id, client:clients(company_name)')
         .eq('id', params.orderId)
+        .eq('org_id', user.id)
         .single();
 
       if (fetchError || !order) {
-        return { error: 'Order not found' };
+        return { error: 'Order not found or access denied' };
       }
 
       // Count related properties
@@ -1234,11 +1239,12 @@ export const agentTools = {
         .select('*', { count: 'exact', head: true })
         .eq('order_id', params.orderId);
 
-      // Delete the order
+      // Delete the order (with ownership verification)
       const { error: deleteError } = await supabase
         .from('orders')
         .delete()
-        .eq('id', params.orderId);
+        .eq('id', params.orderId)
+        .eq('org_id', user.id);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -1275,22 +1281,24 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
-      // Get property info first
+      // Get property info first and verify ownership
       const { data: property, error: fetchError } = await supabase
         .from('properties')
-        .select('id, address, city, state, zip_code, property_type')
+        .select('id, address, city, state, zip_code, property_type, org_id')
         .eq('id', params.propertyId)
+        .eq('org_id', user.id)
         .single();
 
       if (fetchError || !property) {
-        return { error: 'Property not found' };
+        return { error: 'Property not found or access denied' };
       }
 
-      // Delete the property
+      // Delete the property (with ownership verification)
       const { error: deleteError } = await supabase
         .from('properties')
         .delete()
-        .eq('id', params.propertyId);
+        .eq('id', params.propertyId)
+        .eq('org_id', user.id);
 
       if (deleteError) {
         return { error: deleteError.message };
