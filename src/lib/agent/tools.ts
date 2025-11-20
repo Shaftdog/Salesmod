@@ -27,42 +27,69 @@ function sanitizeForIlike(input: string): string {
 }
 
 /**
+ * Escape HTML special characters to prevent XSS
+ */
+function escapeHtml(text: string): string {
+  const htmlEscapes: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+  return text.replace(/[&<>"']/g, char => htmlEscapes[char]);
+}
+
+/**
+ * Redact email address for logging (show first 2 chars and domain)
+ * e.g., "john.doe@example.com" -> "jo***@example.com"
+ */
+function redactEmail(email: string): string {
+  if (!email || !email.includes('@')) return '[invalid]';
+  const [local, domain] = email.split('@');
+  const redactedLocal = local.length > 2 ? local.substring(0, 2) + '***' : '***';
+  return `${redactedLocal}@${domain}`;
+}
+
+/**
  * Format email body with proper HTML
  * Converts plain text or poorly formatted text into proper HTML
+ * Escapes user content to prevent XSS attacks
  */
 function formatEmailBody(body: string): string {
   if (!body) return body;
-  
-  // If already has substantial HTML tags, return as-is
+
+  // If already has substantial HTML tags, return as-is (assume pre-sanitized)
   if (body.includes('<p>') && body.includes('</p>')) {
     return body;
   }
-  
+
+  // Escape the body to prevent XSS before processing
+  const escapedBody = escapeHtml(body);
+
   // Step 1: Detect and format bullet/numbered lists with various patterns
-  // Pattern 1: "1. Item" or "• Item" style
+  // Pattern 1: "1. Item" or "• Item" style (check original body for patterns)
   const hasNumberedList = /\d+\.\s+[A-Z]/.test(body);
   const hasBulletList = /[•\-\*]\s+[A-Z]/.test(body);
-  
+
   // Pattern 2: "First bullet point", "Second bullet point" style
   const hasWordedList = /(First|Second|Third|Fourth|Fifth)[\s\w]*:/gi.test(body);
-  
-  let formatted = body;
-  
+
   // Convert "First bullet point:", "Second bullet point:" to proper list
   if (hasWordedList) {
     // Split on sentence patterns that indicate list items
     const listPattern = /((?:First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:[\s\S]*?)(?=(?:First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:|$)/gi;
-    const listItems = body.match(listPattern);
-    
+    const listItems = escapedBody.match(listPattern);
+
     if (listItems && listItems.length > 1) {
       // Find intro text before the list
-      const introMatch = body.match(/^([\s\S]*?)(?=First|Second|Third|Fourth|Fifth)/i);
+      const introMatch = escapedBody.match(/^([\s\S]*?)(?=First|Second|Third|Fourth|Fifth)/i);
       let result = '';
-      
+
       if (introMatch && introMatch[1].trim()) {
         result += `<p>${introMatch[1].trim()}</p>`;
       }
-      
+
       result += '<ol>';
       listItems.forEach(item => {
         const cleanItem = item.replace(/^(First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:\s*/i, '').trim();
@@ -71,24 +98,24 @@ function formatEmailBody(body: string): string {
         }
       });
       result += '</ol>';
-      
+
       // Find closing text after the list
       const lastItem = listItems[listItems.length - 1];
-      const closingMatch = body.split(lastItem)[1];
+      const closingMatch = escapedBody.split(lastItem)[1];
       if (closingMatch && closingMatch.trim()) {
         result += `<p>${closingMatch.trim()}</p>`;
       }
-      
+
       return result;
     }
   }
   
   // Convert numbered lists (1. 2. 3. etc.)
   if (hasNumberedList) {
-    const lines = body.split(/\.\s+(?=\d+\.|\w)/);
+    const lines = escapedBody.split(/\.\s+(?=\d+\.|\w)/);
     let result = '';
     let inList = false;
-    
+
     lines.forEach(line => {
       const trimmed = line.trim();
       if (/^\d+\./.test(trimmed)) {
@@ -106,18 +133,18 @@ function formatEmailBody(body: string): string {
         result += `<p>${trimmed}</p>`;
       }
     });
-    
+
     if (inList) result += '</ol>';
     return result;
   }
-  
+
   // Convert bullet lists (• or - or *)
   if (hasBulletList) {
-    const lines = body.split(/\n/);
+    const lines = escapedBody.split(/\n/);
     let result = '';
     let inList = false;
     let currentParagraph = '';
-    
+
     lines.forEach(line => {
       const trimmed = line.trim();
       if (/^[•\-\*]\s+/.test(trimmed)) {
@@ -139,17 +166,17 @@ function formatEmailBody(body: string): string {
         currentParagraph += (currentParagraph ? ' ' : '') + trimmed;
       }
     });
-    
+
     if (currentParagraph) {
       result += `<p>${currentParagraph.trim()}</p>`;
     }
     if (inList) result += '</ul>';
     return result;
   }
-  
+
   // No lists detected - format as paragraphs
   // Split by double line breaks first
-  const paragraphs = body.split(/\n\n+/);
+  const paragraphs = escapedBody.split(/\n\n+/);
   if (paragraphs.length > 1) {
     return paragraphs
       .map(p => p.trim())
@@ -157,16 +184,16 @@ function formatEmailBody(body: string): string {
       .map(p => `<p>${p.replace(/\n/g, ' ')}</p>`)
       .join('');
   }
-  
+
   // Split by single line breaks and group as sentences
-  const sentences = body.split(/\.\s+/);
+  const sentences = escapedBody.split(/\.\s+/);
   if (sentences.length > 3) {
     // Group every 2-3 sentences into a paragraph
     let result = '<p>';
     sentences.forEach((sentence, idx) => {
       result += sentence.trim();
       if (!sentence.trim().endsWith('.')) result += '.';
-      
+
       // Start new paragraph every 2-3 sentences
       if ((idx + 1) % 2 === 0 && idx < sentences.length - 1) {
         result += '</p><p>';
@@ -177,9 +204,9 @@ function formatEmailBody(body: string): string {
     result += '</p>';
     return result;
   }
-  
+
   // Single paragraph - just wrap it
-  return `<p>${body}</p>`;
+  return `<p>${escapedBody}</p>`;
 }
 
 /**
@@ -506,7 +533,7 @@ export const agentTools = {
           };
         }
         if (!params.emailDraft.to || !params.emailDraft.to.includes('@')) {
-          console.error('ERROR: emailDraft missing or invalid to field!', params.emailDraft);
+          console.error('ERROR: emailDraft missing or invalid to field');
           return {
             success: false,
             error: 'Email must include a valid to address',
@@ -538,7 +565,7 @@ export const agentTools = {
         };
         console.log('Creating card via chat with emailDraft:', {
           title: params.title,
-          to: params.emailDraft.to,
+          to: redactEmail(params.emailDraft.to),
           hasSubject: !!params.emailDraft.subject,
           hasBody: !!params.emailDraft.body,
         });
@@ -2067,15 +2094,21 @@ export const agentTools = {
 
   /**
    * List files matching a pattern
+   * WARNING: Disabled in production for security reasons
    */
   listFiles: tool({
-    description: 'List files in the codebase matching a glob pattern. Use this to explore the project structure or find specific files.',
+    description: 'List files in the codebase matching a glob pattern. Use this to explore the project structure or find specific files. (Development only)',
     inputSchema: z.object({
       pattern: z.string().min(1).describe('Glob pattern (e.g., "src/**/*.tsx", "*.json")'),
       maxResults: z.number().optional().describe('Maximum number of results to return (default: 50)'),
     }),
     // @ts-ignore
     execute: async (params: any) => {
+      // Security: Disable shell command execution in production
+      if (process.env.NODE_ENV === 'production') {
+        return { error: 'This tool is disabled in production for security reasons' };
+      }
+
       try {
         const { stdout } = await execAsync(
           `find . -type f -path "./${params.pattern}" | head -n ${params.maxResults || 50}`,
@@ -2102,9 +2135,10 @@ export const agentTools = {
 
   /**
    * Search for code patterns
+   * WARNING: Disabled in production for security reasons
    */
   searchCode: tool({
-    description: 'Search for text or code patterns across the codebase using grep. Use this to find where specific functions, classes, or patterns are used.',
+    description: 'Search for text or code patterns across the codebase using grep. Use this to find where specific functions, classes, or patterns are used. (Development only)',
     inputSchema: z.object({
       searchTerm: z.string().min(1).describe('Text or regex pattern to search for'),
       filePattern: z.string().optional().describe('Limit search to files matching pattern (e.g., "*.ts", "src/**/*.tsx")'),
@@ -2113,6 +2147,11 @@ export const agentTools = {
     }),
     // @ts-ignore
     execute: async (params: any) => {
+      // Security: Disable shell command execution in production
+      if (process.env.NODE_ENV === 'production') {
+        return { error: 'This tool is disabled in production for security reasons' };
+      }
+
       try {
         const caseFlag = params.caseSensitive ? '' : '-i';
         const filePattern = params.filePattern || '*';
@@ -2163,15 +2202,21 @@ export const agentTools = {
 
   /**
    * Run a shell command
+   * WARNING: Disabled in production for security reasons
    */
   runCommand: tool({
-    description: 'Execute a shell command in the project directory. Use this to run tests, build commands, npm scripts, git operations, etc. Be careful with destructive commands.',
+    description: 'Execute a shell command in the project directory. Use this to run tests, build commands, npm scripts, git operations, etc. Be careful with destructive commands. (Development only)',
     inputSchema: z.object({
       command: z.string().min(1).describe('Shell command to execute (e.g., "npm test", "git status")'),
       timeout: z.number().optional().describe('Timeout in milliseconds (default: 30000)'),
     }),
     // @ts-ignore
     execute: async (params: any) => {
+      // Security: Disable shell command execution in production
+      if (process.env.NODE_ENV === 'production') {
+        return { error: 'This tool is disabled in production for security reasons' };
+      }
+
       try {
         const { stdout, stderr } = await execAsync(params.command, {
           cwd: process.cwd(),
