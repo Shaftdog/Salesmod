@@ -654,6 +654,9 @@ export async function executeAnthropicTool(
     case 'createCard': {
       const { type, clientId, title, rationale, priority, emailDraft, taskDetails } = toolInput;
 
+      console.log(`[Tool Executor] createCard called with userId: ${userId}`);
+      console.log(`[Tool Executor] createCard params:`, { type, clientId, title, priority });
+
       // Validate send_email actions have emailDraft
       if (type === 'send_email') {
         if (!emailDraft) {
@@ -680,6 +683,8 @@ export async function executeAnthropicTool(
         actionPayload = taskDetails;
       }
 
+      console.log(`[Tool Executor] Inserting card with org_id: ${userId}`);
+
       const { data, error } = await supabase
         .from('kanban_cards')
         .insert({
@@ -696,7 +701,23 @@ export async function executeAnthropicTool(
         .select()
         .single();
 
-      if (error) return { error: error.message };
+      if (error) {
+        console.error(`[Tool Executor] createCard FAILED:`, error);
+        console.error(`[Tool Executor] Error details:`, {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
+        return {
+          success: false,
+          error: error.message,
+          errorCode: error.code,
+          errorDetails: error.details,
+        };
+      }
+
+      console.log(`[Tool Executor] Card created successfully:`, data?.id);
 
       return {
         success: true,
