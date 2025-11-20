@@ -1743,15 +1743,20 @@ export async function executeAnthropicTool(
     case 'searchWeb': {
       const { query, maxResults = 5, searchDepth = 'basic' } = toolInput;
 
+      console.log(`[Tool Executor] searchWeb called with query: "${query}"`);
+
       try {
         const tavilyApiKey = process.env.TAVILY_API_KEY;
 
         if (!tavilyApiKey) {
+          console.log('[Tool Executor] searchWeb: No TAVILY_API_KEY found in environment');
           return {
             error: 'Web search is not configured. Please add TAVILY_API_KEY to environment variables.',
             suggestion: 'Get your free API key at https://tavily.com',
           };
         }
+
+        console.log(`[Tool Executor] searchWeb: Calling Tavily API with ${maxResults} results, ${searchDepth} depth`);
 
         // Call Tavily API
         const response = await fetch('https://api.tavily.com/search', {
