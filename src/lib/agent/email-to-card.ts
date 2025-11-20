@@ -165,6 +165,30 @@ export async function createCardFromEmail(
     // Non-fatal - card was created successfully
   }
 
+  // Create activity record for the incoming email
+  // This ensures the AI agent can see the email in activity history
+  console.log('[Email-to-Card] Creating activity record for incoming email...');
+  const { error: activityError } = await supabase
+    .from('activities')
+    .insert({
+      client_id: clientId,
+      contact_id: contactId,
+      activity_type: 'email',
+      subject: `Received: ${email.subject}`,
+      description: `Incoming email from ${email.from.name || email.from.email}\n\nCategory: ${classification.category}\nIntent: ${classification.intent}\n\n${email.snippet || email.bodyText?.substring(0, 500) || ''}`,
+      status: 'completed',
+      outcome: classification.category,
+      created_by: orgId,
+      created_at: email.receivedAt.toISOString(),
+    });
+
+  if (activityError) {
+    console.error('[Email-to-Card] WARNING: Failed to create activity record:', activityError);
+    // Non-fatal - card was created successfully
+  } else {
+    console.log('[Email-to-Card] Activity record created successfully');
+  }
+
   console.log('[Email-to-Card] Card creation complete:', {
     cardId: card.id,
     messageId: email.id,

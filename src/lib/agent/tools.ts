@@ -1337,7 +1337,8 @@ export const agentTools = {
     execute: async ({ clientId, limit = 10 }: { clientId: string; limit?: number }) => {
       const supabase = await createClient();
 
-      const { data: activities, error } = await supabase
+      // First, get activities directly linked to the client
+      const { data: clientActivities, error: clientError } = await supabase
         .from('activities')
         .select(`
           id,
@@ -1347,19 +1348,58 @@ export const agentTools = {
           status,
           outcome,
           created_at,
-          scheduled_at
+          scheduled_at,
+          contact_id
         `)
         .eq('client_id', clientId)
         .order('created_at', { ascending: false })
         .limit(limit);
 
-      if (error) {
-        return { error: error.message };
+      if (clientError) {
+        return { error: clientError.message };
       }
 
+      // Also get activities for contacts belonging to this client
+      // This catches activities that have contact_id but not client_id
+      const { data: contacts } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('client_id', clientId);
+
+      let contactActivities: any[] = [];
+      if (contacts && contacts.length > 0) {
+        const contactIds = contacts.map(c => c.id);
+        const { data: contactActivityData, error: contactError } = await supabase
+          .from('activities')
+          .select(`
+            id,
+            activity_type,
+            subject,
+            description,
+            status,
+            outcome,
+            created_at,
+            scheduled_at,
+            contact_id
+          `)
+          .in('contact_id', contactIds)
+          .is('client_id', null) // Only get activities not already linked to client
+          .order('created_at', { ascending: false })
+          .limit(limit);
+
+        if (!contactError && contactActivityData) {
+          contactActivities = contactActivityData;
+        }
+      }
+
+      // Merge and sort all activities
+      const allActivities = [...(clientActivities || []), ...contactActivities]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, limit);
+
       return {
-        activities: activities || [],
-        count: activities?.length || 0,
+        activities: allActivities,
+        count: allActivities.length,
       };
     },
   }),
