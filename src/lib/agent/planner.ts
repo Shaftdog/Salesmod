@@ -137,7 +137,7 @@ Recent Activity (Last 7 Days):
     .filter(m => typeof m.content === 'object' && m.content.rule)
     .sort((a, b) => (b.importance || 0) - (a.importance || 0)) // Most important first
     .map(m => `- ${m.content.rule}`)
-    .slice(0, 20); // Increased from 5 to 20 to include all rules
+    .slice(0, 50); // Future-proofed to handle up to 50 rules
   const avoidanceRulesText = avoidanceRules.length > 0
     ? avoidanceRules.join('\n')
     : 'No specific avoidance rules';
