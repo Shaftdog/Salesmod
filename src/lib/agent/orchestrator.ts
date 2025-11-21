@@ -320,6 +320,22 @@ async function createKanbanCards(
   const supabase = await createClient();
   const cards = [];
 
+  // Fetch existing pending cards to prevent duplicates
+  const { data: existingPendingCards } = await supabase
+    .from('kanban_cards')
+    .select('client_id, contact_id, type')
+    .eq('org_id', orgId)
+    .in('state', ['suggested', 'in_review', 'approved']);
+
+  // Create a Set of existing card keys for O(1) lookup
+  const existingCardKeys = new Set(
+    (existingPendingCards || []).map((card: any) =>
+      `${card.client_id || ''}-${card.contact_id || ''}-${card.type}`
+    )
+  );
+
+  console.log(`[createKanbanCards] Found ${existingPendingCards?.length || 0} existing pending cards`);
+
   for (const action of actions) {
     // Build action payload based on type
     let actionPayload: any = {};
@@ -377,6 +393,16 @@ async function createKanbanCards(
     };
     
     const contactId = action.contactId && isValidUUID(action.contactId) ? action.contactId : null;
+
+    // Check for duplicate before creating
+    const cardKey = `${action.clientId || ''}-${contactId || ''}-${action.type}`;
+    if (existingCardKeys.has(cardKey)) {
+      console.log(`[createKanbanCards] Skipping duplicate card: "${action.title}" (client: ${action.clientId}, contact: ${contactId}, type: ${action.type})`);
+      continue;
+    }
+
+    // Add to existing keys to prevent duplicates within this batch
+    existingCardKeys.add(cardKey);
 
     const { data: card, error } = await supabase
       .from('kanban_cards')
