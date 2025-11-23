@@ -370,7 +370,7 @@ export async function saveTopics(orgId: string, topics: TrendingTopic[]): Promis
 }
 
 /**
- * Save calendar items as draft posts
+ * Save calendar items to marketing_content and content_schedule
  */
 export async function saveCalendarItems(
   orgId: string,
@@ -382,31 +382,75 @@ export async function saveCalendarItems(
   const ids: string[] = [];
 
   for (const item of items) {
-    const { data, error } = await supabase
-      .from('social_posts')
+    // Map content type to funnel stage
+    const funnelStage = mapToFunnelStage(item.contentType);
+
+    // Create marketing_content entry
+    const { data: content, error: contentError } = await supabase
+      .from('marketing_content')
       .insert({
         org_id: orgId,
-        calendar_id: calendarId,
-        content: {
-          [item.platform]: item.hook || `[Draft] ${item.topic}: ${item.angle}`,
+        title: `${item.topic}: ${item.angle}`,
+        content_type: 'social_post',
+        body: {
+          short: item.hook || `[Draft] ${item.topic}`,
+          medium: item.hook || `[Draft] ${item.topic}: ${item.angle}`,
+          long: `${item.hook || ''}\n\nTopic: ${item.topic}\nAngle: ${item.angle}`,
         },
-        target_platforms: [item.platform],
-        content_type: item.contentType,
-        scheduled_for: item.scheduledFor,
+        audience_tags: [],
+        theme_tags: [item.topic.toLowerCase().replace(/\s+/g, '_')],
+        funnel_stage: funnelStage,
         status: 'draft',
-        generated_by: 'strategy_agent',
-        generation_prompt: `Topic: ${item.topic}\nAngle: ${item.angle}\nHook: ${item.hook || 'N/A'}`,
+        preview_text: item.hook,
         created_by: userId,
       })
       .select('id')
       .single();
 
-    if (data) {
-      ids.push(data.id);
-    } else if (error) {
-      console.error('Error saving calendar item:', error);
+    if (contentError) {
+      console.error('Error saving calendar item to marketing_content:', contentError);
+      continue;
+    }
+
+    if (content) {
+      ids.push(content.id);
+
+      // Create content_schedule entry
+      const { error: scheduleError } = await supabase
+        .from('content_schedule')
+        .insert({
+          org_id: orgId,
+          content_id: content.id,
+          channel: item.platform, // twitter or linkedin
+          scheduled_for: item.scheduledFor,
+          status: 'scheduled',
+          created_by: userId,
+        });
+
+      if (scheduleError) {
+        console.error('Error creating content_schedule:', scheduleError);
+      }
     }
   }
 
   return ids;
+}
+
+/**
+ * Map social content type to funnel stage
+ */
+function mapToFunnelStage(contentType: string): string {
+  switch (contentType) {
+    case 'educational':
+    case 'curated':
+      return 'awareness';
+    case 'engagement':
+      return 'consideration';
+    case 'promotional':
+      return 'conversion';
+    case 'personal':
+      return 'retention';
+    default:
+      return 'awareness';
+  }
 }

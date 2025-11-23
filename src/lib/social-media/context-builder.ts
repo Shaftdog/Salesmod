@@ -50,25 +50,30 @@ export async function buildSocialMediaContext(orgId: string): Promise<SocialMedi
       .eq('is_active', true)
       .single(),
 
-    // Recent posts (last 30 days)
+    // Recent social content from marketing_content (last 30 days)
     supabase
-      .from('social_posts')
-      .select('*')
+      .from('marketing_content')
+      .select(`
+        *,
+        schedules:content_schedule(*)
+      `)
       .eq('org_id', orgId)
+      .eq('content_type', 'social_post')
       .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
       .order('created_at', { ascending: false })
       .limit(100),
 
-    // Top performing posts (for learning)
+    // Top performing content (published with engagement metrics)
     supabase
-      .from('social_posts')
+      .from('marketing_content')
       .select(`
         *,
-        analytics:post_analytics(*)
+        schedules:content_schedule(*)
       `)
       .eq('org_id', orgId)
+      .eq('content_type', 'social_post')
       .eq('status', 'published')
-      .order('created_at', { ascending: false })
+      .order('published_at', { ascending: false })
       .limit(50),
 
     // Active insights
@@ -110,18 +115,19 @@ export async function buildSocialMediaContext(orgId: string): Promise<SocialMedi
     ? transformCalendar(calendarResult.data)
     : null;
 
-  const recentPosts: SocialPost[] = (recentPostsResult.data || []).map(transformPost);
+  // Transform marketing_content to SocialPost format
+  const recentPosts: SocialPost[] = (recentContentResult.data || []).map(transformMarketingContent);
 
-  // Sort top posts by engagement rate from analytics
-  const topPerformingPosts: SocialPost[] = (topPostsResult.data || [])
-    .filter((post: any) => post.analytics && post.analytics.length > 0)
+  // Sort top posts by engagement metrics from schedules
+  const topPerformingPosts: SocialPost[] = (topContentResult.data || [])
+    .filter((content: any) => content.schedules && content.schedules.length > 0)
     .sort((a: any, b: any) => {
-      const aRate = Math.max(...a.analytics.map((an: any) => an.engagement_rate || 0));
-      const bRate = Math.max(...b.analytics.map((an: any) => an.engagement_rate || 0));
-      return bRate - aRate;
+      const aEngagement = getMaxEngagement(a.schedules);
+      const bEngagement = getMaxEngagement(b.schedules);
+      return bEngagement - aEngagement;
     })
     .slice(0, 20)
-    .map((post: any) => transformPost(post));
+    .map((content: any) => transformMarketingContent(content));
 
   const insights: PerformanceInsight[] = (insightsResult.data || []).map(transformInsight);
 
@@ -218,6 +224,97 @@ function transformCalendar(data: any): ContentCalendar {
     createdAt: data.created_at,
     updatedAt: data.updated_at,
   };
+}
+
+/**
+ * Transform marketing_content to SocialPost format
+ */
+function transformMarketingContent(data: any): SocialPost {
+  const body = data.body || {};
+  const schedules = data.schedules || [];
+
+  // Extract platforms from schedules
+  const platforms = schedules
+    .map((s: any) => s.channel)
+    .filter((c: string) => ['linkedin', 'twitter'].includes(c));
+
+  // Find first schedule for timing
+  const firstSchedule = schedules[0];
+
+  return {
+    id: data.id,
+    orgId: data.org_id,
+    calendarId: undefined,
+    campaignId: data.campaign_id,
+    content: {
+      twitter: body.short || body.medium || '',
+      linkedin: body.long || body.medium || '',
+      both: body.medium || '',
+    },
+    twitterConfig: { isThread: false, threadCount: 1 },
+    linkedinConfig: { isArticle: false },
+    mediaUrls: data.featured_image_url ? [data.featured_image_url] : [],
+    mediaTypes: data.featured_image_url ? ['image'] : [],
+    targetPlatforms: platforms.length > 0 ? platforms : ['linkedin', 'twitter'],
+    contentType: mapContentType(data.funnel_stage),
+    contentPillar: data.theme_tags?.[0],
+    scheduledFor: firstSchedule?.scheduled_for,
+    optimalTimeCalculated: false,
+    status: mapStatus(data.status),
+    twitterPostId: schedules.find((s: any) => s.channel === 'twitter')?.platform_post_id,
+    twitterUrl: schedules.find((s: any) => s.channel === 'twitter')?.platform_url,
+    linkedinPostId: schedules.find((s: any) => s.channel === 'linkedin')?.platform_post_id,
+    linkedinUrl: schedules.find((s: any) => s.channel === 'linkedin')?.platform_url,
+    publishedAt: data.published_at,
+    generatedBy: 'production_agent',
+    generationPrompt: undefined,
+    trendingTopicId: undefined,
+    approvedBy: data.approved_by,
+    approvedAt: undefined,
+    rejectionReason: undefined,
+    createdBy: data.created_by,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+}
+
+/**
+ * Map funnel_stage to social content type
+ */
+function mapContentType(funnelStage: string | undefined): any {
+  switch (funnelStage) {
+    case 'awareness': return 'educational';
+    case 'consideration': return 'engagement';
+    case 'conversion': return 'promotional';
+    case 'retention': return 'personal';
+    default: return 'educational';
+  }
+}
+
+/**
+ * Map marketing_content status to social post status
+ */
+function mapStatus(status: string | undefined): any {
+  switch (status) {
+    case 'draft': return 'draft';
+    case 'needs_review': return 'pending_review';
+    case 'approved': return 'approved';
+    case 'published': return 'published';
+    case 'archived': return 'archived';
+    default: return 'draft';
+  }
+}
+
+/**
+ * Get max engagement from schedules
+ */
+function getMaxEngagement(schedules: any[]): number {
+  if (!schedules || schedules.length === 0) return 0;
+
+  return Math.max(...schedules.map(s => {
+    const metrics = s.engagement_metrics || {};
+    return (metrics.likes || 0) + (metrics.shares || 0) + (metrics.comments || 0) + (metrics.clicks || 0);
+  }));
 }
 
 function transformPost(data: any): SocialPost {

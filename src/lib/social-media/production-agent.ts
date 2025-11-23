@@ -301,7 +301,7 @@ function getPostPreview(post: SocialPost): string {
 }
 
 /**
- * Save generated posts to database
+ * Save generated posts to marketing_content
  */
 export async function saveGeneratedPosts(
   orgId: string,
@@ -313,26 +313,52 @@ export async function saveGeneratedPosts(
   const ids: string[] = [];
 
   for (const post of posts) {
-    const { data, error } = await supabase
-      .from('social_posts')
+    // Map content type to funnel stage
+    const funnelStage = mapToFunnelStage(post.contentType);
+
+    // Create marketing_content entry
+    const { data: content, error: contentError } = await supabase
+      .from('marketing_content')
       .insert({
         org_id: orgId,
-        calendar_id: calendarId,
-        content: post.content,
-        target_platforms: post.targetPlatforms,
-        content_type: post.contentType,
-        status: 'pending_review',
-        generated_by: 'production_agent',
-        generation_prompt: post.rationale,
+        title: generateTitle(post),
+        content_type: 'social_post',
+        body: {
+          short: post.content.twitter || '',
+          medium: post.content.twitter || post.content.linkedin?.substring(0, 500) || '',
+          long: post.content.linkedin || '',
+        },
+        audience_tags: [],
+        theme_tags: post.hashtagSuggestions?.slice(0, 5) || [],
+        funnel_stage: funnelStage,
+        status: 'needs_review',
+        preview_text: post.rationale,
         created_by: userId,
       })
       .select('id')
       .single();
 
-    if (data) {
-      ids.push(data.id);
-    } else if (error) {
-      console.error('Error saving generated post:', error);
+    if (contentError) {
+      console.error('Error saving generated post to marketing_content:', contentError);
+      continue;
+    }
+
+    if (content) {
+      ids.push(content.id);
+
+      // Create content_schedule entries for each platform
+      for (const platform of post.targetPlatforms) {
+        await supabase
+          .from('content_schedule')
+          .insert({
+            org_id: orgId,
+            content_id: content.id,
+            channel: platform,
+            scheduled_for: post.scheduledFor || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            status: 'scheduled',
+            created_by: userId,
+          });
+      }
     }
   }
 
@@ -340,7 +366,36 @@ export async function saveGeneratedPosts(
 }
 
 /**
- * Update existing draft posts with generated content
+ * Generate a title from post content
+ */
+function generateTitle(post: GeneratedPost): string {
+  const content = post.content.twitter || post.content.linkedin || '';
+  // Get first sentence or first 50 chars
+  const firstSentence = content.split(/[.!?]/)[0] || content.substring(0, 50);
+  return firstSentence.trim().substring(0, 100);
+}
+
+/**
+ * Map content type to funnel stage
+ */
+function mapToFunnelStage(contentType: string): string {
+  switch (contentType) {
+    case 'educational':
+    case 'curated':
+      return 'awareness';
+    case 'engagement':
+      return 'consideration';
+    case 'promotional':
+      return 'conversion';
+    case 'personal':
+      return 'retention';
+    default:
+      return 'awareness';
+  }
+}
+
+/**
+ * Update existing draft posts (marketing_content) with generated content
  */
 export async function updateDraftPosts(
   posts: GeneratedPost[],
@@ -354,12 +409,15 @@ export async function updateDraftPosts(
     const draftId = draftPostIds[i];
 
     const { error } = await supabase
-      .from('social_posts')
+      .from('marketing_content')
       .update({
-        content: post.content,
-        target_platforms: post.targetPlatforms,
-        content_type: post.contentType,
-        status: 'pending_review',
+        body: {
+          short: post.content.twitter || '',
+          medium: post.content.twitter || post.content.linkedin?.substring(0, 500) || '',
+          long: post.content.linkedin || '',
+        },
+        theme_tags: post.hashtagSuggestions?.slice(0, 5) || [],
+        status: 'needs_review',
         updated_at: new Date().toISOString(),
       })
       .eq('id', draftId);
@@ -367,7 +425,7 @@ export async function updateDraftPosts(
     if (!error) {
       updated++;
     } else {
-      console.error('Error updating draft post:', error);
+      console.error('Error updating draft post in marketing_content:', error);
     }
   }
 

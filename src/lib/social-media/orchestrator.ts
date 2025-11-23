@@ -12,6 +12,56 @@ import {
   SocialPost,
 } from '@/lib/types/social-media';
 
+/**
+ * Transform marketing_content to SocialPost format
+ */
+function transformMarketingContent(data: any): SocialPost {
+  const body = data.body || {};
+  const schedules = data.schedules || [];
+
+  const platforms = schedules
+    .map((s: any) => s.channel)
+    .filter((c: string) => ['linkedin', 'twitter'].includes(c));
+
+  const firstSchedule = schedules[0];
+
+  return {
+    id: data.id,
+    orgId: data.org_id,
+    calendarId: undefined,
+    campaignId: data.campaign_id,
+    content: {
+      twitter: body.short || body.medium || '',
+      linkedin: body.long || body.medium || '',
+      both: body.medium || '',
+    },
+    twitterConfig: { isThread: false, threadCount: 1 },
+    linkedinConfig: { isArticle: false },
+    mediaUrls: data.featured_image_url ? [data.featured_image_url] : [],
+    mediaTypes: data.featured_image_url ? ['image'] : [],
+    targetPlatforms: platforms.length > 0 ? platforms : ['linkedin', 'twitter'],
+    contentType: 'educational',
+    contentPillar: data.theme_tags?.[0],
+    scheduledFor: firstSchedule?.scheduled_for,
+    optimalTimeCalculated: false,
+    status: data.status || 'draft',
+    twitterPostId: schedules.find((s: any) => s.channel === 'twitter')?.platform_post_id,
+    twitterUrl: schedules.find((s: any) => s.channel === 'twitter')?.platform_url,
+    linkedinPostId: schedules.find((s: any) => s.channel === 'linkedin')?.platform_post_id,
+    linkedinUrl: schedules.find((s: any) => s.channel === 'linkedin')?.platform_url,
+    publishedAt: data.published_at,
+    generatedBy: 'production_agent',
+    generationPrompt: undefined,
+    trendingTopicId: undefined,
+    approvedBy: data.approved_by,
+    approvedAt: undefined,
+    rejectionReason: undefined,
+    createdBy: data.created_by,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+}
+
 interface OrchestratorResult {
   runId: string;
   agentType: SocialAgentType;
@@ -120,28 +170,32 @@ export async function runSocialMediaOrchestrator(
     if (agentType === 'production' || agentType === 'full_cycle') {
       console.log('Running Production Agent...');
 
-      // Get draft posts that need content generation
-      const { data: draftPosts } = await supabase
-        .from('social_posts')
-        .select('*')
+      // Get draft content from marketing_content that needs generation
+      const { data: draftContent } = await supabase
+        .from('marketing_content')
+        .select(`
+          *,
+          schedules:content_schedule(*)
+        `)
         .eq('org_id', orgId)
+        .eq('content_type', 'social_post')
         .eq('status', 'draft')
-        .eq('generated_by', 'strategy_agent')
-        .order('scheduled_for', { ascending: true })
+        .order('created_at', { ascending: true })
         .limit(20);
 
       // Refresh context to include new drafts
       const refreshedContext = await buildSocialMediaContext(orgId);
 
-      const transformedDrafts: SocialPost[] = (draftPosts || []).map(transformPost);
+      // Transform marketing_content to SocialPost format for the agent
+      const transformedDrafts: SocialPost[] = (draftContent || []).map(transformMarketingContent);
       const productionPlan = await runProductionAgent(refreshedContext, transformedDrafts);
       results.production = productionPlan;
 
-      // Update draft posts with generated content
-      if (productionPlan.posts.length > 0 && draftPosts && draftPosts.length > 0) {
+      // Update draft content with generated content
+      if (productionPlan.posts.length > 0 && draftContent && draftContent.length > 0) {
         const updated = await updateDraftPosts(
           productionPlan.posts,
-          draftPosts.map(p => p.id)
+          draftContent.map(p => p.id)
         );
         metrics.postsDrafted = updated;
       } else if (productionPlan.posts.length > 0) {

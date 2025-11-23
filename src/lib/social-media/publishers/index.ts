@@ -83,20 +83,38 @@ export async function publishPost(
     results.push(result);
   }
 
-  // Update post with publishing results
-  const twitterResult = results.find(r => r.platform === 'twitter');
-  const linkedinResult = results.find(r => r.platform === 'linkedin');
+  // Update content_schedule entries with publishing results
+  for (const result of results) {
+    // Find the schedule for this platform
+    // We need to query by content_id and channel
+    const { data: schedules } = await supabase
+      .from('content_schedule')
+      .select('id')
+      .eq('content_id', post.id)
+      .eq('channel', result.platform);
 
+    if (schedules && schedules.length > 0) {
+      await supabase
+        .from('content_schedule')
+        .update({
+          status: result.success ? 'published' : 'failed',
+          platform_post_id: result.postId,
+          platform_url: result.url,
+          published_at: result.success ? new Date().toISOString() : null,
+          error_message: result.error,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', schedules[0].id);
+    }
+  }
+
+  // Also update the marketing_content status
   const anySuccess = results.some(r => r.success);
 
   await supabase
-    .from('social_posts')
+    .from('marketing_content')
     .update({
-      status: anySuccess ? 'published' : 'failed',
-      twitter_post_id: twitterResult?.postId,
-      twitter_url: twitterResult?.url,
-      linkedin_post_id: linkedinResult?.postId,
-      linkedin_url: linkedinResult?.url,
+      status: anySuccess ? 'published' : 'draft',
       published_at: anySuccess ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
     })
@@ -343,45 +361,45 @@ async function refreshToken(account: any): Promise<boolean> {
 }
 
 /**
- * Schedule a post for publishing
+ * Schedule content for publishing (updates content_schedule)
  */
 export async function schedulePost(
   orgId: string,
-  postId: string,
+  contentId: string,
   scheduledFor: Date
 ): Promise<boolean> {
   const supabase = await createClient();
 
+  // Update all schedule entries for this content
   const { error } = await supabase
-    .from('social_posts')
+    .from('content_schedule')
     .update({
       scheduled_for: scheduledFor.toISOString(),
       status: 'scheduled',
       updated_at: new Date().toISOString(),
     })
-    .eq('id', postId)
+    .eq('content_id', contentId)
     .eq('org_id', orgId);
 
   return !error;
 }
 
 /**
- * Cancel a scheduled post
+ * Cancel a scheduled post (updates content_schedule)
  */
 export async function cancelScheduledPost(
   orgId: string,
-  postId: string
+  contentId: string
 ): Promise<boolean> {
   const supabase = await createClient();
 
   const { error } = await supabase
-    .from('social_posts')
+    .from('content_schedule')
     .update({
-      status: 'draft',
-      scheduled_for: null,
+      status: 'cancelled',
       updated_at: new Date().toISOString(),
     })
-    .eq('id', postId)
+    .eq('content_id', contentId)
     .eq('org_id', orgId)
     .eq('status', 'scheduled');
 
@@ -389,50 +407,86 @@ export async function cancelScheduledPost(
 }
 
 /**
- * Get posts due for publishing
+ * Get posts due for publishing from content_schedule
  */
 export async function getPostsDueForPublishing(orgId: string): Promise<SocialPost[]> {
   const supabase = await createClient();
 
-  const { data } = await supabase
-    .from('social_posts')
-    .select('*')
+  // Get scheduled items from content_schedule
+  const { data: schedules } = await supabase
+    .from('content_schedule')
+    .select(`
+      *,
+      content:marketing_content(*)
+    `)
     .eq('org_id', orgId)
     .eq('status', 'scheduled')
+    .in('channel', ['twitter', 'linkedin'])
     .lte('scheduled_for', new Date().toISOString())
     .order('scheduled_for', { ascending: true });
 
-  return (data || []).map(post => ({
-    id: post.id,
-    orgId: post.org_id,
-    calendarId: post.calendar_id,
-    campaignId: post.campaign_id,
-    content: post.content || {},
-    twitterConfig: post.twitter_config || { isThread: false, threadCount: 1 },
-    linkedinConfig: post.linkedin_config || { isArticle: false },
-    mediaUrls: post.media_urls || [],
-    mediaTypes: post.media_types || [],
-    targetPlatforms: post.target_platforms || [],
-    contentType: post.content_type || 'educational',
-    contentPillar: post.content_pillar,
-    scheduledFor: post.scheduled_for,
-    optimalTimeCalculated: post.optimal_time_calculated || false,
-    status: post.status || 'scheduled',
-    twitterPostId: post.twitter_post_id,
-    twitterUrl: post.twitter_url,
-    linkedinPostId: post.linkedin_post_id,
-    linkedinUrl: post.linkedin_url,
-    publishedAt: post.published_at,
-    generatedBy: post.generated_by || 'manual',
-    generationPrompt: post.generation_prompt,
-    trendingTopicId: post.trending_topic_id,
-    approvedBy: post.approved_by,
-    approvedAt: post.approved_at,
-    rejectionReason: post.rejection_reason,
-    createdBy: post.created_by,
-    createdAt: post.created_at,
-    updatedAt: post.updated_at,
-  }));
+  if (!schedules || schedules.length === 0) {
+    return [];
+  }
+
+  // Group by content_id to create posts with multiple platforms
+  const contentMap = new Map<string, { content: any; platforms: string[]; schedules: any[] }>();
+
+  for (const schedule of schedules) {
+    const contentId = schedule.content_id;
+    if (!contentMap.has(contentId)) {
+      contentMap.set(contentId, {
+        content: schedule.content,
+        platforms: [],
+        schedules: [],
+      });
+    }
+    const entry = contentMap.get(contentId)!;
+    entry.platforms.push(schedule.channel);
+    entry.schedules.push(schedule);
+  }
+
+  // Transform to SocialPost format
+  return Array.from(contentMap.entries()).map(([contentId, data]) => {
+    const content = data.content;
+    const body = content?.body || {};
+
+    return {
+      id: contentId,
+      orgId: content?.org_id || orgId,
+      calendarId: undefined,
+      campaignId: content?.campaign_id,
+      content: {
+        twitter: body.short || body.medium || '',
+        linkedin: body.long || body.medium || '',
+        both: body.medium || '',
+      },
+      twitterConfig: { isThread: false, threadCount: 1 },
+      linkedinConfig: { isArticle: false },
+      mediaUrls: content?.featured_image_url ? [content.featured_image_url] : [],
+      mediaTypes: content?.featured_image_url ? ['image'] : [],
+      targetPlatforms: data.platforms as SocialPlatform[],
+      contentType: 'educational',
+      contentPillar: content?.theme_tags?.[0],
+      scheduledFor: data.schedules[0]?.scheduled_for,
+      optimalTimeCalculated: false,
+      status: 'scheduled',
+      twitterPostId: undefined,
+      twitterUrl: undefined,
+      linkedinPostId: undefined,
+      linkedinUrl: undefined,
+      publishedAt: undefined,
+      generatedBy: 'production_agent',
+      generationPrompt: undefined,
+      trendingTopicId: undefined,
+      approvedBy: content?.approved_by,
+      approvedAt: undefined,
+      rejectionReason: undefined,
+      createdBy: content?.created_by,
+      createdAt: content?.created_at,
+      updatedAt: content?.updated_at,
+    };
+  });
 }
 
 /**
