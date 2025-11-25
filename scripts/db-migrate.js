@@ -5,6 +5,7 @@
  * Usage: node scripts/db-migrate.js <migration-file>
  */
 
+require('dotenv').config({ path: '.env.local' });
 const { readFileSync } = require('fs');
 const { Client } = require('pg');
 
@@ -37,35 +38,31 @@ async function applyMigration(migrationFile) {
     await client.query(sql);
     console.log('✅ Migration applied successfully\n');
 
-    // Verify the results
+    // Try to verify the results by checking for common table types
     console.log('🔍 Verifying results...');
-    const result = await client.query(`
-      SELECT
-        COUNT(*) as total_contacts,
-        COUNT(org_id) as contacts_with_org_id,
-        COUNT(*) - COUNT(org_id) as contacts_missing_org_id
-      FROM contacts;
-    `);
-
-    const stats = result.rows[0];
-    console.log(`
-📊 Contact Statistics:
-   Total Contacts: ${stats.total_contacts}
-   ✅ With org_id: ${stats.contacts_with_org_id}
-   ⚠️  Missing org_id: ${stats.contacts_missing_org_id}
-`);
-
-    // Show any contacts still missing org_id
-    if (parseInt(stats.contacts_missing_org_id) > 0) {
-      console.log('⚠️  Contacts still missing org_id:');
-      const orphaned = await client.query(`
-        SELECT id, email, client_id, created_at
-        FROM contacts
-        WHERE org_id IS NULL
-        ORDER BY created_at DESC
-        LIMIT 10;
+    try {
+      // Check if this looks like a task_library migration
+      const taskLibraryCheck = await client.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables
+          WHERE table_name = 'task_library'
+        ) as task_library_exists;
       `);
-      console.table(orphaned.rows);
+
+      if (taskLibraryCheck.rows[0].task_library_exists) {
+        const stats = await client.query(`
+          SELECT
+            (SELECT COUNT(*) FROM task_library) as library_tasks,
+            (SELECT COUNT(*) FROM task_library_subtasks) as library_subtasks
+        `);
+        console.log(`📊 Task Library Statistics:
+   Library Tasks: ${stats.rows[0].library_tasks}
+   Library Subtasks: ${stats.rows[0].library_subtasks}
+`);
+      }
+    } catch (verifyError) {
+      // Verification is optional, don't fail the migration
+      console.log('ℹ️  Skipping verification (tables may not exist yet)');
     }
 
   } catch (error) {

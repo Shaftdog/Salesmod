@@ -129,7 +129,7 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
       priority: "normal",
       feeAmount: "",
       assignedTo: "unassigned",
-      productionTemplateId: "",
+      productionTemplateId: "none",
     },
   });
 
@@ -252,17 +252,20 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
   };
 
   async function processForm(data: FormData) {
-    if (!currentUser) {
+    if (!currentUser || !currentUser.id) {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "You must be logged in to create an order.",
+        title: "Authentication Error",
+        description: "Your session has expired. Please refresh and try again.",
       });
+      console.error('currentUser is missing or has no id:', currentUser);
       return;
     }
 
     try {
+      console.log('Creating order with currentUser:', currentUser.id)
       const newOrder = await createOrder({
+        org_id: currentUser.id,
         status: 'new',
         priority: data.priority,
         order_type: data.orderType,
@@ -291,7 +294,7 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
       } as any);
 
       // Create production card if a template is selected
-      if (data.productionTemplateId && newOrder?.id) {
+      if (data.productionTemplateId && data.productionTemplateId !== 'none' && newOrder?.id) {
         try {
           // Map order priority to production card priority
           const priorityMap: Record<string, 'low' | 'normal' | 'high' | 'urgent'> = {
@@ -749,7 +752,7 @@ const Step4 = ({ appraisers, productionTemplates, onSuggest, isLoading }: { appr
                         <SelectTrigger><SelectValue placeholder="Select a production template" /></SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                        <SelectItem value="">No template (skip production tracking)</SelectItem>
+                        <SelectItem value="none">No template (skip production tracking)</SelectItem>
                         {productionTemplates.map(template => (
                             <SelectItem key={template.id} value={template.id}>
                                 {template.name}

@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight, PlusCircle, ClipboardList, CheckCircle, Clock, AlertTriangle, Factory, FileCheck } from "lucide-react";
+import { ArrowUpRight, PlusCircle, ClipboardList, CheckCircle, Clock, AlertTriangle, Factory, FileCheck, Library } from "lucide-react";
 import Link from "next/link";
 
 export default function ProductionDashboard() {
@@ -55,6 +55,11 @@ export default function ProductionDashboard() {
           <Button asChild variant="outline">
             <Link href="/production/templates">
               <FileCheck className="mr-2 h-4 w-4" /> Templates
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/production/library">
+              <Library className="mr-2 h-4 w-4" /> Task Library
             </Link>
           </Button>
           <Button asChild variant="outline">
@@ -126,7 +131,7 @@ export default function ProductionDashboard() {
       </div>
 
       {/* Quick Links */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="hover:bg-accent transition-colors cursor-pointer">
           <Link href="/production/active-appraisals">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -157,6 +162,17 @@ export default function ProductionDashboard() {
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">Manage appraisal templates</p>
+            </CardContent>
+          </Link>
+        </Card>
+        <Card className="hover:bg-accent transition-colors cursor-pointer">
+          <Link href="/production/library">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Task Library</CardTitle>
+              <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">Manage reusable task definitions</p>
             </CardContent>
           </Link>
         </Card>

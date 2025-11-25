@@ -49,12 +49,17 @@ Orders flow through 10 stages:
 
 A **Production Card** represents an appraisal order moving through the workflow.
 
-### Creating a Card
-1. Go to the Kanban Board
-2. Click "Create Card" or use the order form
-3. Select a template
-4. Assign an appraiser
-5. Set due date and priority
+### Creating a Card via Order Form (Primary Method)
+1. Go to **Orders > New Order**
+2. Fill out property, loan, and contact info
+3. On Step 4 (Order Details), select a **Production Template**
+4. Assign an appraiser and set due date
+5. Submit the order - a production card is automatically created
+
+### Creating a Card for Existing Orders
+For orders created before the production system, or orders created without a template:
+1. Go to the Order detail page
+2. Use the "Create Production Card" action (coming soon)
 
 ### Card Information
 - Order number and property address

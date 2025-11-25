@@ -56,8 +56,11 @@ export function useOrders() {
           assignee:profiles!orders_assigned_to_fkey(*)
         `)
         .single()
-      
-      if (error) throw error
+
+      if (error) {
+        console.error('Supabase order insert error:', error.message, error.code, error.details, error.hint)
+        throw new Error(error.message || 'Failed to create order')
+      }
       
       const newOrder = transformOrder(data)
       
@@ -88,12 +91,12 @@ export function useOrders() {
         description: "The new order has been successfully created.",
       })
     },
-    onError: (error) => {
-      console.error('Create order error:', error)
+    onError: (error: any) => {
+      console.error('Create order error:', error?.message || error?.code || JSON.stringify(error))
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to create order. Please try again.",
+        description: error?.message || "Failed to create order. Please try again.",
       })
     },
   })
