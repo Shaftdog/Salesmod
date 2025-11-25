@@ -57,9 +57,14 @@ export default function ProductionDashboard() {
               <FileCheck className="mr-2 h-4 w-4" /> Templates
             </Link>
           </Button>
+          <Button asChild variant="outline">
+            <Link href="/production/my-tasks">
+              <Clock className="mr-2 h-4 w-4" /> My Tasks
+            </Link>
+          </Button>
           <Button asChild>
-            <Link href="/production/active-appraisals">
-              <ClipboardList className="mr-2 h-4 w-4" /> View Appraisals
+            <Link href="/production/board">
+              <Factory className="mr-2 h-4 w-4" /> Production Board
             </Link>
           </Button>
         </div>
@@ -85,19 +90,24 @@ export default function ProductionDashboard() {
 
       {/* Coming Soon Cards */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Production Pipeline</CardTitle>
-            <CardDescription>
-              Track appraisals through production stages
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex items-center justify-center h-48">
-            <div className="text-center text-muted-foreground">
-              <Factory className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Production pipeline visualization coming soon</p>
-            </div>
-          </CardContent>
+        <Card className="hover:bg-accent transition-colors cursor-pointer">
+          <Link href="/production/board">
+            <CardHeader>
+              <CardTitle>Production Board</CardTitle>
+              <CardDescription>
+                Track appraisals through 10 production stages with Kanban board
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex items-center justify-center h-48">
+              <div className="text-center">
+                <Factory className="h-12 w-12 mx-auto mb-4 text-blue-500" />
+                <p className="text-muted-foreground">View production Kanban board</p>
+                <Button variant="link" className="mt-2">
+                  Open Board <ArrowUpRight className="ml-1 h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Link>
         </Card>
         <Card>
           <CardHeader>

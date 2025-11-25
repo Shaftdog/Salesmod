@@ -40,6 +40,8 @@ import {
   Star,
   Clock,
   Package,
+  Kanban,
+  ListTodo,
 } from "lucide-react";
 
 export interface NavItem {
@@ -99,6 +101,8 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     dashboardHref: "/production",
     items: [
       { href: "/production", icon: LayoutDashboard, label: "Dashboard" },
+      { href: "/production/board", icon: Kanban, label: "Kanban Board" },
+      { href: "/production/my-tasks", icon: ListTodo, label: "My Tasks" },
       { href: "/production/active-appraisals", icon: ClipboardList, label: "Active Appraisals" },
       { href: "/production/quality-control", icon: CheckCircle, label: "Quality Control" },
       { href: "/production/templates", icon: FileCheck, label: "Templates" },
