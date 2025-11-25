@@ -26,6 +26,7 @@ import {
   UserPlus,
   CheckCircle,
   FileCheck,
+  Library,
   CalendarClock,
   MapPinned,
   UserCog,
@@ -106,6 +107,7 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
       { href: "/production/active-appraisals", icon: ClipboardList, label: "Active Appraisals" },
       { href: "/production/quality-control", icon: CheckCircle, label: "Quality Control" },
       { href: "/production/templates", icon: FileCheck, label: "Templates" },
+      { href: "/production/library", icon: Library, label: "Task Library" },
     ],
   },
   {
