@@ -35,11 +35,11 @@ export async function GET(request: NextRequest) {
     const activeOnly = searchParams.get('active_only') === 'true';
     const includeTasksParam = searchParams.get('include_tasks') === 'true';
 
-    // Build query
+    // Build query - templates are shared across all users in the organization
+    // All authenticated users can view templates
     let query = supabase
       .from('production_templates')
       .select('*')
-      .eq('org_id', user.id)
       .order('is_default', { ascending: false })
       .order('name', { ascending: true });
 

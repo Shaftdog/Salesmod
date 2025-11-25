@@ -40,6 +40,8 @@ import { AddressValidationResult, StandardizedAddress } from "@/lib/address-vali
 import { UnitSelector } from "@/components/properties/unit-selector";
 import { isFeeSimplePropertyType } from "@/lib/units";
 import { usePropertyUnits } from "@/hooks/use-property-units";
+import { useProductionTemplates, useCreateProductionCard } from "@/hooks/use-production";
+import type { ProductionTemplateWithTasks } from "@/types/production";
   
 
 const formSchema = z.object({
@@ -70,6 +72,7 @@ const formSchema = z.object({
   dueDate: z.date({ required_error: "Due date is required" }),
   feeAmount: z.string().min(1, "Fee is required"),
   assignedTo: z.string().optional(),
+  productionTemplateId: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -78,7 +81,7 @@ const steps = [
   { id: "Step 1", name: "Property Info", fields: ["propertyAddress", "propertyCity", "propertyState", "propertyZip", "propertyType", "unitId", "accessInstructions", "specialInstructions"] },
   { id: "Step 2", name: "Loan Info", fields: ["loanType", "loanNumber", "loanAmount", "orderType"] },
   { id: "Step 3", name: "Contact Info", fields: ["clientId", "loanOfficer", "processorName", "borrowerName"] },
-  { id: "Step 4", name: "Order Details", fields: ["priority", "dueDate", "feeAmount", "assignedTo"] },
+  { id: "Step 4", name: "Order Details", fields: ["priority", "dueDate", "feeAmount", "assignedTo", "productionTemplateId"] },
   { id: "Step 5", name: "Review & Submit" },
 ];
 
@@ -101,6 +104,8 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
   const { orders: storeOrders, createOrder, isCreating } = useOrders();
   const { clients, createClient } = useClients();
   const { data: currentUser } = useCurrentUser();
+  const { data: productionTemplates } = useProductionTemplates({ active_only: true });
+  const createProductionCard = useCreateProductionCard();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -124,6 +129,7 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
       priority: "normal",
       feeAmount: "",
       assignedTo: "unassigned",
+      productionTemplateId: "",
     },
   });
 
@@ -256,7 +262,7 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
     }
 
     try {
-      await createOrder({
+      const newOrder = await createOrder({
         status: 'new',
         priority: data.priority,
         order_type: data.orderType,
@@ -284,10 +290,35 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
         special_instructions: data.specialInstructions,
       } as any);
 
+      // Create production card if a template is selected
+      if (data.productionTemplateId && newOrder?.id) {
+        try {
+          // Map order priority to production card priority
+          const priorityMap: Record<string, 'low' | 'normal' | 'high' | 'urgent'> = {
+            'rush': 'urgent',
+            'high': 'high',
+            'normal': 'normal',
+            'low': 'low',
+          };
+          const cardPriority = priorityMap[data.priority] || 'normal';
+
+          await createProductionCard.mutateAsync({
+            order_id: newOrder.id,
+            template_id: data.productionTemplateId,
+            due_date: formatISO(data.dueDate),
+            priority: cardPriority,
+            assigned_appraiser_id: data.assignedTo !== 'unassigned' ? data.assignedTo : undefined,
+          });
+        } catch (prodError) {
+          console.error('Failed to create production card:', prodError);
+          // Don't fail the whole order creation if production card fails
+        }
+      }
+
       // Reset form for next entry
       form.reset();
       setCurrentStep(0);
-      
+
       // Redirect to orders page
       router.push('/orders');
     } catch (error) {
@@ -370,7 +401,7 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
               />}
               {currentStep === 1 && <Step2 />}
               {currentStep === 2 && <Step3 clients={clients} onQuickAdd={handleQuickAddClient} />}
-              {currentStep === 3 && <Step4 appraisers={appraisers} onSuggest={handleAiSuggest} isLoading={isAiLoading} />}
+              {currentStep === 3 && <Step4 appraisers={appraisers} productionTemplates={productionTemplates || []} onSuggest={handleAiSuggest} isLoading={isAiLoading} />}
               {currentStep === 4 && <ReviewStep onSelectSuggestion={handleSelectSuggestion} suggestion={aiSuggestion} appraisers={appraisers} clients={clients} />}
             </fieldset>
           </div>
@@ -627,7 +658,7 @@ const Step3 = ({ clients, onQuickAdd }: { clients: Client[], onQuickAdd: (data: 
     )
 }
 
-const Step4 = ({ appraisers, onSuggest, isLoading }: { appraisers: User[], onSuggest: () => void, isLoading: boolean }) => {
+const Step4 = ({ appraisers, productionTemplates, onSuggest, isLoading }: { appraisers: User[], productionTemplates: ProductionTemplateWithTasks[], onSuggest: () => void, isLoading: boolean }) => {
     const { control } = useFormContext();
     return (
         <div className="space-y-4">
@@ -708,6 +739,33 @@ const Step4 = ({ appraisers, onSuggest, isLoading }: { appraisers: User[], onSug
                     AI Suggest Appraiser
                 </Button>
             </div>
+
+            {/* Production Template Selector */}
+            <FormField control={control} name="productionTemplateId" render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Production Template <span className="text-muted-foreground">(optional)</span></FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                    <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Select a production template" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                        <SelectItem value="">No template (skip production tracking)</SelectItem>
+                        {productionTemplates.map(template => (
+                            <SelectItem key={template.id} value={template.id}>
+                                {template.name}
+                                {template.tasks && template.tasks.length > 0 && (
+                                    <span className="text-muted-foreground ml-2">({template.tasks.length} tasks)</span>
+                                )}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                    </Select>
+                    <FormDescription>
+                        Select a template to create a production card for tracking this order through the workflow
+                    </FormDescription>
+                    <FormMessage />
+                </FormItem>
+            )} />
 
         </div>
     )
