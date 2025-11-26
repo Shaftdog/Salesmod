@@ -30,12 +30,14 @@ import { ArrowLeft, Save, Trash2, AlertCircle, CheckCircle, Activity } from 'luc
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
+import { UserAreaOverrides } from '@/components/admin/user-area-overrides'
+import { USER_ROLES, ROLE_DISPLAY_NAMES, type UserRole } from '@/lib/admin/types'
 
 interface User {
   id: string
   email: string
   name: string
-  role: 'admin' | 'manager' | 'user'
+  role: UserRole
   created_at: string
   updated_at?: string
 }
@@ -64,7 +66,7 @@ export default function UserDetailsPage() {
   // Form state
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<'admin' | 'manager' | 'user'>('user')
+  const [role, setRole] = useState<UserRole>('user')
 
   // Fetch user data
   useEffect(() => {
@@ -234,6 +236,9 @@ export default function UserDetailsPage() {
         </Alert>
       )}
 
+      {/* Area Access Overrides (Super Admin only) */}
+      <UserAreaOverrides userId={userId} userRole={role} />
+
       <div className="grid gap-6 md:grid-cols-2">
         {/* User Details Form */}
         <Card>
@@ -267,18 +272,20 @@ export default function UserDetailsPage() {
 
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
-              <Select value={role} onValueChange={(value: any) => setRole(value)}>
+              <Select value={role} onValueChange={(value: UserRole) => setRole(value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="user">User</SelectItem>
-                  <SelectItem value="manager">Manager</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  {USER_ROLES.map((roleOption) => (
+                    <SelectItem key={roleOption} value={roleOption}>
+                      {ROLE_DISPLAY_NAMES[roleOption]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Admins have full access, managers can manage content, users have basic access
+                Each role has different default area access. Super Admins have full system access.
               </p>
             </div>
 

@@ -75,7 +75,8 @@ export function useAdmin(): UseAdminResult {
 
         const userRole = (profile?.role as UserRole) || 'user'
         setRole(userRole)
-        setIsAdmin(userRole === 'admin')
+        // Both admin and super_admin are considered admins
+        setIsAdmin(userRole === 'admin' || userRole === 'super_admin')
       } catch (err) {
         console.error('Error fetching user role:', err)
         setError(err instanceof Error ? err : new Error('Failed to fetch user role'))
