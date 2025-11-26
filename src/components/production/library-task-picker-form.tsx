@@ -205,7 +205,7 @@ export function LibraryTaskPickerForForm({
               </label>
             </div>
 
-            <ScrollArea className="flex-1 -mx-6 px-6">
+            <ScrollArea className="h-[350px] -mx-6 px-6">
               <div className="space-y-2 py-2">
                 {filteredTasks.map((task) => {
                   const isSelected = selectedTaskIds.has(task.id);
