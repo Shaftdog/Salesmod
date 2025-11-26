@@ -239,6 +239,7 @@ export function TemplateEditor({ template, onSuccess, onCancel }: TemplateEditor
   const isPending = createTemplate.isPending || updateTemplate.isPending;
 
   return (
+    <>
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
       {/* Basic Info */}
       <div className="space-y-4">
@@ -386,15 +387,16 @@ export function TemplateEditor({ template, onSuccess, onCancel }: TemplateEditor
           {isEditing ? 'Save Changes' : 'Create Template'}
         </Button>
       </div>
-
-      {/* Library Task Picker */}
-      <LibraryTaskPickerForForm
-        open={showLibraryPicker}
-        onOpenChange={setShowLibraryPicker}
-        defaultStage={libraryPickerStage || undefined}
-        onAdd={handleAddFromLibrary}
-      />
     </form>
+
+    {/* Library Task Picker - outside form to prevent focus issues */}
+    <LibraryTaskPickerForForm
+      open={showLibraryPicker}
+      onOpenChange={setShowLibraryPicker}
+      defaultStage={libraryPickerStage || undefined}
+      onAdd={handleAddFromLibrary}
+    />
+    </>
   );
 }
 
