@@ -33,6 +33,7 @@ import {
   ChevronDown,
   ChevronUp,
   ListPlus,
+  Library,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -48,6 +49,9 @@ import {
   ProductionStage,
   ProductionRole,
 } from '@/types/production';
+import { useTaskLibraryByStage } from '@/hooks/use-task-library';
+import { LibraryTaskWithSubtasks } from '@/types/task-library';
+import { LibraryTaskPickerForForm } from '@/components/production/library-task-picker-form';
 
 // Schema for task definition
 const taskSchema = z.object({
@@ -88,6 +92,8 @@ export function TemplateEditor({ template, onSuccess, onCancel }: TemplateEditor
   const [expandedStages, setExpandedStages] = useState<string[]>(
     template ? [] : ['INTAKE']
   );
+  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
+  const [libraryPickerStage, setLibraryPickerStage] = useState<ProductionStage | null>(null);
 
   const isEditing = !!template;
 
@@ -183,6 +189,37 @@ export function TemplateEditor({ template, onSuccess, onCancel }: TemplateEditor
     if (!expandedStages.includes(stage)) {
       setExpandedStages([...expandedStages, stage]);
     }
+  };
+
+  const openLibraryPicker = (stage: ProductionStage) => {
+    setLibraryPickerStage(stage);
+    setShowLibraryPicker(true);
+  };
+
+  const handleAddFromLibrary = (libraryTasks: LibraryTaskWithSubtasks[]) => {
+    // Convert library tasks to form tasks and append them
+    libraryTasks.forEach(libraryTask => {
+      const stageTasks = taskFields.filter(t => t.stage === libraryTask.stage);
+      appendTask({
+        title: libraryTask.title,
+        description: libraryTask.description || '',
+        stage: libraryTask.stage,
+        role: libraryTask.default_role.toUpperCase() as ProductionRole,
+        is_required: libraryTask.is_required,
+        estimated_minutes: libraryTask.estimated_minutes,
+        sort_order: stageTasks.length,
+        subtasks: libraryTask.subtasks.map((sub, idx) => ({
+          title: sub.title,
+          sort_order: idx,
+        })),
+      });
+      // Expand the stage if not already expanded
+      if (!expandedStages.includes(libraryTask.stage)) {
+        setExpandedStages(prev => [...prev, libraryTask.stage]);
+      }
+    });
+    setShowLibraryPicker(false);
+    setLibraryPickerStage(null);
   };
 
   const getTasksByStage = (stage: string) => {
@@ -284,18 +321,32 @@ export function TemplateEditor({ template, onSuccess, onCancel }: TemplateEditor
                         {stageTasks.length} tasks
                       </Badge>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        addTask(stage);
-                      }}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add Task
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openLibraryPicker(stage);
+                        }}
+                      >
+                        <Library className="h-4 w-4 mr-1" />
+                        From Library
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          addTask(stage);
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Task
+                      </Button>
+                    </div>
                   </button>
 
                   {isExpanded && (
@@ -335,6 +386,14 @@ export function TemplateEditor({ template, onSuccess, onCancel }: TemplateEditor
           {isEditing ? 'Save Changes' : 'Create Template'}
         </Button>
       </div>
+
+      {/* Library Task Picker */}
+      <LibraryTaskPickerForForm
+        open={showLibraryPicker}
+        onOpenChange={setShowLibraryPicker}
+        defaultStage={libraryPickerStage || undefined}
+        onAdd={handleAddFromLibrary}
+      />
     </form>
   );
 }
