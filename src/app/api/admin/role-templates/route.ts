@@ -60,18 +60,23 @@ export async function GET(request: NextRequest) {
     // Group by role
     const roleTemplates: Record<string, any[]> = {}
 
+    // Type assertion for the areas relationship (single object, not array)
+    type AreaRelation = { id: string; code: string; name: string; icon: string | null; display_order: number } | null
+
     for (const template of templatesData || []) {
       const roleName = template.role_name
       if (!roleTemplates[roleName]) {
         roleTemplates[roleName] = []
       }
+      // Cast areas to single object (Supabase returns object for belongs-to relationships)
+      const area = template.areas as unknown as AreaRelation
       roleTemplates[roleName].push({
         id: template.id,
-        areaId: template.areas?.id,
-        areaCode: template.areas?.code,
-        areaName: template.areas?.name,
-        areaIcon: template.areas?.icon,
-        displayOrder: template.areas?.display_order,
+        areaId: area?.id,
+        areaCode: area?.code,
+        areaName: area?.name,
+        areaIcon: area?.icon,
+        displayOrder: area?.display_order,
         includeAllSubmodules: template.include_all_submodules,
       })
     }

@@ -84,11 +84,11 @@ export default function RoleTemplatesPage() {
       const roleTemplate = templatesData.roleTemplates?.find(
         (t: RoleTemplate) => t.role === selectedRole
       )
-      const initialAreas = new Set(
+      const initialAreas = new Set<string>(
         (roleTemplate?.areas || []).map((a: { areaCode: string }) => a.areaCode)
       )
       setSelectedAreas(initialAreas)
-      setOriginalAreas(new Set(initialAreas))
+      setOriginalAreas(new Set<string>(initialAreas))
     } catch (err) {
       console.error('Error fetching role templates:', err)
       setError(err instanceof Error ? err.message : 'Unknown error')
@@ -106,11 +106,11 @@ export default function RoleTemplatesPage() {
   // Update selected areas when role changes
   useEffect(() => {
     const roleTemplate = roleTemplates.find((t) => t.role === selectedRole)
-    const roleAreas = new Set(
+    const roleAreas = new Set<string>(
       (roleTemplate?.areas || []).map((a) => a.areaCode)
     )
     setSelectedAreas(roleAreas)
-    setOriginalAreas(new Set(roleAreas))
+    setOriginalAreas(new Set<string>(roleAreas))
   }, [selectedRole, roleTemplates])
 
   const handleAreaToggle = (areaCode: string) => {

@@ -120,7 +120,7 @@ export function UserAreaOverrides({ userId, userRole, onUpdate }: UserAreaOverri
         setGrants(grantSet)
         setRevokes(revokeSet)
       } else if (mode === 'custom') {
-        const customSet = new Set(
+        const customSet = new Set<string>(
           (userAreasDataResponse.accessEntries || [])
             .filter((e: any) => e.accessType === 'grant')
             .map((e: any) => e.areaCode)
