@@ -27,6 +27,7 @@ interface UseUserAreasResult {
   error: Error | null
   hasAccess: (areaCode: AreaCode) => boolean
   isSuperAdmin: boolean
+  isAdmin: boolean
 }
 
 /**
@@ -39,6 +40,7 @@ export function useUserAreas(): UseUserAreasResult {
   const [error, setError] = useState<Error | null>(null)
 
   const isSuperAdmin = role === 'super_admin'
+  const isAdmin = role === 'admin' || role === 'super_admin'
 
   useEffect(() => {
     async function fetchUserAreas() {
@@ -105,6 +107,7 @@ export function useUserAreas(): UseUserAreasResult {
     error,
     hasAccess,
     isSuperAdmin,
+    isAdmin,
   }
 }
 

@@ -57,6 +57,7 @@ export interface NavSection {
   icon: React.ComponentType<{ className?: string }>;
   dashboardHref: string;
   items: NavItem[];
+  areaCode?: string; // For area-based access control
 }
 
 export const DEPARTMENT_SECTIONS: NavSection[] = [
@@ -65,6 +66,7 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     label: "Sales",
     icon: TrendingUp,
     dashboardHref: "/sales",
+    areaCode: "sales",
     items: [
       { href: "/sales", icon: LayoutDashboard, label: "Dashboard" },
       { href: "/orders", icon: PackageIcon, label: "Orders" },
@@ -82,6 +84,7 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     label: "Marketing",
     icon: Megaphone,
     dashboardHref: "/marketing",
+    areaCode: "marketing",
     items: [
       { href: "/marketing", icon: LayoutDashboard, label: "Dashboard" },
       { href: "/marketing/campaigns", icon: FileText, label: "Campaigns" },
@@ -100,6 +103,7 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     label: "Production",
     icon: Factory,
     dashboardHref: "/production",
+    areaCode: "production",
     items: [
       { href: "/production", icon: LayoutDashboard, label: "Dashboard" },
       { href: "/production/board", icon: Kanban, label: "Kanban Board" },
@@ -115,6 +119,7 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     label: "Operations",
     icon: Cog,
     dashboardHref: "/operations",
+    areaCode: "operations",
     items: [
       { href: "/operations", icon: LayoutDashboard, label: "Dashboard" },
       { href: "/tasks", icon: CheckSquare, label: "Tasks" },
@@ -127,6 +132,7 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     label: "Logistics",
     icon: Truck,
     dashboardHref: "/logistics",
+    areaCode: "logistics",
     items: [
       { href: "/logistics", icon: LayoutDashboard, label: "Dashboard" },
       { href: "/logistics/resources", icon: UserCog, label: "Resources" },
@@ -142,6 +148,7 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     label: "Finance",
     icon: DollarSign,
     dashboardHref: "/finance",
+    areaCode: "finance",
     items: [
       { href: "/finance", icon: LayoutDashboard, label: "Dashboard" },
       { href: "/finance/invoicing", icon: Receipt, label: "Invoicing" },
@@ -156,6 +163,7 @@ export const AI_SECTION: NavSection = {
   label: "AI & Automation",
   icon: Brain,
   dashboardHref: "/agent",
+  areaCode: "ai_automation",
   items: [
     { href: "/agent", icon: Bot, label: "AI Agent" },
     { href: "/agent/jobs", icon: Calendar, label: "Jobs" },
@@ -173,6 +181,12 @@ export const ADMIN_ITEM: NavItem = {
   href: "/admin",
   icon: Shield,
   label: "Admin",
+};
+
+export const SUPER_ADMIN_ITEM: NavItem = {
+  href: "/admin/roles",
+  icon: UserCog,
+  label: "Role Management",
 };
 
 // Generate initial expanded state from sections
