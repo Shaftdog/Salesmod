@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCurrentUser } from "@/hooks/use-appraisers";
+import { useUserAreas } from "@/hooks/use-user-areas";
 import {
   Collapsible,
   CollapsibleContent,
@@ -16,13 +16,16 @@ import {
   AI_SECTION,
   SYSTEM_ITEMS,
   ADMIN_ITEM,
+  SUPER_ADMIN_ITEM,
   getInitialExpandedState,
+  type NavSection,
 } from "@/lib/navigation-config";
 import { isActivePath } from "@/lib/breadcrumb-utils";
+import type { AreaCode } from "@/lib/admin/types";
 
 function Sidebar() {
   const pathname = usePathname();
-  const { data: currentUser, isLoading, error } = useCurrentUser();
+  const { hasAccess, isSuperAdmin, isAdmin, isLoading: areasLoading } = useUserAreas();
 
   // Track which sections are expanded - all start collapsed
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(
@@ -36,16 +39,43 @@ function Sidebar() {
     }));
   };
 
-  // Log user data loading errors
-  if (error) {
-    console.error('Failed to load user data:', error);
-  }
+  // Filter department sections based on user's area access
+  const accessibleSections = useMemo(() => {
+    // While loading, show all sections to prevent flash
+    if (areasLoading) {
+      return DEPARTMENT_SECTIONS;
+    }
+    // Super admin sees everything
+    if (isSuperAdmin) {
+      return DEPARTMENT_SECTIONS;
+    }
+    // Filter sections based on user's area access
+    return DEPARTMENT_SECTIONS.filter((section) => {
+      if (!section.areaCode) return true;
+      return hasAccess(section.areaCode as AreaCode);
+    });
+  }, [hasAccess, isSuperAdmin, areasLoading]);
 
-  // Build system items with conditional admin link
-  const systemItems = [
-    ...SYSTEM_ITEMS,
-    ...(currentUser?.role === "admin" ? [ADMIN_ITEM] : []),
-  ];
+  // Check if user has access to AI section
+  const showAISection = useMemo(() => {
+    if (areasLoading) return true;
+    if (isSuperAdmin) return true;
+    return hasAccess('ai_automation' as AreaCode);
+  }, [hasAccess, isSuperAdmin, areasLoading]);
+
+  // Build system items with conditional admin links
+  const systemItems = useMemo(() => {
+    const items = [...SYSTEM_ITEMS];
+    // Add admin link for admins and super admins
+    if (isAdmin) {
+      items.push(ADMIN_ITEM);
+    }
+    // Add role management link for super admins only
+    if (isSuperAdmin) {
+      items.push(SUPER_ADMIN_ITEM);
+    }
+    return items;
+  }, [isAdmin, isSuperAdmin]);
 
   return (
     <aside className="fixed inset-y-0 left-0 z-10 hidden w-60 flex-col border-r bg-background sm:flex">
@@ -94,9 +124,9 @@ function Sidebar() {
 
         <div className="my-2 border-t" />
 
-        {/* Departmental Sections */}
+        {/* Departmental Sections - filtered by user access */}
         <div className="space-y-1">
-          {DEPARTMENT_SECTIONS.map((section) => (
+          {accessibleSections.map((section) => (
             <Collapsible
               key={section.key}
               open={expandedSections[section.key]}
@@ -139,46 +169,48 @@ function Sidebar() {
         </div>
       </nav>
 
-      {/* Bottom Section - AI & System - Fixed at bottom */}
-      <div className="flex-shrink-0 border-t px-3 py-5">
-        <Collapsible
-          open={expandedSections[AI_SECTION.key]}
-          onOpenChange={() => toggleSection(AI_SECTION.key)}
-        >
-          <CollapsibleTrigger
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-            aria-label={`${AI_SECTION.label} navigation`}
-            aria-expanded={expandedSections[AI_SECTION.key]}
-            aria-controls={`${AI_SECTION.key}-nav`}
+      {/* Bottom Section - AI & System - Fixed at bottom (conditionally shown) */}
+      {showAISection && (
+        <div className="flex-shrink-0 border-t px-3 py-5">
+          <Collapsible
+            open={expandedSections[AI_SECTION.key]}
+            onOpenChange={() => toggleSection(AI_SECTION.key)}
           >
-            <AI_SECTION.icon className="h-4 w-4" />
-            <span className="flex-1 text-left">{AI_SECTION.label}</span>
-            {expandedSections[AI_SECTION.key] ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-          </CollapsibleTrigger>
-          <CollapsibleContent
-            className="ml-4 space-y-1 border-l pl-2"
-            id={`${AI_SECTION.key}-nav`}
-          >
-            {AI_SECTION.items.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
-                  isActivePath(item.href, pathname) && "bg-accent text-accent-foreground"
-                )}
-              >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            ))}
-          </CollapsibleContent>
-        </Collapsible>
-      </div>
+            <CollapsibleTrigger
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+              aria-label={`${AI_SECTION.label} navigation`}
+              aria-expanded={expandedSections[AI_SECTION.key]}
+              aria-controls={`${AI_SECTION.key}-nav`}
+            >
+              <AI_SECTION.icon className="h-4 w-4" />
+              <span className="flex-1 text-left">{AI_SECTION.label}</span>
+              {expandedSections[AI_SECTION.key] ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </CollapsibleTrigger>
+            <CollapsibleContent
+              className="ml-4 space-y-1 border-l pl-2"
+              id={`${AI_SECTION.key}-nav`}
+            >
+              {AI_SECTION.items.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
+                    isActivePath(item.href, pathname) && "bg-accent text-accent-foreground"
+                  )}
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+      )}
     </aside>
   );
 }
