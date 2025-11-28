@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { ArrowLeft, Save, Trash2, AlertCircle, CheckCircle, Activity } from 'lucide-react'
+import { ArrowLeft, Save, Trash2, AlertCircle, CheckCircle, Activity, KeyRound, Mail, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
@@ -60,6 +60,8 @@ export default function UserDetailsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isSendingReset, setIsSendingReset] = useState(false)
+  const [isSendingInvite, setIsSendingInvite] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
@@ -153,6 +155,58 @@ export default function UserDetailsPage() {
       console.error('Error deleting user:', err)
       setError(err instanceof Error ? err.message : 'Unknown error')
       setIsDeleting(false)
+    }
+  }
+
+  const handleSendPasswordReset = async () => {
+    try {
+      setIsSendingReset(true)
+      setError(null)
+      setSuccessMessage(null)
+
+      const response = await fetch(`/api/admin/users/${userId}/reset-password`, {
+        method: 'POST',
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send password reset')
+      }
+
+      setSuccessMessage(data.message || 'Password reset email sent')
+      setTimeout(() => setSuccessMessage(null), 5000)
+    } catch (err) {
+      console.error('Error sending password reset:', err)
+      setError(err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setIsSendingReset(false)
+    }
+  }
+
+  const handleSendInvite = async () => {
+    try {
+      setIsSendingInvite(true)
+      setError(null)
+      setSuccessMessage(null)
+
+      const response = await fetch(`/api/admin/users/${userId}/send-invite`, {
+        method: 'POST',
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send invite')
+      }
+
+      setSuccessMessage(data.message || 'Login link sent')
+      setTimeout(() => setSuccessMessage(null), 5000)
+    } catch (err) {
+      console.error('Error sending invite:', err)
+      setError(err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setIsSendingInvite(false)
     }
   }
 
@@ -332,6 +386,53 @@ export default function UserDetailsPage() {
 
         {/* User Info & Activity */}
         <div className="space-y-6">
+          {/* User Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>User Actions</CardTitle>
+              <CardDescription>
+                Send password reset or login links to this user
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-col gap-3">
+                <Button
+                  variant="outline"
+                  onClick={handleSendPasswordReset}
+                  disabled={isSendingReset}
+                  className="w-full justify-start"
+                >
+                  {isSendingReset ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <KeyRound className="h-4 w-4 mr-2" />
+                  )}
+                  {isSendingReset ? 'Sending...' : 'Send Password Reset'}
+                </Button>
+                <p className="text-xs text-muted-foreground ml-6 -mt-1">
+                  Sends an email with a link to reset their password
+                </p>
+
+                <Button
+                  variant="outline"
+                  onClick={handleSendInvite}
+                  disabled={isSendingInvite}
+                  className="w-full justify-start"
+                >
+                  {isSendingInvite ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Mail className="h-4 w-4 mr-2" />
+                  )}
+                  {isSendingInvite ? 'Sending...' : 'Send Login Link'}
+                </Button>
+                <p className="text-xs text-muted-foreground ml-6 -mt-1">
+                  Sends a magic link for password-less login
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* User Info */}
           <Card>
             <CardHeader>
