@@ -254,12 +254,26 @@ export async function requireRole(
 /**
  * Require admin role - throws error if user is not an admin
  * Use this in admin-only API routes
+ * Note: Accepts both 'admin' and 'super_admin' roles
  */
 export async function requireAdmin(
   supabase?: SupabaseClient,
   customMessage?: string
 ): Promise<string> {
-  return requireRole('admin', supabase, customMessage || 'Unauthorized: Admin access required')
+  const userId = await getCurrentUserId(supabase)
+
+  if (!userId) {
+    throw new Error('Unauthorized: Not authenticated')
+  }
+
+  const isAdminUser = await isAdmin(userId, supabase)
+
+  if (!isAdminUser) {
+    const message = customMessage || 'Unauthorized: Admin access required'
+    throw new Error(message)
+  }
+
+  return userId
 }
 
 /**
