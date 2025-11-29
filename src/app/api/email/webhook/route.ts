@@ -30,17 +30,17 @@ async function handleBounce(supabase: any, data: any) {
       return;
     }
 
-    // Get org_id from contact's client
+    // SECURITY: Get tenant_id from contact's client for proper tenant isolation
     const { data: client } = await supabase
       .from('clients')
-      .select('org_id')
+      .select('tenant_id')
       .eq('id', contact.client_id)
       .single();
 
-    const orgId = client?.org_id;
+    const tenantId = client?.tenant_id;
 
-    if (!orgId) {
-      console.error('Could not determine org_id for contact:', contact.id);
+    if (!tenantId) {
+      console.error('Could not determine tenant_id for contact:', contact.id);
       return;
     }
 
@@ -61,7 +61,7 @@ async function handleBounce(supabase: any, data: any) {
     const { data: existingSuppression } = await supabase
       .from('email_suppressions')
       .select('*')
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .eq('contact_id', contact.id)
       .single();
 
@@ -69,7 +69,7 @@ async function handleBounce(supabase: any, data: any) {
       // Hard bounce - immediate suppression
       if (!existingSuppression) {
         await supabase.from('email_suppressions').insert({
-          org_id: orgId,
+          tenant_id: tenantId,
           contact_id: contact.id,
           email: emailAddress,
           reason: 'bounce',
@@ -102,7 +102,7 @@ async function handleBounce(supabase: any, data: any) {
 
       // Create notification
       await supabase.from('email_notifications').insert({
-        org_id: orgId,
+        tenant_id: tenantId,
         contact_id: contact.id,
         type: 'bounce_hard',
         email: emailAddress,
@@ -123,7 +123,7 @@ async function handleBounce(supabase: any, data: any) {
 
       if (!existingSuppression) {
         await supabase.from('email_suppressions').insert({
-          org_id: orgId,
+          tenant_id: tenantId,
           contact_id: contact.id,
           email: emailAddress,
           reason: shouldSuppress ? 'bounce' : 'soft_bounce_tracking',
@@ -157,7 +157,7 @@ async function handleBounce(supabase: any, data: any) {
         });
 
         await supabase.from('email_notifications').insert({
-          org_id: orgId,
+          tenant_id: tenantId,
           contact_id: contact.id,
           type: 'bounce_soft',
           email: emailAddress,

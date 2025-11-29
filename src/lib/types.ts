@@ -32,7 +32,7 @@ export interface User {
 export interface Client {
   id: string;
   companyName: string;
-  primaryContact: string;
+  primaryContact: string | null;
   email: string;
   phone: string;
   address: string;
@@ -47,7 +47,7 @@ export interface Client {
   feeSchedule?: any; // jsonb
   preferredTurnaround?: number;
   specialRequirements?: string;
-  
+
   // Relations
   role?: PartyRole;
 }
@@ -97,7 +97,7 @@ export interface Order {
   createdAt: string;
   updatedAt: string;
   metadata?: any; // jsonb
-  
+
   // Appraisal Workflow Fields (added 2025-10-24)
   scopeOfWork?: 'desktop' | 'exterior_only' | 'interior' | 'inspection_only' | 'desk_review' | 'field_review';
   intendedUse?: string; // Refinance, Purchase, FHA, etc. (30+ values)
@@ -113,7 +113,7 @@ export interface Order {
   newConstructionType?: 'community_builder' | 'spec_custom' | 'refinance_newly_constructed';
   zoningType?: 'residential' | 'planned_unit_development' | 'two_unit' | 'three_unit' | 'four_unit' | 'mixed_use' | 'agricultural' | 'commercial';
   inspectionDate?: string;
-  
+
   props?: {
     // Custom fields from imports
     unit?: string; // Unit number if extracted from address
@@ -123,7 +123,7 @@ export interface Order {
     };
     [key: string]: any; // Other custom fields
   };
-  
+
   // Relations
   client?: Client;
   assignee?: User;
@@ -140,7 +140,7 @@ export interface OrderHistory {
   changedById: string; // user id
   notes?: string;
   createdAt: string;
-  
+
   // Relations
   changedBy?: User;
 }
@@ -252,7 +252,7 @@ export interface ClientTag {
   clientId: string;
   tagId: string;
   createdAt: string;
-  
+
   // Relations
   tag?: Tag;
 }
@@ -280,7 +280,7 @@ export interface Deal {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
-  
+
   // Relations
   client?: Client;
   contact?: Contact;
@@ -310,7 +310,7 @@ export interface Task {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
-  
+
   // Relations
   client?: Client;
   contact?: Contact;
@@ -351,7 +351,7 @@ export interface Case {
   createdAt: string;
   updatedAt: string;
   closedAt?: string;
-  
+
   // Relations
   client?: Client;
   contact?: Contact;
@@ -367,7 +367,7 @@ export interface CaseComment {
   isInternal: boolean;
   createdBy: string;
   createdAt: string;
-  
+
   // Relations
   creator?: User;
 }
@@ -378,7 +378,7 @@ export interface CaseComment {
 
 export const goalMetricTypes = [
   'order_volume',
-  'revenue', 
+  'revenue',
   'new_clients',
   'completion_rate',
   'deal_value',
@@ -402,7 +402,7 @@ export interface Goal {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
-  
+
   // Relations
   assignee?: User;
   creator?: User;
@@ -461,11 +461,11 @@ export interface PropertyUnit {
   props?: any; // jsonb for flexible storage (bed/bath, sqft, owner, etc.)
   createdAt: string;
   updatedAt: string;
-  
+
   // Computed fields
   priorWork3y?: number; // USPAP prior work count (3 years) for this unit
   orderCount?: number; // Total orders for this unit
-  
+
   // Relations
   property?: Property;
   orders?: Order[];

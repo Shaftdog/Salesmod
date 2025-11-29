@@ -23,7 +23,7 @@ import { RoleSelect } from "@/components/shared/role-select";
 
 const formSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
-  primaryContact: z.string().min(1, "Primary contact name is required"),
+  primaryContact: z.string().optional(),
   email: z.string().email("Invalid email address"),
   phone: z.string().min(1, "Phone number is required"),
   address: z.string().min(1, "Address is required"),
@@ -38,7 +38,7 @@ export function ClientForm() {
   const { toast } = useToast();
   const router = useRouter();
   const { createClient, isCreating } = useClients();
-  
+
   const form = useForm<ClientFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -57,7 +57,7 @@ export function ClientForm() {
     try {
       await createClient({
         company_name: data.companyName,
-        primary_contact: data.primaryContact,
+        primary_contact: data.primaryContact || null,
         email: data.email,
         phone: data.phone,
         address: data.address,
@@ -68,7 +68,7 @@ export function ClientForm() {
         active_orders: 0,
         total_revenue: 0,
       } as any);
-      
+
       router.push("/clients");
     } catch (error: any) {
       console.error('Failed to create client:', error);
@@ -104,7 +104,7 @@ export function ClientForm() {
             name="primaryContact"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Primary Contact <span className="text-destructive">*</span></FormLabel>
+                <FormLabel>Primary Contact</FormLabel>
                 <FormControl>
                   <Input placeholder="Alice Wonderland" {...field} />
                 </FormControl>
@@ -196,13 +196,13 @@ export function ClientForm() {
           )}
         />
         <div className="flex justify-end gap-4">
-            <Button type="button" variant="outline" onClick={() => router.back()} disabled={isCreating}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isCreating}>
-                {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isCreating ? "Saving..." : "Save Client"}
-            </Button>
+          <Button type="button" variant="outline" onClick={() => router.back()} disabled={isCreating}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isCreating}>
+            {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isCreating ? "Saving..." : "Save Client"}
+          </Button>
         </div>
       </form>
     </Form>

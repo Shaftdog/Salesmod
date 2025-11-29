@@ -600,11 +600,26 @@ async function processActiveJobs(orgId: string, runId: string): Promise<number> 
   const supabase = createServiceRoleClient();
   let totalCardsCreated = 0;
 
-  // Get all running jobs for this org
+  // SECURITY: Get user's tenant_id for proper tenant scoping
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+
+  if (!tenantId) {
+    const errorMsg = `User ${orgId} has no tenant_id assigned - cannot process jobs securely`;
+    console.error(`[Jobs] ${errorMsg}`);
+    throw new Error(errorMsg);
+  }
+
+  // Get all running jobs for this tenant
   const { data: activeJobs, error: jobsError } = await supabase
     .from('jobs')
     .select('*')
-    .eq('org_id', orgId)
+    .eq('tenant_id', tenantId)
     .eq('status', 'running')
     .order('created_at', { ascending: true });
 

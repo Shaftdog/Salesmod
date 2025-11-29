@@ -29,7 +29,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { User, Client, OrderType, PropertyType, OrderPriority, Order } from "@/lib/types";
 import { orderTypes, propertyTypes, orderPriorities } from "@/lib/types";
 import {
-    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../ui/alert-dialog";
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+} from "../ui/alert-dialog";
 import { QuickClientForm } from "./quick-client-form";
 import { useOrders } from "@/hooks/use-orders";
 import { useClients } from "@/hooks/use-clients";
@@ -42,7 +43,7 @@ import { isFeeSimplePropertyType } from "@/lib/units";
 import { usePropertyUnits } from "@/hooks/use-property-units";
 import { useProductionTemplates, useCreateProductionCard } from "@/hooks/use-production";
 import type { ProductionTemplateWithTasks } from "@/types/production";
-  
+
 
 const formSchema = z.object({
   // Step 1
@@ -94,7 +95,7 @@ type OrderFormProps = {
 export function OrderForm({ appraisers, clients: initialClients, initialValues }: OrderFormProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiSuggestion, setAiSuggestion] = useState<{appraiserId: string, reason: string} | null>(null);
+  const [aiSuggestion, setAiSuggestion] = useState<{ appraiserId: string, reason: string } | null>(null);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const [potentialDuplicates, setPotentialDuplicates] = useState<Order[]>([]);
   const [propertyIdFromUrl, setPropertyIdFromUrl] = useState<string | undefined>(initialValues?.propertyId);
@@ -139,14 +140,14 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
       ...form.getValues(),
       dueDate: addDays(new Date(), 7),
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  
+
   const handleQuickAddClient = async (clientData: any) => {
     try {
       const newClient = await createClient({
         company_name: clientData.companyName,
-        primary_contact: clientData.primaryContact,
+        primary_contact: clientData.primaryContact || null,
         email: clientData.email,
         phone: clientData.phone,
         address: clientData.address,
@@ -156,7 +157,7 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
         active_orders: 0,
         total_revenue: 0,
       } as any);
-      
+
       form.setValue("clientId", newClient.id);
     } catch (error) {
       console.error('Failed to add client:', error);
@@ -169,58 +170,58 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
     setAiSuggestion(null);
     const validation = await form.trigger(["propertyAddress", "propertyCity", "propertyState", "propertyZip", "priority", "orderType"]);
     if (!validation) {
-        toast({
-            variant: "destructive",
-            title: "Missing Information",
-            description: "Please fill out property and order details before using AI suggestion.",
-        });
-        setIsAiLoading(false);
-        return;
+      toast({
+        variant: "destructive",
+        title: "Missing Information",
+        description: "Please fill out property and order details before using AI suggestion.",
+      });
+      setIsAiLoading(false);
+      return;
     }
     try {
-        const orderDetails = form.getValues();
-        const response = await fetch('/api/suggest-appraiser', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                propertyAddress: orderDetails.propertyAddress,
-                propertyCity: orderDetails.propertyCity,
-                propertyState: orderDetails.propertyState,
-                propertyZip: orderDetails.propertyZip,
-                orderPriority: orderDetails.priority,
-                orderType: orderDetails.orderType,
-                appraisers: appraisers.map(a => ({
-                    id: a.id,
-                    name: a.name,
-                    availability: a.availability ?? false,
-                    geographicCoverage: a.geographicCoverage ?? '',
-                    workload: a.workload ?? 0,
-                    rating: a.rating ?? 0,
-                })),
-            }),
-        });
+      const orderDetails = form.getValues();
+      const response = await fetch('/api/suggest-appraiser', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          propertyAddress: orderDetails.propertyAddress,
+          propertyCity: orderDetails.propertyCity,
+          propertyState: orderDetails.propertyState,
+          propertyZip: orderDetails.propertyZip,
+          orderPriority: orderDetails.priority,
+          orderType: orderDetails.orderType,
+          appraisers: appraisers.map(a => ({
+            id: a.id,
+            name: a.name,
+            availability: a.availability ?? false,
+            geographicCoverage: a.geographicCoverage ?? '',
+            workload: a.workload ?? 0,
+            rating: a.rating ?? 0,
+          })),
+        }),
+      });
 
-        if (!response.ok) {
-            throw new Error('Failed to get AI suggestion');
-        }
+      if (!response.ok) {
+        throw new Error('Failed to get AI suggestion');
+      }
 
-        const result = await response.json();
-        setAiSuggestion(result);
-        toast({
-            title: "AI Suggestion Ready",
-            description: "Review the suggested appraiser below.",
-        });
+      const result = await response.json();
+      setAiSuggestion(result);
+      toast({
+        title: "AI Suggestion Ready",
+        description: "Review the suggested appraiser below.",
+      });
     } catch (error) {
-        console.error("AI suggestion failed:", error);
-        toast({
-            variant: "destructive",
-            title: "AI Suggestion Failed",
-            description: "Could not get an appraiser suggestion. Please try again.",
-        });
+      console.error("AI suggestion failed:", error);
+      toast({
+        variant: "destructive",
+        title: "AI Suggestion Failed",
+        description: "Could not get an appraiser suggestion. Please try again.",
+      });
     } finally {
-        setIsAiLoading(false);
+      setIsAiLoading(false);
     }
   }
 
@@ -244,7 +245,7 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
     form.setValue("propertyCity", standardized.city);
     form.setValue("propertyState", standardized.state);
     form.setValue("propertyZip", standardized.zip);
-    
+
     toast({
       title: "Address Standardized",
       description: overrideReason ? `Address updated: ${overrideReason}` : "Address has been standardized",
@@ -345,15 +346,15 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
     }
 
     if (currentStep === 0) { // Property Info step
-        checkForDuplicates();
+      checkForDuplicates();
     } else if (currentStep < steps.length - 1) {
-        setCurrentStep((step) => step + 1);
+      setCurrentStep((step) => step + 1);
     }
   };
 
   const proceedToNextStep = () => {
     if (currentStep < steps.length - 1) {
-        setCurrentStep((step) => step + 1);
+      setCurrentStep((step) => step + 1);
     }
   }
 
@@ -362,21 +363,21 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
     const thirtyDaysAgo = subDays(new Date(), 30);
 
     const duplicates = storeOrders.filter(order => {
-        const orderDate = new Date(order.orderedDate);
-        return (
-            order.propertyAddress.toLowerCase() === propertyAddress.toLowerCase() &&
-            order.propertyCity.toLowerCase() === propertyCity.toLowerCase() &&
-            order.propertyState.toLowerCase() === propertyState.toLowerCase() &&
-            order.propertyZip === propertyZip &&
-            orderDate >= thirtyDaysAgo
-        );
+      const orderDate = new Date(order.orderedDate);
+      return (
+        order.propertyAddress.toLowerCase() === propertyAddress.toLowerCase() &&
+        order.propertyCity.toLowerCase() === propertyCity.toLowerCase() &&
+        order.propertyState.toLowerCase() === propertyState.toLowerCase() &&
+        order.propertyZip === propertyZip &&
+        orderDate >= thirtyDaysAgo
+      );
     });
 
     if (duplicates.length > 0) {
-        setPotentialDuplicates(duplicates);
-        setShowDuplicateWarning(true);
+      setPotentialDuplicates(duplicates);
+      setShowDuplicateWarning(true);
     } else {
-        proceedToNextStep();
+      proceedToNextStep();
     }
   };
 
@@ -394,10 +395,10 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
       <FormProvider {...form}>
         <form onSubmit={form.handleSubmit(processForm)} className="space-y-8">
           <Progress value={progress} className="w-full" />
-          
+
           <div className="min-h-[450px]">
             <fieldset disabled={isCreating}>
-              {currentStep === 0 && <Step1 
+              {currentStep === 0 && <Step1
                 onAddressValidation={handleAddressValidation}
                 onAcceptAddressSuggestion={handleAcceptAddressSuggestion}
                 propertyId={propertyIdFromUrl}
@@ -419,9 +420,9 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
                 Next <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             )}
-             {currentStep === steps.length - 2 && (
-               <Button type="button" onClick={next} disabled={isCreating}>
-                 Review Order
+            {currentStep === steps.length - 2 && (
+              <Button type="button" onClick={next} disabled={isCreating}>
+                Review Order
               </Button>
             )}
             {currentStep === steps.length - 1 && (
@@ -442,7 +443,7 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
               An order for this property address was created recently. Are you sure you want to create a new one?
               <ul className="mt-2 list-disc list-inside bg-muted p-2 rounded-md">
                 {potentialDuplicates.map(d => (
-                    <li key={d.id} className="text-sm">Order #{d.orderNumber} created on {format(new Date(d.orderedDate), "PPP")}</li>
+                  <li key={d.id} className="text-sm">Order #{d.orderNumber} created on {format(new Date(d.orderedDate), "PPP")}</li>
                 ))}
               </ul>
             </AlertDialogDescription>
@@ -450,8 +451,8 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => {
-                setShowDuplicateWarning(false);
-                proceedToNextStep();
+              setShowDuplicateWarning(false);
+              proceedToNextStep();
             }}>
               Create Anyway
             </AlertDialogAction>
@@ -462,11 +463,11 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
   );
 }
 
-const Step1 = ({ 
-  onAddressValidation, 
+const Step1 = ({
+  onAddressValidation,
   onAcceptAddressSuggestion,
   propertyId
-}: { 
+}: {
   onAddressValidation: (result: AddressValidationResult) => void;
   onAcceptAddressSuggestion: (standardized: StandardizedAddress, overrideReason?: string) => void;
   propertyId?: string;
@@ -478,10 +479,10 @@ const Step1 = ({
   const propertyZip = watch("propertyZip");
   const propertyType = watch("propertyType");
   const unitId = watch("unitId");
-  
+
   // Fetch units if we have a propertyId
   const { data: units = [] } = usePropertyUnits(propertyId);
-  
+
   // Show unit selector if property is fee-simple type OR if property has units
   const shouldShowUnitSelector = propertyId && (
     isFeeSimplePropertyType(propertyType) || units.length > 0
@@ -497,29 +498,29 @@ const Step1 = ({
         </FormItem>
       )} />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <FormField name="propertyCity" control={control} render={({ field }) => (
-        <FormItem>
-          <FormLabel>City <span className="text-destructive">*</span></FormLabel>
-          <FormControl><Input placeholder="San Francisco" {...field} /></FormControl>
-          <FormMessage />
-        </FormItem>
-      )} />
-      <FormField name="propertyState" control={control} render={({ field }) => (
-        <FormItem>
-          <FormLabel>State <span className="text-destructive">*</span></FormLabel>
-          <FormControl><Input placeholder="CA" {...field} /></FormControl>
-          <FormMessage />
-        </FormItem>
-      )} />
-      <FormField name="propertyZip" control={control} render={({ field }) => (
-        <FormItem>
-          <FormLabel>ZIP Code <span className="text-destructive">*</span></FormLabel>
-          <FormControl><Input placeholder="94103" {...field} /></FormControl>
-          <FormMessage />
-        </FormItem>
-      )} />
+        <FormField name="propertyCity" control={control} render={({ field }) => (
+          <FormItem>
+            <FormLabel>City <span className="text-destructive">*</span></FormLabel>
+            <FormControl><Input placeholder="San Francisco" {...field} /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
+        <FormField name="propertyState" control={control} render={({ field }) => (
+          <FormItem>
+            <FormLabel>State <span className="text-destructive">*</span></FormLabel>
+            <FormControl><Input placeholder="CA" {...field} /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
+        <FormField name="propertyZip" control={control} render={({ field }) => (
+          <FormItem>
+            <FormLabel>ZIP Code <span className="text-destructive">*</span></FormLabel>
+            <FormControl><Input placeholder="94103" {...field} /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
       </div>
-      
+
       {/* Address Validation Component */}
       <AddressValidator
         street={propertyAddress || ""}
@@ -531,21 +532,21 @@ const Step1 = ({
         autoValidate={true}
         className="mt-4"
       />
-       <FormField control={control} name="propertyType" render={({ field }) => (
+      <FormField control={control} name="propertyType" render={({ field }) => (
         <FormItem>
-            <FormLabel>Property Type <span className="text-destructive">*</span></FormLabel>
-            <Select onValueChange={field.onChange} defaultValue={field.value}>
+          <FormLabel>Property Type <span className="text-destructive">*</span></FormLabel>
+          <Select onValueChange={field.onChange} defaultValue={field.value}>
             <FormControl>
-                <SelectTrigger><SelectValue placeholder="Select a property type" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select a property type" /></SelectTrigger>
             </FormControl>
             <SelectContent>
-                {propertyTypes.map(type => <SelectItem key={type} value={type} className="capitalize">{type.replace(/_/g, " ")}</SelectItem>)}
+              {propertyTypes.map(type => <SelectItem key={type} value={type} className="capitalize">{type.replace(/_/g, " ")}</SelectItem>)}
             </SelectContent>
-            </Select>
-            <FormMessage />
+          </Select>
+          <FormMessage />
         </FormItem>
-        )} />
-      
+      )} />
+
       {/* Unit Selector - only for fee-simple properties or properties with existing units */}
       {shouldShowUnitSelector && (
         <div className="space-y-2">
@@ -563,7 +564,7 @@ const Step1 = ({
           />
         </div>
       )}
-      
+
       <FormField name="accessInstructions" control={control} render={({ field }) => (
         <FormItem>
           <FormLabel>Access Instructions <span className="text-muted-foreground">(optional)</span></FormLabel>
@@ -571,7 +572,7 @@ const Step1 = ({
           <FormMessage />
         </FormItem>
       )} />
-       <FormField name="specialInstructions" control={control} render={({ field }) => (
+      <FormField name="specialInstructions" control={control} render={({ field }) => (
         <FormItem>
           <FormLabel>Special Instructions <span className="text-muted-foreground">(optional)</span></FormLabel>
           <FormControl><Textarea placeholder="e.g. Beware of dog, gate code is #1234" {...field} /></FormControl>
@@ -583,228 +584,228 @@ const Step1 = ({
 }
 
 const Step2 = () => {
-    const { control } = useFormContext();
-    return (
-        <div className="space-y-4">
-             <FormField control={control} name="orderType" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Order Type <span className="text-destructive">*</span></FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Select an order type" /></SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        {orderTypes.map(type => <SelectItem key={type} value={type} className="capitalize">{type.replace(/_/g, " ")}</SelectItem>)}
-                    </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-             )} />
-            <FormField name="loanType" control={control} render={({ field }) => (
-                <FormItem>
-                <FormLabel>Loan Type <span className="text-muted-foreground">(optional)</span></FormLabel>
-                <FormControl><Input placeholder="e.g. Conventional, FHA, VA" {...field} /></FormControl>
-                <FormMessage />
-                </FormItem>
-            )} />
-            <FormField name="loanNumber" control={control} render={({ field }) => (
-                <FormItem>
-                <FormLabel>Loan Number <span className="text-muted-foreground">(optional)</span></FormLabel>
-                <FormControl><Input placeholder="e.g. 1234567890" {...field} /></FormControl>
-                <FormMessage />
-                </FormItem>
-            )} />
-            <FormField name="loanAmount" control={control} render={({ field }) => (
-                <FormItem>
-                <FormLabel>Loan Amount <span className="text-muted-foreground">(optional)</span></FormLabel>
-                <FormControl><Input type="number" placeholder="e.g. 500000" {...field} /></FormControl>
-                <FormMessage />
-                </FormItem>
-            )} />
-        </div>
-    )
+  const { control } = useFormContext();
+  return (
+    <div className="space-y-4">
+      <FormField control={control} name="orderType" render={({ field }) => (
+        <FormItem>
+          <FormLabel>Order Type <span className="text-destructive">*</span></FormLabel>
+          <Select onValueChange={field.onChange} defaultValue={field.value}>
+            <FormControl>
+              <SelectTrigger><SelectValue placeholder="Select an order type" /></SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              {orderTypes.map(type => <SelectItem key={type} value={type} className="capitalize">{type.replace(/_/g, " ")}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField name="loanType" control={control} render={({ field }) => (
+        <FormItem>
+          <FormLabel>Loan Type <span className="text-muted-foreground">(optional)</span></FormLabel>
+          <FormControl><Input placeholder="e.g. Conventional, FHA, VA" {...field} /></FormControl>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField name="loanNumber" control={control} render={({ field }) => (
+        <FormItem>
+          <FormLabel>Loan Number <span className="text-muted-foreground">(optional)</span></FormLabel>
+          <FormControl><Input placeholder="e.g. 1234567890" {...field} /></FormControl>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField name="loanAmount" control={control} render={({ field }) => (
+        <FormItem>
+          <FormLabel>Loan Amount <span className="text-muted-foreground">(optional)</span></FormLabel>
+          <FormControl><Input type="number" placeholder="e.g. 500000" {...field} /></FormControl>
+          <FormMessage />
+        </FormItem>
+      )} />
+    </div>
+  )
 }
 
 const Step3 = ({ clients, onQuickAdd }: { clients: Client[], onQuickAdd: (data: any) => void }) => {
-    const { control } = useFormContext();
-    return (
-        <div className="space-y-4">
-             <FormField control={control} name="clientId" render={({ field }) => (
-                <FormItem className="flex flex-col">
-                    <FormLabel>Client <span className="text-destructive">*</span></FormLabel>
-                    <ClientSelector clients={clients} value={field.value} onChange={field.onChange} onQuickAdd={onQuickAdd} />
-                    <FormMessage />
-                </FormItem>
-            )} />
-            <FormField name="borrowerName" control={control} render={({ field }) => (
-                <FormItem>
-                <FormLabel>Borrower Name <span className="text-destructive">*</span></FormLabel>
-                <FormControl><Input placeholder="John Borrower" {...field} /></FormControl>
-                <FormMessage />
-                </FormItem>
-            )} />
-            <FormField name="loanOfficer" control={control} render={({ field }) => (
-                <FormItem>
-                <FormLabel>Loan Officer <span className="text-muted-foreground">(optional)</span></FormLabel>
-                <FormControl><Input placeholder="Jane Officer" {...field} /></FormControl>
-                <FormMessage />
-                </FormItem>
-            )} />
-            <FormField name="processorName" control={control} render={({ field }) => (
-                <FormItem>
-                <FormLabel>Processor Name <span className="text-muted-foreground">(optional)</span></FormLabel>
-                <FormControl><Input placeholder="Peter Processor" {...field} /></FormControl>
-                <FormMessage />
-                </FormItem>
-            )} />
-        </div>
-    )
+  const { control } = useFormContext();
+  return (
+    <div className="space-y-4">
+      <FormField control={control} name="clientId" render={({ field }) => (
+        <FormItem className="flex flex-col">
+          <FormLabel>Client <span className="text-destructive">*</span></FormLabel>
+          <ClientSelector clients={clients} value={field.value} onChange={field.onChange} onQuickAdd={onQuickAdd} />
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField name="borrowerName" control={control} render={({ field }) => (
+        <FormItem>
+          <FormLabel>Borrower Name <span className="text-destructive">*</span></FormLabel>
+          <FormControl><Input placeholder="John Borrower" {...field} /></FormControl>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField name="loanOfficer" control={control} render={({ field }) => (
+        <FormItem>
+          <FormLabel>Loan Officer <span className="text-muted-foreground">(optional)</span></FormLabel>
+          <FormControl><Input placeholder="Jane Officer" {...field} /></FormControl>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField name="processorName" control={control} render={({ field }) => (
+        <FormItem>
+          <FormLabel>Processor Name <span className="text-muted-foreground">(optional)</span></FormLabel>
+          <FormControl><Input placeholder="Peter Processor" {...field} /></FormControl>
+          <FormMessage />
+        </FormItem>
+      )} />
+    </div>
+  )
 }
 
 const Step4 = ({ appraisers, productionTemplates, onSuggest, isLoading }: { appraisers: User[], productionTemplates: ProductionTemplateWithTasks[], onSuggest: () => void, isLoading: boolean }) => {
-    const { control } = useFormContext();
-    return (
-        <div className="space-y-4">
-            <FormField control={control} name="priority" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Priority <span className="text-destructive">*</span></FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Select priority level" /></SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        {orderPriorities.map(p => <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>)}
-                    </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-             )} />
-             <FormField control={control} name="dueDate" render={({ field }) => (
-                <FormItem className="flex flex-col">
-                    <FormLabel>Due Date <span className="text-destructive">*</span></FormLabel>
-                    <Popover>
-                        <PopoverTrigger asChild>
-                        <FormControl>
-                            <Button
-                            variant={"outline"}
-                            className={cn(
-                                "w-[240px] pl-3 text-left font-normal",
-                                !field.value && "text-muted-foreground"
-                            )}
-                            >
-                            {field.value ? (
-                                format(field.value, "PPP")
-                            ) : (
-                                <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                        </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) => date < new Date()}
-                            initialFocus
-                        />
-                        </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                </FormItem>
-            )} />
-             <FormField name="feeAmount" control={control} render={({ field }) => (
-                <FormItem>
-                <FormLabel>Fee Amount <span className="text-destructive">*</span></FormLabel>
-                <FormControl><Input type="number" placeholder="e.g. 500.00" {...field} /></FormControl>
-                <FormMessage />
-                </FormItem>
-            )} />
-            <div className="space-y-2">
-                <FormField control={control} name="assignedTo" render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Assign To Appraiser <span className="text-muted-foreground">(optional)</span></FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                        <FormControl>
-                            <SelectTrigger><SelectValue placeholder="Select an appraiser" /></SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                            <SelectItem value="unassigned">Unassigned</SelectItem>
-                            {appraisers.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
-                        </SelectContent>
-                        </Select>
-                        <FormMessage />
-                    </FormItem>
-                )} />
-                <Button type="button" variant="outline" size="sm" onClick={onSuggest} disabled={isLoading}>
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-                    AI Suggest Appraiser
+  const { control } = useFormContext();
+  return (
+    <div className="space-y-4">
+      <FormField control={control} name="priority" render={({ field }) => (
+        <FormItem>
+          <FormLabel>Priority <span className="text-destructive">*</span></FormLabel>
+          <Select onValueChange={field.onChange} defaultValue={field.value}>
+            <FormControl>
+              <SelectTrigger><SelectValue placeholder="Select priority level" /></SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              {orderPriorities.map(p => <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField control={control} name="dueDate" render={({ field }) => (
+        <FormItem className="flex flex-col">
+          <FormLabel>Due Date <span className="text-destructive">*</span></FormLabel>
+          <Popover>
+            <PopoverTrigger asChild>
+              <FormControl>
+                <Button
+                  variant={"outline"}
+                  className={cn(
+                    "w-[240px] pl-3 text-left font-normal",
+                    !field.value && "text-muted-foreground"
+                  )}
+                >
+                  {field.value ? (
+                    format(field.value, "PPP")
+                  ) : (
+                    <span>Pick a date</span>
+                  )}
+                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                 </Button>
-            </div>
+              </FormControl>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={field.value}
+                onSelect={field.onChange}
+                disabled={(date) => date < new Date()}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField name="feeAmount" control={control} render={({ field }) => (
+        <FormItem>
+          <FormLabel>Fee Amount <span className="text-destructive">*</span></FormLabel>
+          <FormControl><Input type="number" placeholder="e.g. 500.00" {...field} /></FormControl>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <div className="space-y-2">
+        <FormField control={control} name="assignedTo" render={({ field }) => (
+          <FormItem>
+            <FormLabel>Assign To Appraiser <span className="text-muted-foreground">(optional)</span></FormLabel>
+            <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+              <FormControl>
+                <SelectTrigger><SelectValue placeholder="Select an appraiser" /></SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {appraisers.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )} />
+        <Button type="button" variant="outline" size="sm" onClick={onSuggest} disabled={isLoading}>
+          {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+          AI Suggest Appraiser
+        </Button>
+      </div>
 
-            {/* Production Template Selector */}
-            <FormField control={control} name="productionTemplateId" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Production Template <span className="text-muted-foreground">(optional)</span></FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                    <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Select a production template" /></SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        <SelectItem value="none">No template (skip production tracking)</SelectItem>
-                        {productionTemplates.map(template => (
-                            <SelectItem key={template.id} value={template.id}>
-                                {template.name}
-                                {template.tasks && template.tasks.length > 0 && (
-                                    <span className="text-muted-foreground ml-2">({template.tasks.length} tasks)</span>
-                                )}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                    </Select>
-                    <FormDescription>
-                        Select a template to create a production card for tracking this order through the workflow
-                    </FormDescription>
-                    <FormMessage />
-                </FormItem>
-            )} />
+      {/* Production Template Selector */}
+      <FormField control={control} name="productionTemplateId" render={({ field }) => (
+        <FormItem>
+          <FormLabel>Production Template <span className="text-muted-foreground">(optional)</span></FormLabel>
+          <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+            <FormControl>
+              <SelectTrigger><SelectValue placeholder="Select a production template" /></SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              <SelectItem value="none">No template (skip production tracking)</SelectItem>
+              {productionTemplates.map(template => (
+                <SelectItem key={template.id} value={template.id}>
+                  {template.name}
+                  {template.tasks && template.tasks.length > 0 && (
+                    <span className="text-muted-foreground ml-2">({template.tasks.length} tasks)</span>
+                  )}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <FormDescription>
+            Select a template to create a production card for tracking this order through the workflow
+          </FormDescription>
+          <FormMessage />
+        </FormItem>
+      )} />
 
-        </div>
-    )
+    </div>
+  )
 }
 
-const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers, clients }: { suggestion: {appraiserId: string, reason: string} | null, onSelectSuggestion: () => void, appraisers: User[], clients: Client[] }) => {
-    const { getValues } = useFormContext();
-    const values = getValues();
-    const client = clients.find(c => c.id === values.clientId);
-    const appraiser = appraisers.find(a => a.id === values.assignedTo);
-    
-    return (
-        <div className="space-y-6">
-             <h3 className="text-lg font-medium">Review Order</h3>
-             {suggestion && (
-                <div className="p-4 bg-accent/20 border border-accent rounded-lg">
-                    <h4 className="font-semibold text-accent-foreground flex items-center gap-2"><Wand2 className="h-5 w-5" /> AI Suggestion</h4>
-                    <p className="text-sm mt-2">{suggestion.reason}</p>
-                    <p className="text-sm mt-1 font-semibold">Suggested Appraiser: {appraisers.find(a => a.id === suggestion.appraiserId)?.name}</p>
-                    <Button size="sm" className="mt-2" onClick={onSelectSuggestion}>Accept Suggestion</Button>
-                </div>
-            )}
-             <div className="space-y-2">
-                <h4 className="font-medium">Property</h4>
-                <p className="text-sm text-muted-foreground">{values.propertyAddress}, {values.propertyCity}, {values.propertyState} {values.propertyZip}</p>
-             </div>
-             <div className="space-y-2">
-                <h4 className="font-medium">Client</h4>
-                <p className="text-sm text-muted-foreground">{client?.companyName}</p>
-             </div>
-             <div className="space-y-2">
-                <h4 className="font-medium">Details</h4>
-                <p className="text-sm text-muted-foreground">Due Date: {values.dueDate ? format(values.dueDate, "PPP") : 'Not set'}</p>
-                <p className="text-sm text-muted-foreground">Fee: {formatCurrency(parseFloat(values.feeAmount || '0'))}</p>
-                <p className="text-sm text-muted-foreground">Assigned To: {appraiser?.name || 'Unassigned'}</p>
-             </div>
+const ReviewStep = ({ suggestion, onSelectSuggestion, appraisers, clients }: { suggestion: { appraiserId: string, reason: string } | null, onSelectSuggestion: () => void, appraisers: User[], clients: Client[] }) => {
+  const { getValues } = useFormContext();
+  const values = getValues();
+  const client = clients.find(c => c.id === values.clientId);
+  const appraiser = appraisers.find(a => a.id === values.assignedTo);
+
+  return (
+    <div className="space-y-6">
+      <h3 className="text-lg font-medium">Review Order</h3>
+      {suggestion && (
+        <div className="p-4 bg-accent/20 border border-accent rounded-lg">
+          <h4 className="font-semibold text-accent-foreground flex items-center gap-2"><Wand2 className="h-5 w-5" /> AI Suggestion</h4>
+          <p className="text-sm mt-2">{suggestion.reason}</p>
+          <p className="text-sm mt-1 font-semibold">Suggested Appraiser: {appraisers.find(a => a.id === suggestion.appraiserId)?.name}</p>
+          <Button size="sm" className="mt-2" onClick={onSelectSuggestion}>Accept Suggestion</Button>
         </div>
-    )
+      )}
+      <div className="space-y-2">
+        <h4 className="font-medium">Property</h4>
+        <p className="text-sm text-muted-foreground">{values.propertyAddress}, {values.propertyCity}, {values.propertyState} {values.propertyZip}</p>
+      </div>
+      <div className="space-y-2">
+        <h4 className="font-medium">Client</h4>
+        <p className="text-sm text-muted-foreground">{client?.companyName}</p>
+      </div>
+      <div className="space-y-2">
+        <h4 className="font-medium">Details</h4>
+        <p className="text-sm text-muted-foreground">Due Date: {values.dueDate ? format(values.dueDate, "PPP") : 'Not set'}</p>
+        <p className="text-sm text-muted-foreground">Fee: {formatCurrency(parseFloat(values.feeAmount || '0'))}</p>
+        <p className="text-sm text-muted-foreground">Assigned To: {appraiser?.name || 'Unassigned'}</p>
+      </div>
+    </div>
+  )
 }

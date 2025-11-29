@@ -29,6 +29,23 @@ export async function POST(request: NextRequest) {
     // Use service role client for database queries (bypass RLS)
     const supabase = createServiceRoleClient();
 
+    // SECURITY: Fetch user's tenant_id to scope all duplicate checks
+    const { data: userProfile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    const userTenantId = userProfile?.tenant_id || null;
+
+    if (!userTenantId) {
+      console.error(`[DRY-RUN] User ${user.id} has no tenant_id assigned`);
+      return NextResponse.json(
+        { error: 'User has no tenant assigned. Cannot perform secure dry-run.' },
+        { status: 400 }
+      );
+    }
+
     const body = await request.json();
     const { 
       fileData, 
@@ -202,7 +219,8 @@ export async function POST(request: NextRequest) {
           supabase,
           entity,
           transformedRow,
-          user.id
+          user.id,
+          userTenantId
         );
 
         if (duplicate) {
@@ -305,7 +323,8 @@ async function checkForDuplicate(
   supabase: any,
   entity: 'contacts' | 'clients' | 'orders',
   row: Record<string, any>,
-  userId: string
+  userId: string,
+  tenantId: string | null
 ): Promise<{ id: string; matchedOn: string; existingData: Record<string, any> } | null> {
   try {
     switch (entity) {
@@ -313,10 +332,17 @@ async function checkForDuplicate(
         // Match by email (case-insensitive) using functional index
         if (row.email) {
           const emailLower = String(row.email).toLowerCase();
-          const { data, error } = await supabase
+          let query = supabase
             .from('contacts')
             .select('*')
-            .eq('email', emailLower)
+            .eq('email', emailLower);
+
+          // SECURITY: Only check duplicates within user's tenant
+          if (tenantId) {
+            query = query.eq('tenant_id', tenantId);
+          }
+
+          const { data, error } = await query
             .limit(1)
             .maybeSingle();
 
@@ -335,10 +361,17 @@ async function checkForDuplicate(
         // Match by domain (primary) or normalized company name
         if (row.domain) {
           const domainLower = String(row.domain).toLowerCase();
-          const { data, error } = await supabase
+          let query = supabase
             .from('clients')
             .select('*')
-            .eq('domain', domainLower)
+            .eq('domain', domainLower);
+
+          // SECURITY: Only check duplicates within user's tenant
+          if (tenantId) {
+            query = query.eq('tenant_id', tenantId);
+          }
+
+          const { data, error } = await query
             .limit(1)
             .maybeSingle();
 
@@ -354,9 +387,16 @@ async function checkForDuplicate(
         // Fallback to company name match
         if (row.company_name) {
           const normalized = normalizeCompanyName(row.company_name);
-          const { data: clients, error } = await supabase
+          let query = supabase
             .from('clients')
             .select('*');
+
+          // SECURITY: Only check duplicates within user's tenant
+          if (tenantId) {
+            query = query.eq('tenant_id', tenantId);
+          }
+
+          const { data: clients, error } = await query;
 
           if (!error && clients) {
             for (const client of clients) {
@@ -376,10 +416,17 @@ async function checkForDuplicate(
       case 'orders': {
         // Match by external_id or order_number
         if (row.external_id) {
-          const { data, error } = await supabase
+          let query = supabase
             .from('orders')
             .select('*')
-            .eq('external_id', row.external_id)
+            .eq('external_id', row.external_id);
+
+          // SECURITY: Only check duplicates within user's tenant
+          if (tenantId) {
+            query = query.eq('tenant_id', tenantId);
+          }
+
+          const { data, error } = await query
             .limit(1)
             .single();
 
@@ -393,10 +440,17 @@ async function checkForDuplicate(
         }
 
         if (row.order_number) {
-          const { data, error } = await supabase
+          let query = supabase
             .from('orders')
             .select('*')
-            .eq('order_number', row.order_number)
+            .eq('order_number', row.order_number);
+
+          // SECURITY: Only check duplicates within user's tenant
+          if (tenantId) {
+            query = query.eq('tenant_id', tenantId);
+          }
+
+          const { data, error } = await query
             .limit(1)
             .single();
 

@@ -28,15 +28,23 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const {
-      orgId = user.id, // Default to current user's org
       pageSize = 1000,
       start = 0,
       dryRun = false
     } = body;
 
-    // Verify user owns the org (or is admin)
-    if (orgId !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // SECURITY: Get user's tenant_id for proper tenant scoping
+    const authSupabase = await createClient();
+    const { data: profile } = await authSupabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    const tenantId = profile?.tenant_id;
+
+    if (!tenantId) {
+      return NextResponse.json({ error: 'User has no tenant assigned' }, { status: 400 });
     }
 
     // Use service role client for deterministic bulk operations
@@ -54,8 +62,8 @@ export async function POST(request: NextRequest) {
     // Query orders missing property_id but with complete address
     const { data: orders, error: queryError } = await supabase
       .from('orders')
-      .select('id, created_by, property_address, property_city, property_state, property_zip, property_type, property_id')
-      .eq('created_by', orgId)
+      .select('id, created_by, property_address, property_city, property_state, property_zip, property_type, property_id, tenant_id')
+      .eq('tenant_id', tenantId)
       .is('property_id', null)
       .not('property_address', 'is', null)
       .not('property_city', 'is', null)
@@ -299,28 +307,39 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const orgId = searchParams.get('orgId') || user.id;
+    // SECURITY: Get authenticated user's tenant_id (no user-supplied parameters)
+    const authSupabase = await createClient();
+    const { data: profile } = await authSupabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    const tenantId = profile?.tenant_id;
+
+    if (!tenantId) {
+      return NextResponse.json({ error: 'User has no tenant assigned' }, { status: 400 });
+    }
 
     // Use service role client for consistent query behavior
     const supabase = createServiceRoleClient();
 
-    // Get statistics
+    // Get statistics (filtered by tenant_id for security)
     const { count: totalOrdersCount } = await supabase
       .from('orders')
       .select('*', { count: 'exact', head: true })
-      .eq('created_by', orgId);
+      .eq('tenant_id', tenantId);
 
     const { count: linkedOrdersCount } = await supabase
       .from('orders')
       .select('*', { count: 'exact', head: true })
-      .eq('created_by', orgId)
+      .eq('tenant_id', tenantId)
       .not('property_id', 'is', null);
 
     const { count: unlinkedOrdersCount } = await supabase
       .from('orders')
       .select('*', { count: 'exact', head: true })
-      .eq('created_by', orgId)
+      .eq('tenant_id', tenantId)
       .is('property_id', null)
       .not('property_address', 'is', null)
       .not('property_city', 'is', null)
@@ -330,10 +349,10 @@ export async function GET(request: NextRequest) {
     const { count: propertiesCount } = await supabase
       .from('properties')
       .select('*', { count: 'exact', head: true })
-      .eq('org_id', orgId);
+      .eq('tenant_id', tenantId);
 
     return NextResponse.json({
-      orgId,
+      tenantId,
       statistics: {
         totalOrders: totalOrdersCount || 0,
         linkedOrders: linkedOrdersCount || 0,

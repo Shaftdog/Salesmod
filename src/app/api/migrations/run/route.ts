@@ -134,9 +134,24 @@ async function processMigration(
   try {
     const startTime = Date.now();
     const autoLinkProperties = options.autoLinkProperties ?? true;
-    
+
+    // SECURITY: Get user's tenant_id to ensure imported data belongs to their tenant
+    const { data: userProfile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', userId)
+      .single();
+
+    const userTenantId = userProfile?.tenant_id || null;
+
+    if (!userTenantId) {
+      console.warn(`⚠️ User ${userId} has no tenant_id - imported data will not be tenant-scoped`);
+    }
+
     console.log('🚀 Migration Processing - Starting:', {
       jobId,
+      userId,
+      tenantId: userTenantId,
       fileDataLength: fileData?.length,
       fileDataPreview: fileData?.substring(0, 200),
       entity,
@@ -255,6 +270,7 @@ async function processMigration(
             source,
             duplicateStrategy,
             userId,
+            userTenantId,
             autoLinkProperties,
             metrics
           );
@@ -339,6 +355,7 @@ async function processRow(
   source: string,
   duplicateStrategy: DuplicateStrategy,
   userId: string,
+  tenantId: string | null,
   autoLinkProperties: boolean,
   metrics: any
 ): Promise<{ type: 'inserted' | 'updated' | 'skipped' }> {
@@ -377,11 +394,11 @@ async function processRow(
   // Entity-specific processing
   switch (entity) {
     case 'contacts':
-      return await processContact(supabase, transformedRow, duplicateStrategy, userId);
+      return await processContact(supabase, transformedRow, duplicateStrategy, userId, tenantId);
     case 'clients':
-      return await processClient(supabase, transformedRow, source, duplicateStrategy, userId);
+      return await processClient(supabase, transformedRow, source, duplicateStrategy, userId, tenantId);
     case 'orders':
-      return await processOrder(supabase, transformedRow, source, duplicateStrategy, userId, autoLinkProperties, metrics);
+      return await processOrder(supabase, transformedRow, source, duplicateStrategy, userId, tenantId, autoLinkProperties, metrics);
     default:
       throw new Error(`Unsupported entity: ${entity}`);
   }
@@ -394,8 +411,13 @@ async function processContact(
   supabase: any,
   row: Record<string, any>,
   duplicateStrategy: DuplicateStrategy,
-  userId: string
+  userId: string,
+  tenantId: string | null
 ): Promise<{ type: 'inserted' | 'updated' | 'skipped' }> {
+  // SECURITY: Set tenant_id for proper multi-tenant isolation
+  if (tenantId) {
+    row.tenant_id = tenantId;
+  }
   // Resolve client_id (optional - contacts can exist without company)
   let clientId = null;
 
@@ -537,8 +559,14 @@ async function processClient(
   row: Record<string, any>,
   source: string,
   duplicateStrategy: DuplicateStrategy,
-  userId: string
+  userId: string,
+  tenantId: string | null
 ): Promise<{ type: 'inserted' | 'updated' | 'skipped' }> {
+  // SECURITY: Set tenant_id and org_id for proper isolation
+  row.org_id = userId;
+  if (tenantId) {
+    row.tenant_id = tenantId;
+  }
   // Handle address fields - combine ALL components into single address field
   // Supports both patterns:
   // 1. Multi-line: Address, Address2, Address3, City, State, Zip
@@ -753,6 +781,7 @@ async function processOrder(
   source: string,
   duplicateStrategy: DuplicateStrategy,
   userId: string,
+  tenantId: string | null,
   autoLinkProperties: boolean,
   metrics: any
 ): Promise<{ type: 'inserted' | 'updated' | 'skipped' }> {
@@ -761,9 +790,12 @@ async function processOrder(
     row.source = source;
   }
 
-  // Set created_by and org_id (for tenant isolation)
+  // SECURITY: Set tenant_id, created_by and org_id for proper isolation
   row.created_by = userId;
-  row.org_id = userId; // org_id matches created_by for tenant boundary
+  row.org_id = userId; // org_id matches created_by for audit trail
+  if (tenantId) {
+    row.tenant_id = tenantId; // Multi-tenant isolation boundary
+  }
   
   // Set defaults for optional fields
   if (!row.borrower_name || row.borrower_name.trim() === '') {

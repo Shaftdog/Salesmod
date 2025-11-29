@@ -34,7 +34,7 @@ import { AddressValidationResult, StandardizedAddress } from "@/lib/address-vali
 import { UnitSelector } from "@/components/properties/unit-selector";
 import { isFeeSimplePropertyType } from "@/lib/units";
 import { usePropertyUnits } from "@/hooks/use-property-units";
-  
+
 
 const formSchema = z.object({
   // Property Info
@@ -64,7 +64,7 @@ const formSchema = z.object({
   dueDate: z.date({ required_error: "Due date is required" }),
   feeAmount: z.string().min(1, "Fee is required"),
   assignedTo: z.string().optional(),
-  
+
   // Important Dates
   orderedDate: z.date().optional(),
   assignedDate: z.date().optional(),
@@ -121,7 +121,7 @@ export function OrderEditForm({ order, appraisers, clients: initialClients }: Or
     try {
       const newClient = await createClient({
         company_name: clientData.companyName,
-        primary_contact: clientData.primaryContact,
+        primary_contact: clientData.primaryContact || null,
         email: clientData.email,
         phone: clientData.phone,
         address: clientData.address,
@@ -131,7 +131,7 @@ export function OrderEditForm({ order, appraisers, clients: initialClients }: Or
         active_orders: 0,
         total_revenue: 0,
       } as any);
-      
+
       form.setValue("clientId", newClient.id);
     } catch (error) {
       console.error('Failed to add client:', error);
@@ -148,7 +148,7 @@ export function OrderEditForm({ order, appraisers, clients: initialClients }: Or
     form.setValue("propertyCity", standardized.city);
     form.setValue("propertyState", standardized.state);
     form.setValue("propertyZip", standardized.zip);
-    
+
     toast({
       title: "Address Standardized",
       description: overrideReason ? `Address updated: ${overrideReason}` : "Address has been standardized",
@@ -185,7 +185,7 @@ export function OrderEditForm({ order, appraisers, clients: initialClients }: Or
         completed_date: data.completedDate ? formatISO(data.completedDate) : undefined,
         delivered_date: data.deliveredDate ? formatISO(data.deliveredDate) : undefined,
       } as any);
-      
+
       // Redirect back to order detail page
       router.push(`/orders/${order.id}`);
     } catch (error) {
@@ -200,7 +200,7 @@ export function OrderEditForm({ order, appraisers, clients: initialClients }: Or
           {/* Property Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Property Information</h3>
-            <PropertyInfoFields 
+            <PropertyInfoFields
               onAddressValidation={handleAddressValidation}
               onAcceptAddressSuggestion={handleAcceptAddressSuggestion}
               propertyId={order.propertyId}
@@ -228,9 +228,9 @@ export function OrderEditForm({ order, appraisers, clients: initialClients }: Or
 
         {/* Actions */}
         <div className="flex justify-between gap-4 pt-4 border-t">
-          <Button 
-            type="button" 
-            variant="outline" 
+          <Button
+            type="button"
+            variant="outline"
             onClick={() => router.push(`/orders/${order.id}`)}
             disabled={isUpdating}
           >
@@ -246,11 +246,11 @@ export function OrderEditForm({ order, appraisers, clients: initialClients }: Or
   );
 }
 
-const PropertyInfoFields = ({ 
-  onAddressValidation, 
+const PropertyInfoFields = ({
+  onAddressValidation,
   onAcceptAddressSuggestion,
   propertyId
-}: { 
+}: {
   onAddressValidation: (result: AddressValidationResult) => void;
   onAcceptAddressSuggestion: (standardized: StandardizedAddress, overrideReason?: string) => void;
   propertyId?: string;
@@ -262,10 +262,10 @@ const PropertyInfoFields = ({
   const propertyZip = watch("propertyZip");
   const propertyType = watch("propertyType");
   const unitId = watch("unitId");
-  
+
   // Fetch units if we have a propertyId
   const { data: units = [] } = usePropertyUnits(propertyId);
-  
+
   // Show unit selector if property is fee-simple type OR if property has units
   const shouldShowUnitSelector = propertyId && (
     isFeeSimplePropertyType(propertyType) || units.length > 0
@@ -281,29 +281,29 @@ const PropertyInfoFields = ({
         </FormItem>
       )} />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <FormField name="propertyCity" control={control} render={({ field }) => (
-        <FormItem>
-          <FormLabel>City <span className="text-destructive">*</span></FormLabel>
-          <FormControl><Input placeholder="San Francisco" {...field} /></FormControl>
-          <FormMessage />
-        </FormItem>
-      )} />
-      <FormField name="propertyState" control={control} render={({ field }) => (
-        <FormItem>
-          <FormLabel>State <span className="text-destructive">*</span></FormLabel>
-          <FormControl><Input placeholder="CA" {...field} /></FormControl>
-          <FormMessage />
-        </FormItem>
-      )} />
-      <FormField name="propertyZip" control={control} render={({ field }) => (
-        <FormItem>
-          <FormLabel>ZIP Code <span className="text-destructive">*</span></FormLabel>
-          <FormControl><Input placeholder="94103" {...field} /></FormControl>
-          <FormMessage />
-        </FormItem>
-      )} />
+        <FormField name="propertyCity" control={control} render={({ field }) => (
+          <FormItem>
+            <FormLabel>City <span className="text-destructive">*</span></FormLabel>
+            <FormControl><Input placeholder="San Francisco" {...field} /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
+        <FormField name="propertyState" control={control} render={({ field }) => (
+          <FormItem>
+            <FormLabel>State <span className="text-destructive">*</span></FormLabel>
+            <FormControl><Input placeholder="CA" {...field} /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
+        <FormField name="propertyZip" control={control} render={({ field }) => (
+          <FormItem>
+            <FormLabel>ZIP Code <span className="text-destructive">*</span></FormLabel>
+            <FormControl><Input placeholder="94103" {...field} /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
       </div>
-      
+
       {/* Address Validation Component */}
       <AddressValidator
         street={propertyAddress || ""}
@@ -315,21 +315,21 @@ const PropertyInfoFields = ({
         autoValidate={false}
         className="mt-4"
       />
-       <FormField control={control} name="propertyType" render={({ field }) => (
+      <FormField control={control} name="propertyType" render={({ field }) => (
         <FormItem>
-            <FormLabel>Property Type <span className="text-destructive">*</span></FormLabel>
-            <Select onValueChange={field.onChange} value={field.value}>
+          <FormLabel>Property Type <span className="text-destructive">*</span></FormLabel>
+          <Select onValueChange={field.onChange} value={field.value}>
             <FormControl>
-                <SelectTrigger><SelectValue placeholder="Select a property type" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select a property type" /></SelectTrigger>
             </FormControl>
             <SelectContent>
-                {propertyTypes.map(type => <SelectItem key={type} value={type} className="capitalize">{type.replace(/_/g, " ")}</SelectItem>)}
+              {propertyTypes.map(type => <SelectItem key={type} value={type} className="capitalize">{type.replace(/_/g, " ")}</SelectItem>)}
             </SelectContent>
-            </Select>
-            <FormMessage />
+          </Select>
+          <FormMessage />
         </FormItem>
-        )} />
-      
+      )} />
+
       {/* Unit Selector - only for fee-simple properties or properties with existing units */}
       {shouldShowUnitSelector && (
         <div className="space-y-2">
@@ -347,7 +347,7 @@ const PropertyInfoFields = ({
           />
         </div>
       )}
-      
+
       <FormField name="accessInstructions" control={control} render={({ field }) => (
         <FormItem>
           <FormLabel>Access Instructions <span className="text-muted-foreground">(optional)</span></FormLabel>
@@ -355,7 +355,7 @@ const PropertyInfoFields = ({
           <FormMessage />
         </FormItem>
       )} />
-       <FormField name="specialInstructions" control={control} render={({ field }) => (
+      <FormField name="specialInstructions" control={control} render={({ field }) => (
         <FormItem>
           <FormLabel>Special Instructions <span className="text-muted-foreground">(optional)</span></FormLabel>
           <FormControl><Textarea placeholder="e.g. Beware of dog, gate code is #1234" {...field} /></FormControl>
@@ -367,305 +367,305 @@ const PropertyInfoFields = ({
 }
 
 const LoanInfoFields = () => {
-    const { control } = useFormContext();
-    return (
-        <div className="space-y-4">
-             <FormField control={control} name="orderType" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Order Type <span className="text-destructive">*</span></FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Select an order type" /></SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        {orderTypes.map(type => <SelectItem key={type} value={type} className="capitalize">{type.replace(/_/g, " ")}</SelectItem>)}
-                    </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-             )} />
-            <FormField name="loanType" control={control} render={({ field }) => (
-                <FormItem>
-                <FormLabel>Loan Type <span className="text-muted-foreground">(optional)</span></FormLabel>
-                <FormControl><Input placeholder="e.g. Conventional, FHA, VA" {...field} /></FormControl>
-                <FormMessage />
-                </FormItem>
-            )} />
-            <FormField name="loanNumber" control={control} render={({ field }) => (
-                <FormItem>
-                <FormLabel>Loan Number <span className="text-muted-foreground">(optional)</span></FormLabel>
-                <FormControl><Input placeholder="e.g. 1234567890" {...field} /></FormControl>
-                <FormMessage />
-                </FormItem>
-            )} />
-            <FormField name="loanAmount" control={control} render={({ field }) => (
-                <FormItem>
-                <FormLabel>Loan Amount <span className="text-muted-foreground">(optional)</span></FormLabel>
-                <FormControl><Input type="number" placeholder="e.g. 500000" {...field} /></FormControl>
-                <FormMessage />
-                </FormItem>
-            )} />
-        </div>
-    )
+  const { control } = useFormContext();
+  return (
+    <div className="space-y-4">
+      <FormField control={control} name="orderType" render={({ field }) => (
+        <FormItem>
+          <FormLabel>Order Type <span className="text-destructive">*</span></FormLabel>
+          <Select onValueChange={field.onChange} value={field.value}>
+            <FormControl>
+              <SelectTrigger><SelectValue placeholder="Select an order type" /></SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              {orderTypes.map(type => <SelectItem key={type} value={type} className="capitalize">{type.replace(/_/g, " ")}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField name="loanType" control={control} render={({ field }) => (
+        <FormItem>
+          <FormLabel>Loan Type <span className="text-muted-foreground">(optional)</span></FormLabel>
+          <FormControl><Input placeholder="e.g. Conventional, FHA, VA" {...field} /></FormControl>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField name="loanNumber" control={control} render={({ field }) => (
+        <FormItem>
+          <FormLabel>Loan Number <span className="text-muted-foreground">(optional)</span></FormLabel>
+          <FormControl><Input placeholder="e.g. 1234567890" {...field} /></FormControl>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField name="loanAmount" control={control} render={({ field }) => (
+        <FormItem>
+          <FormLabel>Loan Amount <span className="text-muted-foreground">(optional)</span></FormLabel>
+          <FormControl><Input type="number" placeholder="e.g. 500000" {...field} /></FormControl>
+          <FormMessage />
+        </FormItem>
+      )} />
+    </div>
+  )
 }
 
 const ContactInfoFields = ({ clients, onQuickAdd }: { clients: Client[], onQuickAdd: (data: any) => void }) => {
-    const { control } = useFormContext();
-    return (
-        <div className="space-y-4">
-             <FormField control={control} name="clientId" render={({ field }) => (
-                <FormItem className="flex flex-col">
-                    <FormLabel>Client <span className="text-destructive">*</span></FormLabel>
-                    <ClientSelector clients={clients} value={field.value} onChange={field.onChange} onQuickAdd={onQuickAdd} />
-                    <FormMessage />
-                </FormItem>
-            )} />
-            <FormField name="borrowerName" control={control} render={({ field }) => (
-                <FormItem>
-                <FormLabel>Borrower Name <span className="text-destructive">*</span></FormLabel>
-                <FormControl><Input placeholder="John Borrower" {...field} /></FormControl>
-                <FormMessage />
-                </FormItem>
-            )} />
-            <FormField name="loanOfficer" control={control} render={({ field }) => (
-                <FormItem>
-                <FormLabel>Loan Officer <span className="text-muted-foreground">(optional)</span></FormLabel>
-                <FormControl><Input placeholder="Jane Officer" {...field} /></FormControl>
-                <FormMessage />
-                </FormItem>
-            )} />
-            <FormField name="processorName" control={control} render={({ field }) => (
-                <FormItem>
-                <FormLabel>Processor Name <span className="text-muted-foreground">(optional)</span></FormLabel>
-                <FormControl><Input placeholder="Peter Processor" {...field} /></FormControl>
-                <FormMessage />
-                </FormItem>
-            )} />
-        </div>
-    )
+  const { control } = useFormContext();
+  return (
+    <div className="space-y-4">
+      <FormField control={control} name="clientId" render={({ field }) => (
+        <FormItem className="flex flex-col">
+          <FormLabel>Client <span className="text-destructive">*</span></FormLabel>
+          <ClientSelector clients={clients} value={field.value} onChange={field.onChange} onQuickAdd={onQuickAdd} />
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField name="borrowerName" control={control} render={({ field }) => (
+        <FormItem>
+          <FormLabel>Borrower Name <span className="text-destructive">*</span></FormLabel>
+          <FormControl><Input placeholder="John Borrower" {...field} /></FormControl>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField name="loanOfficer" control={control} render={({ field }) => (
+        <FormItem>
+          <FormLabel>Loan Officer <span className="text-muted-foreground">(optional)</span></FormLabel>
+          <FormControl><Input placeholder="Jane Officer" {...field} /></FormControl>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField name="processorName" control={control} render={({ field }) => (
+        <FormItem>
+          <FormLabel>Processor Name <span className="text-muted-foreground">(optional)</span></FormLabel>
+          <FormControl><Input placeholder="Peter Processor" {...field} /></FormControl>
+          <FormMessage />
+        </FormItem>
+      )} />
+    </div>
+  )
 }
 
 const OrderDetailsFields = ({ appraisers }: { appraisers: User[] }) => {
-    const { control } = useFormContext();
-    return (
-        <div className="space-y-4">
-            <FormField control={control} name="priority" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Priority <span className="text-destructive">*</span></FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Select priority level" /></SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        {orderPriorities.map(p => <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>)}
-                    </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-             )} />
-             <FormField control={control} name="dueDate" render={({ field }) => (
-                <FormItem className="flex flex-col">
-                    <FormLabel>Due Date <span className="text-destructive">*</span></FormLabel>
-                    <Popover>
-                        <PopoverTrigger asChild>
-                        <FormControl>
-                            <Button
-                            variant={"outline"}
-                            className={cn(
-                                "w-[240px] pl-3 text-left font-normal",
-                                !field.value && "text-muted-foreground"
-                            )}
-                            >
-                            {field.value ? (
-                                format(field.value, "PPP")
-                            ) : (
-                                <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                        </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) => date < new Date()}
-                            initialFocus
-                        />
-                        </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                </FormItem>
-            )} />
-             <FormField name="feeAmount" control={control} render={({ field }) => (
-                <FormItem>
-                <FormLabel>Fee Amount <span className="text-destructive">*</span></FormLabel>
-                <FormControl><Input type="number" placeholder="e.g. 500.00" {...field} /></FormControl>
-                <FormMessage />
-                </FormItem>
-            )} />
-            <FormField control={control} name="assignedTo" render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Assign To Appraiser <span className="text-muted-foreground">(optional)</span></FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Select an appraiser" /></SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        <SelectItem value="unassigned">Unassigned</SelectItem>
-                        {appraisers.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
-                    </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-            )} />
+  const { control } = useFormContext();
+  return (
+    <div className="space-y-4">
+      <FormField control={control} name="priority" render={({ field }) => (
+        <FormItem>
+          <FormLabel>Priority <span className="text-destructive">*</span></FormLabel>
+          <Select onValueChange={field.onChange} value={field.value}>
+            <FormControl>
+              <SelectTrigger><SelectValue placeholder="Select priority level" /></SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              {orderPriorities.map(p => <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField control={control} name="dueDate" render={({ field }) => (
+        <FormItem className="flex flex-col">
+          <FormLabel>Due Date <span className="text-destructive">*</span></FormLabel>
+          <Popover>
+            <PopoverTrigger asChild>
+              <FormControl>
+                <Button
+                  variant={"outline"}
+                  className={cn(
+                    "w-[240px] pl-3 text-left font-normal",
+                    !field.value && "text-muted-foreground"
+                  )}
+                >
+                  {field.value ? (
+                    format(field.value, "PPP")
+                  ) : (
+                    <span>Pick a date</span>
+                  )}
+                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                </Button>
+              </FormControl>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={field.value}
+                onSelect={field.onChange}
+                disabled={(date) => date < new Date()}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField name="feeAmount" control={control} render={({ field }) => (
+        <FormItem>
+          <FormLabel>Fee Amount <span className="text-destructive">*</span></FormLabel>
+          <FormControl><Input type="number" placeholder="e.g. 500.00" {...field} /></FormControl>
+          <FormMessage />
+        </FormItem>
+      )} />
+      <FormField control={control} name="assignedTo" render={({ field }) => (
+        <FormItem>
+          <FormLabel>Assign To Appraiser <span className="text-muted-foreground">(optional)</span></FormLabel>
+          <Select onValueChange={field.onChange} value={field.value}>
+            <FormControl>
+              <SelectTrigger><SelectValue placeholder="Select an appraiser" /></SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              {appraisers.map(user => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <FormMessage />
+        </FormItem>
+      )} />
 
-            <div className="pt-4 border-t">
-                <h4 className="text-sm font-medium mb-4">Important Dates</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField control={control} name="orderedDate" render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                            <FormLabel>Ordered Date <span className="text-muted-foreground">(optional)</span></FormLabel>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                <FormControl>
-                                    <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                        "w-full pl-3 text-left font-normal",
-                                        !field.value && "text-muted-foreground"
-                                    )}
-                                    >
-                                    {field.value ? (
-                                        format(field.value, "PPP")
-                                    ) : (
-                                        <span>Pick a date</span>
-                                    )}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                    mode="single"
-                                    selected={field.value}
-                                    onSelect={field.onChange}
-                                    initialFocus
-                                />
-                                </PopoverContent>
-                            </Popover>
-                            <FormMessage />
-                        </FormItem>
-                    )} />
+      <div className="pt-4 border-t">
+        <h4 className="text-sm font-medium mb-4">Important Dates</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField control={control} name="orderedDate" render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Ordered Date <span className="text-muted-foreground">(optional)</span></FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full pl-3 text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
+                    >
+                      {field.value ? (
+                        format(field.value, "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={field.value}
+                    onSelect={field.onChange}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <FormMessage />
+            </FormItem>
+          )} />
 
-                    <FormField control={control} name="assignedDate" render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                            <FormLabel>Assigned Date <span className="text-muted-foreground">(optional)</span></FormLabel>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                <FormControl>
-                                    <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                        "w-full pl-3 text-left font-normal",
-                                        !field.value && "text-muted-foreground"
-                                    )}
-                                    >
-                                    {field.value ? (
-                                        format(field.value, "PPP")
-                                    ) : (
-                                        <span>Pick a date</span>
-                                    )}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                    mode="single"
-                                    selected={field.value}
-                                    onSelect={field.onChange}
-                                    initialFocus
-                                />
-                                </PopoverContent>
-                            </Popover>
-                            <FormMessage />
-                        </FormItem>
-                    )} />
+          <FormField control={control} name="assignedDate" render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Assigned Date <span className="text-muted-foreground">(optional)</span></FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full pl-3 text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
+                    >
+                      {field.value ? (
+                        format(field.value, "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={field.value}
+                    onSelect={field.onChange}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <FormMessage />
+            </FormItem>
+          )} />
 
-                    <FormField control={control} name="completedDate" render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                            <FormLabel>Completed Date <span className="text-muted-foreground">(optional)</span></FormLabel>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                <FormControl>
-                                    <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                        "w-full pl-3 text-left font-normal",
-                                        !field.value && "text-muted-foreground"
-                                    )}
-                                    >
-                                    {field.value ? (
-                                        format(field.value, "PPP")
-                                    ) : (
-                                        <span>Pick a date</span>
-                                    )}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                    mode="single"
-                                    selected={field.value}
-                                    onSelect={field.onChange}
-                                    initialFocus
-                                />
-                                </PopoverContent>
-                            </Popover>
-                            <FormMessage />
-                        </FormItem>
-                    )} />
+          <FormField control={control} name="completedDate" render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Completed Date <span className="text-muted-foreground">(optional)</span></FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full pl-3 text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
+                    >
+                      {field.value ? (
+                        format(field.value, "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={field.value}
+                    onSelect={field.onChange}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <FormMessage />
+            </FormItem>
+          )} />
 
-                    <FormField control={control} name="deliveredDate" render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                            <FormLabel>Delivered Date <span className="text-muted-foreground">(optional)</span></FormLabel>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                <FormControl>
-                                    <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                        "w-full pl-3 text-left font-normal",
-                                        !field.value && "text-muted-foreground"
-                                    )}
-                                    >
-                                    {field.value ? (
-                                        format(field.value, "PPP")
-                                    ) : (
-                                        <span>Pick a date</span>
-                                    )}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                    mode="single"
-                                    selected={field.value}
-                                    onSelect={field.onChange}
-                                    initialFocus
-                                />
-                                </PopoverContent>
-                            </Popover>
-                            <FormMessage />
-                        </FormItem>
-                    )} />
-                </div>
-            </div>
+          <FormField control={control} name="deliveredDate" render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Delivered Date <span className="text-muted-foreground">(optional)</span></FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full pl-3 text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
+                    >
+                      {field.value ? (
+                        format(field.value, "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={field.value}
+                    onSelect={field.onChange}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <FormMessage />
+            </FormItem>
+          )} />
         </div>
-    )
+      </div>
+    </div>
+  )
 }
 

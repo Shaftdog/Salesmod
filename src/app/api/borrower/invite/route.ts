@@ -52,21 +52,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if borrower user already exists
-    const { data: existingUser } = await executeAsAdmin(
+    // SECURITY: Use getUserByEmail instead of listUsers to prevent user enumeration
+    const borrowerEmail = email.toLowerCase();
+    const { data: existingUserData } = await executeAsAdmin(
       "check_borrower_user",
       session.user.id,
       async (adminClient) => {
-        return await adminClient.auth.admin.listUsers();
+        return await adminClient.auth.admin.getUserByEmail(borrowerEmail);
       }
     );
 
     let borrowerUserId: string;
-    const borrowerEmail = email.toLowerCase();
 
-    // Find if user with this email already exists
-    const existingBorrower = existingUser?.users?.find(
-      (u: any) => u.email === borrowerEmail
-    );
+    // getUserByEmail returns { data: { user: ... } } if found, or error if not found
+    const existingBorrower = existingUserData?.user || null;
 
     if (existingBorrower) {
       borrowerUserId = existingBorrower.id;
