@@ -374,6 +374,32 @@ export function useRejectCard() {
 }
 
 // =============================================
+// MUTATION: Mark Card as Done
+// =============================================
+
+export function useMarkCardDone() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (cardId: string) => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('kanban_cards')
+        .update({ state: 'done', executed_at: new Date().toISOString() })
+        .eq('id', cardId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kanban-cards'] });
+    },
+  });
+}
+
+// =============================================
 // MUTATION: Update Card State
 // =============================================
 

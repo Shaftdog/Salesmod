@@ -7,14 +7,37 @@ type ValidAreaCode = typeof VALID_AREA_CODES[number]
 
 // Route to area mapping for middleware protection
 const ROUTE_AREA_MAP: Record<string, ValidAreaCode> = {
+  // Sales area routes
   '/sales': 'sales',
+  '/orders': 'sales',
+  '/clients': 'sales',
+  '/contacts': 'sales',
+  '/deals': 'sales',
+  '/cases': 'sales',
+  '/properties': 'sales',
+
+  // Marketing area routes
   '/marketing': 'marketing',
+
+  // Production area routes
   '/production': 'production',
+
+  // Operations area routes
   '/operations': 'operations',
+  '/tasks': 'operations',
+
+  // Logistics area routes
   '/logistics': 'logistics',
+
+  // Finance area routes
   '/finance': 'finance',
+
+  // AI & Automation area routes
   '/agent': 'ai_automation',
   '/ai-analytics': 'ai_automation',
+
+  // Admin area routes
+  '/admin': 'admin',
 }
 
 // Get area code from pathname (returns only valid area codes)

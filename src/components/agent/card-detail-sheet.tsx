@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { KanbanCard, useApproveCard, useExecuteCard, useRejectCard } from '@/hooks/use-agent';
+import { KanbanCard, useApproveCard, useExecuteCard, useRejectCard, useMarkCardDone } from '@/hooks/use-agent';
 import { Send, Check, X, Loader2, AlertCircle, Calendar, DollarSign, Phone, FileSearch, MessageSquare, Bot } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { CardReviewChat } from './card-review-chat';
@@ -58,6 +58,7 @@ export function CardDetailSheet({ card, open, onOpenChange }: CardDetailSheetPro
   const approveCard = useApproveCard();
   const executeCard = useExecuteCard();
   const rejectCard = useRejectCard();
+  const markCardDone = useMarkCardDone();
   const [showReviewChat, setShowReviewChat] = useState(false);
 
   if (!card) {
@@ -131,6 +132,23 @@ export function CardDetailSheet({ card, open, onOpenChange }: CardDetailSheetPro
     } catch (error: any) {
       toast({
         title: 'Rejection Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleMarkDone = async () => {
+    try {
+      await markCardDone.mutateAsync(card.id);
+      toast({
+        title: 'Marked as Done',
+        description: `${card.title} has been moved to done`,
+      });
+      onOpenChange(false);
+    } catch (error: any) {
+      toast({
+        title: 'Failed to Mark as Done',
         description: error.message,
         variant: 'destructive',
       });
@@ -448,6 +466,19 @@ export function CardDetailSheet({ card, open, onOpenChange }: CardDetailSheetPro
               >
                 <X className="h-4 w-4 mr-2" />
                 Reject
+              </Button>
+              <Button
+                onClick={handleMarkDone}
+                variant="secondary"
+                className="flex-1"
+                disabled={markCardDone.isPending}
+              >
+                {markCardDone.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4 mr-2" />
+                )}
+                Done
               </Button>
               <Button
                 onClick={handleApprove}
