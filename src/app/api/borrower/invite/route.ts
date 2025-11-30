@@ -52,20 +52,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if borrower user already exists
-    // SECURITY: Use getUserByEmail instead of listUsers to prevent user enumeration
+    // SECURITY: Query profiles table to check user existence without enumeration
     const borrowerEmail = email.toLowerCase();
-    const { data: existingUserData } = await executeAsAdmin(
+    const { data: existingProfile } = await executeAsAdmin(
       "check_borrower_user",
       session.user.id,
       async (adminClient) => {
-        return await adminClient.auth.admin.getUserByEmail(borrowerEmail);
+        return await adminClient
+          .from("profiles")
+          .select("id")
+          .eq("email", borrowerEmail)
+          .single();
       }
     );
 
     let borrowerUserId: string;
 
-    // getUserByEmail returns { data: { user: ... } } if found, or error if not found
-    const existingBorrower = existingUserData?.user || null;
+    const existingBorrower = existingProfile;
 
     if (existingBorrower) {
       borrowerUserId = existingBorrower.id;
