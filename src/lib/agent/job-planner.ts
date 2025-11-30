@@ -487,6 +487,20 @@ async function getTargetContacts(
 ): Promise<TargetContact[]> {
   console.log(`[getTargetContacts] Called with input:`, JSON.stringify(input));
   console.log(`[getTargetContacts] Params filter:`, JSON.stringify(params.target_filter));
+
+  // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+
+  if (!tenantId) {
+    console.error(`[getTargetContacts] User ${orgId} has no tenant_id assigned`);
+    return [];
+  }
   
   // If explicit contact IDs provided, use those
   if (input.contact_ids && input.contact_ids.length > 0) {
@@ -708,11 +722,12 @@ async function getTargetContacts(
   let suppressedContactIds: string[] = [];
 
   if (contactIds.length > 0) {
+    // SECURITY: Use tenant_id instead of org_id for proper multi-tenant isolation
     const { data: suppressions } = await supabase
       .from('email_suppressions')
       .select('contact_id')
       .in('contact_id', contactIds)
-      .eq('org_id', orgId);
+      .eq('tenant_id', tenantId);
 
     if (suppressions && suppressions.length > 0) {
       suppressedContactIds = suppressions.map((s: any) => s.contact_id);
