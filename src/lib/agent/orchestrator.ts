@@ -11,37 +11,37 @@ import { Job, JobTask } from '@/types/jobs';
  */
 function formatEmailBody(body: string): string {
   if (!body) return body;
-  
+
   // If already has substantial HTML tags, return as-is
   if (body.includes('<p>') && body.includes('</p>')) {
     return body;
   }
-  
+
   // Step 1: Detect and format bullet/numbered lists with various patterns
   // Pattern 1: "1. Item" or "• Item" style
   const hasNumberedList = /\d+\.\s+[A-Z]/.test(body);
   const hasBulletList = /[•\-\*]\s+[A-Z]/.test(body);
-  
+
   // Pattern 2: "First bullet point", "Second bullet point" style
   const hasWordedList = /(First|Second|Third|Fourth|Fifth)[\s\w]*:/gi.test(body);
-  
+
   let formatted = body;
-  
+
   // Convert "First bullet point:", "Second bullet point:" to proper list
   if (hasWordedList) {
     // Split on sentence patterns that indicate list items
     const listPattern = /((?:First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:[\s\S]*?)(?=(?:First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:|$)/gi;
     const listItems = body.match(listPattern);
-    
+
     if (listItems && listItems.length > 1) {
       // Find intro text before the list
       const introMatch = body.match(/^([\s\S]*?)(?=First|Second|Third|Fourth|Fifth)/i);
       let result = '';
-      
+
       if (introMatch && introMatch[1].trim()) {
         result += `<p>${introMatch[1].trim()}</p>`;
       }
-      
+
       result += '<ol>';
       listItems.forEach(item => {
         const cleanItem = item.replace(/^(First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:\s*/i, '').trim();
@@ -50,24 +50,24 @@ function formatEmailBody(body: string): string {
         }
       });
       result += '</ol>';
-      
+
       // Find closing text after the list
       const lastItem = listItems[listItems.length - 1];
       const closingMatch = body.split(lastItem)[1];
       if (closingMatch && closingMatch.trim()) {
         result += `<p>${closingMatch.trim()}</p>`;
       }
-      
+
       return result;
     }
   }
-  
+
   // Convert numbered lists (1. 2. 3. etc.)
   if (hasNumberedList) {
     const lines = body.split(/\.\s+(?=\d+\.|\w)/);
     let result = '';
     let inList = false;
-    
+
     lines.forEach(line => {
       const trimmed = line.trim();
       if (/^\d+\./.test(trimmed)) {
@@ -85,18 +85,18 @@ function formatEmailBody(body: string): string {
         result += `<p>${trimmed}</p>`;
       }
     });
-    
+
     if (inList) result += '</ol>';
     return result;
   }
-  
+
   // Convert bullet lists (• or - or *)
   if (hasBulletList) {
     const lines = body.split(/\n/);
     let result = '';
     let inList = false;
     let currentParagraph = '';
-    
+
     lines.forEach(line => {
       const trimmed = line.trim();
       if (/^[•\-\*]\s+/.test(trimmed)) {
@@ -118,14 +118,14 @@ function formatEmailBody(body: string): string {
         currentParagraph += (currentParagraph ? ' ' : '') + trimmed;
       }
     });
-    
+
     if (currentParagraph) {
       result += `<p>${currentParagraph.trim()}</p>`;
     }
     if (inList) result += '</ul>';
     return result;
   }
-  
+
   // No lists detected - format as paragraphs
   // Split by double line breaks first
   const paragraphs = body.split(/\n\n+/);
@@ -136,7 +136,7 @@ function formatEmailBody(body: string): string {
       .map(p => `<p>${p.replace(/\n/g, ' ')}</p>`)
       .join('');
   }
-  
+
   // Split by single line breaks and group as sentences
   const sentences = body.split(/\.\s+/);
   if (sentences.length > 3) {
@@ -145,7 +145,7 @@ function formatEmailBody(body: string): string {
     sentences.forEach((sentence, idx) => {
       result += sentence.trim();
       if (!sentence.trim().endsWith('.')) result += '.';
-      
+
       // Start new paragraph every 2-3 sentences
       if ((idx + 1) % 2 === 0 && idx < sentences.length - 1) {
         result += '</p><p>';
@@ -156,7 +156,7 @@ function formatEmailBody(body: string): string {
     result += '</p>';
     return result;
   }
-  
+
   // Single paragraph - just wrap it
   return `<p>${body}</p>`;
 }
@@ -195,11 +195,25 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
     return existingRun as AgentRun;
   }
 
+  // SECURITY: Get user's tenant_id
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+
+  if (!tenantId) {
+    throw new Error(`User ${orgId} has no tenant_id assigned`);
+  }
+
   // Create agent run record
   const { data: run, error: runError } = await supabase
     .from('agent_runs')
     .insert({
       org_id: orgId,
+      tenant_id: tenantId,
       started_at: startTime,
       status: 'running',
       mode,
@@ -257,11 +271,11 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
 
     // Step 4: Create kanban cards
     console.log(`[${run.id}] Creating ${plan.actions.length} kanban cards...`);
-    const cards = await createKanbanCards(orgId, run.id, plan.actions);
+    const cards = await createKanbanCards(orgId, tenantId, run.id, plan.actions);
 
     // Step 5: Update run with results
     const emailsSent = approvedResults.filter(r => r.success && r.metadata?.simulated === false).length;
-    
+
     await supabase
       .from('agent_runs')
       .update({
@@ -314,6 +328,7 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
  */
 async function createKanbanCards(
   orgId: string,
+  tenantId: string,
   runId: string,
   actions: ProposedAction[]
 ): Promise<any[]> {
@@ -350,7 +365,7 @@ async function createKanbanCards(
         // Skip this card - don't create invalid email cards
         continue;
       }
-      
+
       actionPayload = {
         to: action.emailDraft.to,
         subject: action.emailDraft.subject,
@@ -391,7 +406,7 @@ async function createKanbanCards(
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       return uuidRegex.test(str);
     };
-    
+
     const contactId = action.contactId && isValidUUID(action.contactId) ? action.contactId : null;
 
     // Check for duplicate before creating
@@ -408,6 +423,7 @@ async function createKanbanCards(
       .from('kanban_cards')
       .insert({
         org_id: orgId,
+        tenant_id: tenantId,
         run_id: runId,
         client_id: action.clientId,
         contact_id: contactId,
@@ -466,13 +482,13 @@ async function executeApprovedCards(orgId: string): Promise<ExecutionResult[]> {
       console.log(`[Execute] Executing card: ${card.title} (${card.type})`);
       const result = await executeCard(card.id);
       results.push(result);
-      
+
       if (result.success) {
         console.log(`[Execute] ✓ ${card.title}: Success`);
       } else {
         console.error(`[Execute] ✗ ${card.title}: ${result.error}`);
       }
-      
+
       // Small delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 1000));
     } catch (error: any) {
@@ -822,7 +838,7 @@ async function processActiveJobs(orgId: string, runId: string): Promise<number> 
 
           if (cards.length === 0) {
             console.error(`[Jobs] Task ${task.id} (${task.kind}) expanded to 0 cards - marking as error`);
-            
+
             // Mark task as error instead of leaving it pending
             await supabase
               .from('job_tasks')
@@ -832,7 +848,7 @@ async function processActiveJobs(orgId: string, runId: string): Promise<number> 
                 finished_at: new Date().toISOString(),
               })
               .eq('id', task.id);
-            
+
             continue;
           }
 

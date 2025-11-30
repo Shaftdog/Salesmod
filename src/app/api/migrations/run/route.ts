@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     if (jobError || !job) {
       console.error('Error creating migration job:', jobError);
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: jobError?.message || 'Failed to create migration job',
         details: jobError?.details || null,
         hint: jobError?.hint || null
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
         console.error('Error stack:', error.stack);
       }
     );
-    
+
     console.log('✅ Migration job created and background processing started:', {
       jobId: job.id,
       entity,
@@ -200,12 +200,12 @@ async function processMigration(
     });
 
     const rows = parseResult.data;
-    
+
     console.log('🚀 Migration Processing - Parsed CSV:', {
       totalRows: rows.length,
       firstRow: rows[0],
     });
-    
+
     // Initialize totals and metrics
     const totals: MigrationTotals = {
       total: rows.length,
@@ -214,7 +214,7 @@ async function processMigration(
       skipped: 0,
       errors: 0,
     };
-    
+
     metrics.totals.read = rows.length;
 
     // Build mapping lookup
@@ -245,7 +245,7 @@ async function processMigration(
         // Update final totals and exit
         await supabase
           .from('migration_jobs')
-          .update({ 
+          .update({
             totals,
             finished_at: new Date().toISOString()
           })
@@ -261,7 +261,7 @@ async function processMigration(
 
         try {
           console.log(`📝 Processing row ${rowIndex + 1}/${rows.length}:`, row);
-          
+
           const result = await processRow(
             supabase,
             row,
@@ -287,7 +287,7 @@ async function processMigration(
             stack: error.stack,
             row: row,
           });
-          
+
           totals.errors++;
 
           // Log error with context
@@ -314,8 +314,8 @@ async function processMigration(
     metrics.totals.updated = totals.updated;
     metrics.totals.deduped = totals.skipped;
     metrics.totals.skipped_no_external_id = totals.skipped;
-    metrics.link_rate = metrics.properties.link_attempted > 0 
-      ? metrics.properties.linked / metrics.properties.link_attempted 
+    metrics.link_rate = metrics.properties.link_attempted > 0
+      ? metrics.properties.linked / metrics.properties.link_attempted
       : 0;
     metrics.duration_ms = Date.now() - startTime;
 
@@ -422,12 +422,12 @@ async function processContact(
   let clientId = null;
 
   if (row._client_domain || row._client_name) {
-    clientId = await resolveClientId(supabase, row._client_domain, row._client_name);
+    clientId = await resolveClientId(supabase, row._client_domain, row._client_name, tenantId);
   } else if (row.email) {
     // Extract domain from email
     const domain = transformExtractDomain(row.email);
     if (domain) {
-      clientId = await resolveClientId(supabase, domain, null);
+      clientId = await resolveClientId(supabase, domain, null, tenantId);
     }
   }
 
@@ -439,35 +439,35 @@ async function processContact(
   if (row._role) {
     const roleCode = mapPartyRole(row._role);
     row.primary_role_code = roleCode;
-    
+
     // Store original label in props
     if (!row.props) row.props = {};
     row.props.source_role_label = row._role;
-    
+
     // Flag junk records for exclusion
     if (isJunkRole(roleCode)) {
       row.primary_role_code = 'unknown';
       row.props.exclude = true;
       row.props.exclude_reason = `Junk role: ${row._role}`;
     }
-    
+
     delete row._role; // Remove special field
   }
-  
+
   // FALLBACK: Auto-map invalid role codes for contacts (same as clients)
   if (row.primary_role_code && typeof row.primary_role_code === 'string') {
     if (row.primary_role_code.includes(' ') || /[A-Z]/.test(row.primary_role_code)) {
       console.log(`🔄 Auto-mapping invalid contact role: "${row.primary_role_code}"`);
       const mapped = mapPartyRole(row.primary_role_code);
-      
+
       if (!row.props) row.props = {};
       row.props.original_role = row.primary_role_code;
       row.primary_role_code = mapped;
-      
+
       console.log(`  → Mapped to: "${mapped}"`);
     }
   }
-  
+
   // Set to null if empty to avoid foreign key constraint errors
   if (!row.primary_role_code || row.primary_role_code === '') {
     row.primary_role_code = null;
@@ -514,11 +514,16 @@ async function processContact(
   // Check for duplicate using functional index on lower(email)
   if (row.email) {
     const emailLower = String(row.email).toLowerCase();
-    const { data: existing } = await supabase
+    let query = supabase
       .from('contacts')
       .select('id')
-      .eq('email', emailLower)
-      .maybeSingle();
+      .eq('email', emailLower);
+
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+
+    const { data: existing } = await query.maybeSingle();
 
     if (existing) {
       if (duplicateStrategy === 'skip') {
@@ -530,7 +535,7 @@ async function processContact(
       // 'create' strategy falls through to insert
     }
   }
-  
+
   // Ensure email is stored in lowercase for index compatibility
   if (row.email) {
     row.email = String(row.email).toLowerCase();
@@ -574,31 +579,31 @@ async function processClient(
   const hasLineAddress = row['address.line1'] || row['address.line2'] || row['address.line3'];
   const hasStreetAddress = row['address.street'];
   const hasCityStateZip = row['address.city'] || row['address.state'] || row['address.zip'];
-  
+
   if (hasLineAddress || hasStreetAddress || hasCityStateZip) {
     const addressParts: string[] = [];
-    
+
     // Add street first if present (e.g., "201 East McBee Avenue")
     if (row['address.street']) {
       addressParts.push(row['address.street']);
     }
-    
+
     // Add line1 if present AND different from street
     if (row['address.line1'] && row['address.line1'] !== row['address.street']) {
       addressParts.push(row['address.line1']);
     }
-    
+
     // Add line2 and line3 if present (e.g., suite numbers, building names)
     if (row['address.line2']) addressParts.push(row['address.line2']);
     if (row['address.line3']) addressParts.push(row['address.line3']);
-    
+
     // Add city, state, zip (always add these if present)
     if (row['address.city']) addressParts.push(row['address.city']);
     if (row['address.state']) addressParts.push(row['address.state']);
     if (row['address.zip']) addressParts.push(row['address.zip']);
-    
+
     row.address = addressParts.join(', ') || 'N/A';
-    
+
     // Clean up the component fields
     delete row['address.line1'];
     delete row['address.line2'];
@@ -608,7 +613,7 @@ async function processClient(
     delete row['address.state'];
     delete row['address.zip'];
   }
-  
+
   // Handle multi-line billing address fields (Billing Address, Billing Address 2, Billing Address 3)
   if (row['billing_address.line1'] || row['billing_address.line2'] || row['billing_address.line3']) {
     const parts = [
@@ -616,15 +621,15 @@ async function processClient(
       row['billing_address.line2'],
       row['billing_address.line3']
     ].filter(p => p && p.trim() !== '');
-    
+
     row.billing_address = parts.join(', ') || row.address || 'N/A';
-    
+
     // Clean up the component fields
     delete row['billing_address.line1'];
     delete row['billing_address.line2'];
     delete row['billing_address.line3'];
   }
-  
+
   // Handle billing address components if present
   if (row['billing_address.street'] || row['billing_address.city']) {
     const parts = [
@@ -633,36 +638,36 @@ async function processClient(
       row['billing_address.state'],
       row['billing_address.zip']
     ].filter(p => p && p.trim() !== '');
-    
+
     row.billing_address = parts.join(', ') || row.address || 'N/A';
-    
+
     delete row['billing_address.street'];
     delete row['billing_address.city'];
     delete row['billing_address.state'];
     delete row['billing_address.zip'];
   }
-  
+
   // Set required fields with defaults if not provided
   if (!row.primary_contact || row.primary_contact.trim() === '') {
     row.primary_contact = row.company_name || 'Unknown Contact';
   }
-  
+
   if (!row.email || row.email.trim() === '') {
     row.email = `${(row.domain || 'noemail').toLowerCase()}@imported.local`;
   }
-  
+
   if (!row.phone || row.phone.trim() === '') {
     row.phone = '000-000-0000';
   }
-  
+
   if (!row.address || row.address.trim() === '') {
     row.address = 'N/A';
   }
-  
+
   if (!row.billing_address || row.billing_address.trim() === '') {
     row.billing_address = row.address || 'N/A';
   }
-  
+
   // Set source if provided
   if (source && !row.source) {
     row.props = { ...(row.props || {}), import_source: source };
@@ -677,21 +682,21 @@ async function processClient(
   if (row._role) {
     const roleCode = mapPartyRole(row._role);
     row.primary_role_code = roleCode;
-    
+
     // Store original label in props
     if (!row.props) row.props = {};
     row.props.source_role_label = row._role;
-    
+
     // Flag junk records for exclusion
     if (isJunkRole(roleCode)) {
       row.primary_role_code = 'unknown';
       row.props.exclude = true;
       row.props.exclude_reason = `Junk role: ${row._role}`;
     }
-    
+
     delete row._role; // Remove special field
   }
-  
+
   // FALLBACK: If primary_role_code looks like an unmapped category value (has spaces/capitals),
   // try to map it using mapPartyRole. This handles cases where old field mappings
   // mapped Category directly to primary_role_code before the preset was fixed.
@@ -699,15 +704,15 @@ async function processClient(
     if (row.primary_role_code.includes(' ') || /[A-Z]/.test(row.primary_role_code)) {
       console.log(`🔄 Auto-mapping invalid role code: "${row.primary_role_code}"`);
       const mapped = mapPartyRole(row.primary_role_code);
-      
+
       if (!row.props) row.props = {};
       row.props.original_category = row.primary_role_code;
       row.primary_role_code = mapped;
-      
+
       console.log(`  → Mapped to: "${mapped}"`);
     }
   }
-  
+
   // Set to null if empty to avoid foreign key constraint errors
   if (!row.primary_role_code || row.primary_role_code === '') {
     row.primary_role_code = null;
@@ -715,11 +720,16 @@ async function processClient(
 
   // Check for duplicate by domain using functional index
   if (row.domain) {
-    const { data: existing } = await supabase
+    let query = supabase
       .from('clients')
       .select('id')
-      .eq('domain', row.domain)
-      .maybeSingle();
+      .eq('domain', row.domain);
+
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+
+    const { data: existing } = await query.maybeSingle();
 
     if (existing) {
       if (duplicateStrategy === 'skip') {
@@ -734,7 +744,13 @@ async function processClient(
   // Fallback: check by normalized company name
   if (row.company_name) {
     const normalized = normalizeCompanyName(row.company_name);
-    const { data: clients } = await supabase.from('clients').select('id, company_name');
+    let query = supabase.from('clients').select('id, company_name');
+
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+
+    const { data: clients } = await query;
 
     if (clients) {
       for (const client of clients) {
@@ -796,45 +812,45 @@ async function processOrder(
   if (tenantId) {
     row.tenant_id = tenantId; // Multi-tenant isolation boundary
   }
-  
+
   // Set defaults for optional fields
   if (!row.borrower_name || row.borrower_name.trim() === '') {
     row.borrower_name = 'Unknown Borrower';
   }
-  
+
   // Normalize and set defaults for enum fields (must be lowercase)
   if (!row.property_type || row.property_type.trim() === '') {
     row.property_type = 'single_family';
   } else {
     row.property_type = String(row.property_type).toLowerCase().trim();
   }
-  
+
   if (!row.order_type || row.order_type.trim() === '') {
     row.order_type = 'purchase';
   } else {
     row.order_type = String(row.order_type).toLowerCase().trim();
   }
-  
+
   if (!row.status || row.status.trim() === '') {
     row.status = 'new';
   } else {
     row.status = String(row.status).toLowerCase().trim();
   }
-  
+
   if (!row.priority || row.priority.trim() === '') {
     row.priority = 'normal';
   } else {
     row.priority = String(row.priority).toLowerCase().trim();
   }
-  
+
   if (!row.fee_amount) {
     row.fee_amount = 0;
   }
-  
+
   if (!row.ordered_date) {
     row.ordered_date = new Date().toISOString();
   }
-  
+
   if (!row.due_date) {
     // Default to 14 days from order date
     const dueDate = new Date(row.ordered_date);
@@ -844,128 +860,128 @@ async function processOrder(
 
   // Two-phase property upsert: Property → Order
   let propertyId: string | null = null;
-  
+
   // Preserve any city/state/zip that came from direct CSV mappings
   const csvMappedCity = row.property_city?.trim();
   const csvMappedState = row.property_state?.trim();
   const csvMappedZip = row.property_zip?.trim();
   const csvMappedAddress = row.property_address?.trim();
-  
+
   // Handle address parsing and property creation (only if auto-linking is enabled)
   if (autoLinkProperties) {
     // Check both row.props.original_address AND row['props.original_address'] (field mapping format)
     const originalAddress = row.props?.original_address || row['props.original_address'];
-    
-    if (originalAddress && !row.property_address) {
-    try {
-      console.log('🏠 Parsing address:', originalAddress);
-      
-      const addressParts = splitUSAddress(originalAddress);
-      const { street, city, state, zip } = addressParts;
-      
-      console.log('🏠 Parsed address parts:', { street, city, state, zip });
-      
-      // Extract unit from street address
-      const { street: streetNoUnit, unit, unitType } = extractUnit(street);
-      
-      // Set order snapshot address - prefer CSV-mapped values over parsed values
-      row.property_address = csvMappedAddress || streetNoUnit;
-      row.property_city = csvMappedCity || city;
-      row.property_state = (csvMappedState || state).toUpperCase();
-      row.property_zip = csvMappedZip || zip;
-      
-      // Move original address to props if it was in row level
-      if (row['props.original_address']) {
-        if (!row.props) row.props = {};
-        row.props.original_address = row['props.original_address'];
-        delete row['props.original_address'];
-      }
-      
-      // Set default property_type if not provided
-      if (!row.property_type) {
-        row.property_type = 'single_family';
-      }
-      
-      // Store unit in props if extracted (for backward compatibility)
-      if (unit) {
-        if (!row.props) row.props = {};
-        row.props.unit = unit;
-      }
-      
-      // Upsert property (building-level, no unit in identity)
-      if (streetNoUnit && city && state && zip) {
-        metrics.properties.link_attempted++;
-        propertyId = await upsertPropertyForOrder(supabase, userId, {
-          street: streetNoUnit,
-          city,
-          state: state.toUpperCase(),
-          zip,
-          type: row.property_type
-        }, metrics);
-        
-        if (propertyId) {
-          metrics.properties.linked++;
-          metrics.properties.upserts++;
-        } else {
-          metrics.properties.unlinked++;
-        }
-      }
-      
-      // Create property_unit if unit extracted and should be created
-      if (propertyId && unit && shouldCreateUnit(row.property_type, unit, row.props)) {
-        try {
-          const unitNorm = normalizeUnit(unit);
-          if (unitNorm) {
-            // Upsert property_unit (idempotent via unique index)
-            const { data: propertyUnit, error: unitError } = await supabase
-              .from('property_units')
-              .upsert(
-                {
-                  property_id: propertyId,
-                  unit_identifier: unit.trim(),
-                  unit_norm: unitNorm,
-                  unit_type: unitType || (row.property_type === 'condo' ? 'condo' : null),
-                  props: {
-                    imported_from: source,
-                    imported_at: new Date().toISOString()
-                  }
-                },
-                {
-                  onConflict: 'property_id,unit_norm',
-                  ignoreDuplicates: false
-                }
-              )
-              .select('id')
-              .single();
 
-            if (!unitError && propertyUnit) {
-              row.property_unit_id = propertyUnit.id;
-              
-              // Cache USPAP counts for both unit and building
-              const { data: unitPriorWork } = await supabase
-                .rpc('property_unit_prior_work_count', { _property_unit_id: propertyUnit.id });
-              
-              const { data: buildingPriorWork } = await supabase
-                .rpc('property_building_prior_work_count', { _property_id: propertyId });
-              
-              if (!row.props.uspap) row.props.uspap = {};
-              row.props.uspap.unit_prior_work_3y = unitPriorWork || 0;
-              row.props.uspap.building_prior_work_3y = buildingPriorWork || 0;
-              row.props.uspap.as_of = new Date().toISOString();
-            }
-          }
-        } catch (unitCreateError) {
-          console.warn('Failed to create property_unit:', unitCreateError);
-          // Continue with import - unit creation failure shouldn't block the order
+    if (originalAddress && !row.property_address) {
+      try {
+        console.log('🏠 Parsing address:', originalAddress);
+
+        const addressParts = splitUSAddress(originalAddress);
+        const { street, city, state, zip } = addressParts;
+
+        console.log('🏠 Parsed address parts:', { street, city, state, zip });
+
+        // Extract unit from street address
+        const { street: streetNoUnit, unit, unitType } = extractUnit(street);
+
+        // Set order snapshot address - prefer CSV-mapped values over parsed values
+        row.property_address = csvMappedAddress || streetNoUnit;
+        row.property_city = csvMappedCity || city;
+        row.property_state = (csvMappedState || state).toUpperCase();
+        row.property_zip = csvMappedZip || zip;
+
+        // Move original address to props if it was in row level
+        if (row['props.original_address']) {
+          if (!row.props) row.props = {};
+          row.props.original_address = row['props.original_address'];
+          delete row['props.original_address'];
         }
+
+        // Set default property_type if not provided
+        if (!row.property_type) {
+          row.property_type = 'single_family';
+        }
+
+        // Store unit in props if extracted (for backward compatibility)
+        if (unit) {
+          if (!row.props) row.props = {};
+          row.props.unit = unit;
+        }
+
+        // Upsert property (building-level, no unit in identity)
+        if (streetNoUnit && city && state && zip) {
+          metrics.properties.link_attempted++;
+          propertyId = await upsertPropertyForOrder(supabase, userId, {
+            street: streetNoUnit,
+            city,
+            state: state.toUpperCase(),
+            zip,
+            type: row.property_type
+          }, metrics);
+
+          if (propertyId) {
+            metrics.properties.linked++;
+            metrics.properties.upserts++;
+          } else {
+            metrics.properties.unlinked++;
+          }
+        }
+
+        // Create property_unit if unit extracted and should be created
+        if (propertyId && unit && shouldCreateUnit(row.property_type, unit, row.props)) {
+          try {
+            const unitNorm = normalizeUnit(unit);
+            if (unitNorm) {
+              // Upsert property_unit (idempotent via unique index)
+              const { data: propertyUnit, error: unitError } = await supabase
+                .from('property_units')
+                .upsert(
+                  {
+                    property_id: propertyId,
+                    unit_identifier: unit.trim(),
+                    unit_norm: unitNorm,
+                    unit_type: unitType || (row.property_type === 'condo' ? 'condo' : null),
+                    props: {
+                      imported_from: source,
+                      imported_at: new Date().toISOString()
+                    }
+                  },
+                  {
+                    onConflict: 'property_id,unit_norm',
+                    ignoreDuplicates: false
+                  }
+                )
+                .select('id')
+                .single();
+
+              if (!unitError && propertyUnit) {
+                row.property_unit_id = propertyUnit.id;
+
+                // Cache USPAP counts for both unit and building
+                const { data: unitPriorWork } = await supabase
+                  .rpc('property_unit_prior_work_count', { _property_unit_id: propertyUnit.id });
+
+                const { data: buildingPriorWork } = await supabase
+                  .rpc('property_building_prior_work_count', { _property_id: propertyId });
+
+                if (!row.props.uspap) row.props.uspap = {};
+                row.props.uspap.unit_prior_work_3y = unitPriorWork || 0;
+                row.props.uspap.building_prior_work_3y = buildingPriorWork || 0;
+                row.props.uspap.as_of = new Date().toISOString();
+              }
+            }
+          } catch (unitCreateError) {
+            console.warn('Failed to create property_unit:', unitCreateError);
+            // Continue with import - unit creation failure shouldn't block the order
+          }
+        }
+      } catch (error) {
+        console.warn('Address parsing failed:', error);
+        // Continue with import - address parsing failure shouldn't block the row
       }
-    } catch (error) {
-      console.warn('Address parsing failed:', error);
-      // Continue with import - address parsing failure shouldn't block the row
-    }
     }
   }
-  
+
   // NEW: Handle case where CSV provides address components directly (no original_address)
   // If we have CSV-mapped address components but didn't parse from original_address, use them
   if (!row.property_address && csvMappedAddress) {
@@ -980,7 +996,7 @@ async function processOrder(
   if (!row.property_zip && csvMappedZip) {
     row.property_zip = csvMappedZip;
   }
-  
+
   // Try to link property if we have all required address components from CSV
   if (autoLinkProperties && !propertyId && csvMappedAddress && csvMappedCity && csvMappedState && csvMappedZip) {
     metrics.properties.link_attempted++;
@@ -991,7 +1007,7 @@ async function processOrder(
       zip: csvMappedZip,
       type: row.property_type || 'single_family'
     }, metrics);
-    
+
     if (propertyId) {
       metrics.properties.linked++;
       metrics.properties.upserts++;
@@ -999,7 +1015,7 @@ async function processOrder(
       metrics.properties.unlinked++;
     }
   }
-  
+
   // CRITICAL: Ensure address fields are never NULL (database constraint)
   // Use empty string as fallback to avoid NOT NULL constraint errors
   if (!row.property_address || row.property_address.trim() === '') {
@@ -1014,7 +1030,7 @@ async function processOrder(
   if (!row.property_zip || row.property_zip.trim() === '') {
     row.property_zip = '00000';
   }
-  
+
   // Set property_id if we successfully created/linked a property
   if (propertyId) {
     row.property_id = propertyId;
@@ -1027,7 +1043,7 @@ async function processOrder(
     const completedAt = row.completed_date ? new Date(row.completed_date) : null;
     const inspectionDate = row.props?.inspection_date ? new Date(row.props.inspection_date) : null;
     const dueDate = row.due_date ? new Date(row.due_date) : null;
-    
+
     // Derive status from dates (most specific to least specific)
     if (completedAt) {
       row.status = 'completed';
@@ -1058,32 +1074,37 @@ async function processOrder(
   if (!row.client_id) {
     // Try Asana client resolution (in order of preference)
     if (row._client_name) {
-      row.client_id = await resolveClientId(supabase, null, row._client_name);
+      row.client_id = await resolveClientId(supabase, null, row._client_name, tenantId);
     }
-    
+
     if (!row.client_id && row._amc_client) {
-      row.client_id = await resolveClientId(supabase, null, row._amc_client);
+      row.client_id = await resolveClientId(supabase, null, row._amc_client, tenantId);
     }
-    
+
     if (!row.client_id && row._lender_client) {
-      row.client_id = await resolveClientId(supabase, null, row._lender_client);
+      row.client_id = await resolveClientId(supabase, null, row._lender_client, tenantId);
     }
-    
+
     // Clean up special fields
     delete row._client_name;
     delete row._amc_client;
     delete row._lender_client;
-    
+
     // Try to infer from borrower email domain
     if (!row.client_id && row.borrower_email) {
       const domain = transformExtractDomain(row.borrower_email);
       if (domain) {
-        const { data: clientByDomain } = await supabase
+        let query = supabase
           .from('clients')
           .select('id')
-          .eq('domain', domain)
-          .maybeSingle();
-        
+          .eq('domain', domain);
+
+        if (tenantId) {
+          query = query.eq('tenant_id', tenantId);
+        }
+
+        const { data: clientByDomain } = await query.maybeSingle();
+
         if (clientByDomain) {
           row.client_id = clientByDomain.id;
         }
@@ -1094,11 +1115,11 @@ async function processOrder(
     if (!row.client_id) {
       // Check if we have any client name to work with from special fields
       const potentialClientName = row._client_name || row._amc_client || row._lender_client;
-      
+
       if (potentialClientName && potentialClientName !== 'None' && potentialClientName !== 'AMC') {
         // Auto-detect if it's an individual or company
         const clientType = detectClientType(potentialClientName);
-        
+
         // Try to create the client
         const { data: autoCreatedClient, error: autoCreateError } = await supabase
           .from('clients')
@@ -1113,20 +1134,20 @@ async function processOrder(
           })
           .select('id')
           .maybeSingle();
-        
+
         if (!autoCreateError && autoCreatedClient) {
           row.client_id = autoCreatedClient.id;
-          
+
           // Log auto-creation for review
           if (!row.props) row.props = {};
           row.props.client_auto_created = true;
           row.props.client_type_detected = clientType;
-          
+
           console.log(`✅ Auto-created ${clientType} client: ${potentialClientName}`);
         }
       }
     }
-    
+
     // Last resort: Fall back to "Unassigned Orders" client
     if (!row.client_id) {
       const { data: unassignedClient } = await supabase
@@ -1156,7 +1177,7 @@ async function processOrder(
         if (createError || !newUnassigned) {
           throw new Error('Unable to associate order with client. Please provide client information in mapping.');
         }
-        
+
         row.client_id = newUnassigned.id;
       }
 
@@ -1172,12 +1193,12 @@ async function processOrder(
   // Without external_id, we can't prevent duplicates on re-import
   if (!row.external_id || row.external_id.trim() === '') {
     console.warn('Order missing external_id, generating from order_number:', row.order_number);
-    
+
     // Option 1: Use order_number as external_id if available
     if (row.order_number && row.order_number.trim() !== '') {
       row.external_id = `order-${row.order_number}`;
       console.log(`Generated external_id: ${row.external_id}`);
-    } 
+    }
     // Option 2: Skip if no stable identifier available
     else {
       console.error('Order has no external_id or order_number - cannot ensure idempotency, skipping');
@@ -1192,13 +1213,20 @@ async function processOrder(
 
   // Check for duplicate by (org_id, source, external_id)
   if (row.external_id) {
-    const { data: existing } = await supabase
+    let query = supabase
       .from('orders')
       .select('id')
-      .eq('org_id', userId)
       .eq('source', row.source)
-      .eq('external_id', row.external_id)
-      .maybeSingle();
+      .eq('external_id', row.external_id);
+
+    // Use tenant_id if available, otherwise fallback to org_id (legacy)
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    } else {
+      query = query.eq('org_id', userId);
+    }
+
+    const { data: existing } = await query.maybeSingle();
 
     if (existing) {
       if (duplicateStrategy === 'skip') {
@@ -1212,15 +1240,20 @@ async function processOrder(
 
   // Check by order_number (only if external_id check didn't find a match)
   if (row.order_number) {
-    const { data: existing, error: lookupError } = await supabase
+    let query = supabase
       .from('orders')
       .select('id')
-      .eq('order_number', row.order_number)
-      .maybeSingle();
+      .eq('order_number', row.order_number);
+
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+
+    const { data: existing, error: lookupError } = await query.maybeSingle();
 
     if (!lookupError && existing) {
       console.log(`📋 Found duplicate order by order_number: ${row.order_number}`);
-      
+
       if (duplicateStrategy === 'skip') {
         return { type: 'skipped' };
       } else if (duplicateStrategy === 'update') {
@@ -1228,7 +1261,7 @@ async function processOrder(
           .from('orders')
           .update(row)
           .eq('id', existing.id);
-        
+
         if (updateError) {
           throw new Error(`Failed to update order: ${updateError.message}`);
         }
@@ -1243,21 +1276,21 @@ async function processOrder(
     .insert(row)
     .select()
     .single();
-  
+
   if (insertError) {
     console.error('❌ Order insert failed:', insertError);
     throw new Error(`Failed to insert order: ${insertError.message}`);
   }
-  
+
   console.log('✅ Order inserted successfully:', insertedOrder?.id);
-  
+
   // USPAP cache: Update order with prior work count if property was linked
   if (propertyId) {
     try {
-      const { data: prior } = await supabase.rpc('property_prior_work_count', { 
-        _property_id: propertyId 
+      const { data: prior } = await supabase.rpc('property_prior_work_count', {
+        _property_id: propertyId
       });
-      
+
       // Update the order with USPAP cache
       await supabase
         .from('orders')
@@ -1276,7 +1309,7 @@ async function processOrder(
       // Don't fail the import for USPAP cache issues
     }
   }
-  
+
   return { type: 'inserted' };
 }
 
@@ -1300,7 +1333,7 @@ async function upsertPropertyForOrder(
     // Validate address if we have all required fields
     let validationResult = null;
     let standardizedAddress = addr;
-    
+
     if (addr.street && addr.city && addr.state && addr.zip && addr.zip.length >= 5) {
       try {
         const apiKey = process.env.GOOGLE_MAPS_API_KEY;
@@ -1312,7 +1345,7 @@ async function upsertPropertyForOrder(
             addr.zip,
             apiKey
           );
-          
+
           // Use standardized address if validation succeeded
           if (validationResult.isValid && validationResult.standardized) {
             standardizedAddress = {
@@ -1323,7 +1356,7 @@ async function upsertPropertyForOrder(
               type: addr.type
             };
           }
-          
+
           // Track validation results based on confidence score
           // HIGH (0.8+) = verified, MEDIUM (0.5-0.8) = partial, LOW (<0.5) = failed
           if (validationResult.confidence >= 0.8) {
@@ -1343,12 +1376,12 @@ async function upsertPropertyForOrder(
 
     // Use standardized address for hash calculation
     const addr_hash = normalizeAddressKey(
-      standardizedAddress.street, 
-      standardizedAddress.city, 
-      standardizedAddress.state, 
+      standardizedAddress.street,
+      standardizedAddress.city,
+      standardizedAddress.state,
       standardizedAddress.zip
     );
-    
+
     const propertyData: any = {
       org_id: orgId,
       address_line1: standardizedAddress.street,
@@ -1364,19 +1397,19 @@ async function upsertPropertyForOrder(
       propertyData.validation_status = validationResult.isValid ? 'verified' : 'partial';
       propertyData.verified_at = new Date().toISOString();
       propertyData.verification_source = 'google';
-      
+
       if (validationResult.standardized) {
         propertyData.zip4 = validationResult.standardized.zip4;
         propertyData.county = validationResult.standardized.county;
         propertyData.latitude = validationResult.standardized.latitude;
         propertyData.longitude = validationResult.standardized.longitude;
       }
-      
+
       if (validationResult.metadata) {
         propertyData.dpv_code = validationResult.metadata.dpvCode;
       }
     }
-    
+
     const { data, error } = await supabase
       .from('properties')
       .upsert(propertyData, { onConflict: 'org_id,addr_hash' })
@@ -1401,15 +1434,21 @@ async function upsertPropertyForOrder(
 async function resolveClientId(
   supabase: any,
   domain: string | null,
-  companyName: string | null
+  companyName: string | null,
+  tenantId: string | null
 ): Promise<string | null> {
   // Try domain match first
   if (domain) {
-    const { data: client } = await supabase
+    let query = supabase
       .from('clients')
       .select('id')
-      .ilike('domain', domain)
-      .single();
+      .ilike('domain', domain);
+
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+
+    const { data: client } = await query.maybeSingle();
 
     if (client) return client.id;
   }
@@ -1417,7 +1456,13 @@ async function resolveClientId(
   // Try company name match
   if (companyName) {
     const normalized = normalizeCompanyName(companyName);
-    const { data: clients } = await supabase.from('clients').select('id, company_name');
+    let query = supabase.from('clients').select('id, company_name');
+
+    if (tenantId) {
+      query = query.eq('tenant_id', tenantId);
+    }
+
+    const { data: clients } = await query;
 
     if (clients) {
       for (const client of clients) {

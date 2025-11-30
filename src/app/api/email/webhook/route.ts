@@ -281,15 +281,32 @@ export async function POST(request: NextRequest) {
       case 'email.complained':
         // Add to suppressions
         if (data.to && data.contact_id) {
-          await supabase
-            .from('email_suppressions')
-            .upsert({
-              org_id: data.org_id,
-              contact_id: data.contact_id,
-              email: data.to,
-              reason: 'complaint',
-              details: 'User marked as spam',
-            }, { onConflict: 'org_id,contact_id' });
+          // Look up tenant_id from contact -> client
+          const { data: contact } = await supabase
+            .from('contacts')
+            .select('client_id')
+            .eq('id', data.contact_id)
+            .single();
+
+          if (contact) {
+            const { data: client } = await supabase
+              .from('clients')
+              .select('tenant_id')
+              .eq('id', contact.client_id)
+              .single();
+
+            if (client?.tenant_id) {
+              await supabase
+                .from('email_suppressions')
+                .upsert({
+                  tenant_id: client.tenant_id,
+                  contact_id: data.contact_id,
+                  email: data.to,
+                  reason: 'complaint',
+                  details: 'User marked as spam',
+                }, { onConflict: 'tenant_id,contact_id' }); // Assuming constraint updated to tenant_id
+            }
+          }
         }
         break;
 
