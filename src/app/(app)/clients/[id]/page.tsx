@@ -248,9 +248,10 @@ export default function ClientDetailPage() {
           <div>
             <p className="text-sm text-muted-foreground mb-2">Tags</p>
             <TagSelector
-              clientId={clientId}
+              entityId={clientId}
+              entityType="client"
               allTags={allTags}
-              clientTags={clientTags}
+              assignedTags={clientTags}
               onAddTag={handleAddTag}
               onRemoveTag={handleRemoveTag}
             />

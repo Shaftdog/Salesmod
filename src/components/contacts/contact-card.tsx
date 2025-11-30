@@ -10,6 +10,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal } from "lucide-react";
+import { useContactTags } from "@/hooks/use-contact-tags";
+import { TagBadge } from "@/components/tags/tag-badge";
 
 type ContactCardProps = {
   contact: Contact;
@@ -21,6 +23,7 @@ export function ContactCard({ contact, onEdit, onDelete }: ContactCardProps) {
   const fullName = `${contact.firstName} ${contact.lastName}`;
   const hasHardBounce = contact.tags?.includes('email_bounced_hard');
   const hasSoftBounce = contact.tags?.includes('email_bounced_soft');
+  const { data: contactTags = [] } = useContactTags(contact.id);
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -83,8 +86,8 @@ export function ContactCard({ contact, onEdit, onDelete }: ContactCardProps) {
               {contact.mobile && (
                 <div className="flex items-center gap-2 text-sm">
                   <Smartphone className="h-4 w-4 text-muted-foreground" />
-                  <a 
-                    href={`tel:${contact.mobile}`} 
+                  <a
+                    href={`tel:${contact.mobile}`}
                     className="hover:underline"
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -93,6 +96,18 @@ export function ContactCard({ contact, onEdit, onDelete }: ContactCardProps) {
                 </div>
               )}
             </div>
+            {contactTags.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-2">
+                {contactTags.slice(0, 3).map((ct) => (
+                  ct.tag && <TagBadge key={ct.tagId} tag={ct.tag} />
+                ))}
+                {contactTags.length > 3 && (
+                  <span className="text-xs text-muted-foreground">
+                    +{contactTags.length - 3} more
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           
           <DropdownMenu>

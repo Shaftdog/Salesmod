@@ -8,6 +8,7 @@ import type {
   Activity,
   Tag,
   ClientTag,
+  ContactTag,
   Deal,
   Task,
   Case,
@@ -202,6 +203,15 @@ export function transformClientTag(dbClientTag: any): ClientTag {
     tagId: dbClientTag.tag_id,
     createdAt: dbClientTag.created_at,
     tag: dbClientTag.tag ? transformTag(dbClientTag.tag) : undefined,
+  }
+}
+
+export function transformContactTag(dbContactTag: any): ContactTag {
+  return {
+    contactId: dbContactTag.contact_id,
+    tagId: dbContactTag.tag_id,
+    createdAt: dbContactTag.created_at,
+    tag: dbContactTag.tag ? transformTag(dbContactTag.tag) : undefined,
   }
 }
 

@@ -22,12 +22,13 @@ import { TagBadge } from "./tag-badge";
 import { Check, Plus, Tags } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCreateTag } from "@/hooks/use-tags";
-import type { Tag, ClientTag } from "@/lib/types";
+import type { Tag, ClientTag, ContactTag } from "@/lib/types";
 
 type TagSelectorProps = {
-  clientId: string;
+  entityId: string;
+  entityType: 'client' | 'contact';
   allTags: Tag[];
-  clientTags: ClientTag[];
+  assignedTags: (ClientTag | ContactTag)[];
   onAddTag: (tagId: string) => void;
   onRemoveTag: (tagId: string) => void;
 };
@@ -45,7 +46,7 @@ const PRESET_COLORS = [
   "#06B6D4", // Cyan
 ];
 
-export function TagSelector({ clientId, allTags, clientTags, onAddTag, onRemoveTag }: TagSelectorProps) {
+export function TagSelector({ entityId, entityType, allTags, assignedTags, onAddTag, onRemoveTag }: TagSelectorProps) {
   const [open, setOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
@@ -53,8 +54,10 @@ export function TagSelector({ clientId, allTags, clientTags, onAddTag, onRemoveT
 
   const { mutateAsync: createTag, isPending: isCreating } = useCreateTag();
 
-  const clientTagIds = new Set(clientTags.map(ct => ct.tagId));
-  const availableTags = allTags.filter(tag => !clientTagIds.has(tag.id));
+  const assignedTagIds = new Set(assignedTags.map(t => t.tagId));
+  const availableTags = allTags.filter(tag => !assignedTagIds.has(tag.id));
+
+  const entityLabel = entityType === 'client' ? 'client' : 'contact';
 
   const handleCreateTag = async () => {
     if (!newTagName.trim()) return;
@@ -76,13 +79,13 @@ export function TagSelector({ clientId, allTags, clientTags, onAddTag, onRemoveT
   return (
     <>
       <div className="flex flex-wrap gap-2 items-center">
-        {clientTags.map((clientTag) => (
-          clientTag.tag && (
+        {assignedTags.map((assignedTag) => (
+          assignedTag.tag && (
             <TagBadge
-              key={clientTag.tagId}
-              tag={clientTag.tag}
+              key={assignedTag.tagId}
+              tag={assignedTag.tag}
               removable
-              onRemove={() => onRemoveTag(clientTag.tagId)}
+              onRemove={() => onRemoveTag(assignedTag.tagId)}
             />
           )
         ))}
@@ -143,7 +146,7 @@ export function TagSelector({ clientId, allTags, clientTags, onAddTag, onRemoveT
           <DialogHeader>
             <DialogTitle>Create New Tag</DialogTitle>
             <DialogDescription>
-              Add a new tag to organize your clients. The tag will be automatically added to this client.
+              Add a new tag to organize your {entityLabel}s. The tag will be automatically added to this {entityLabel}.
             </DialogDescription>
           </DialogHeader>
 
