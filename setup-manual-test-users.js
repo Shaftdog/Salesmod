@@ -28,24 +28,24 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
 const USERS = [
     {
         email: 'rod@myroihome.com',
-        password: 'TestPassword123!',
+        password: 'test-password',
         name: 'Rod (ROI)',
         tenantName: 'ROI Appraisal Group',
-        tenantType: 'amc' // Assuming 'amc' is a valid type based on context
+        tenantType: 'internal'
     },
     {
-        email: 'rod2@myroihome.com',
-        password: 'TestPassword123!',
-        name: 'Rod 2 (ROI)',
+        email: 'dashawn@myroihome.com',
+        password: 'test-password',
+        name: 'Dashawn (ROI)',
         tenantName: 'ROI Appraisal Group', // Same tenant as Rod
-        tenantType: 'amc'
+        tenantType: 'internal'
     },
     {
-        email: 'sherrard@sourceam.com',
-        password: 'TestPassword123!',
-        name: 'Sherrard (SourceAM)',
-        tenantName: 'SourceAM',
-        tenantType: 'lender' // Assuming 'lender' or similar, using 'amc' if unsure. Let's guess 'amc' or check types.
+        email: 'testuser123@gmail.com',
+        password: 'test-password',
+        name: 'Test User',
+        tenantName: 'Test user\'s Organization',
+        tenantType: 'lender'
     }
 ];
 
@@ -177,8 +177,11 @@ async function setupUsers() {
     }
 
     console.log('\n✅ Setup complete!');
-    console.log('Credentials for all users:');
-    console.log('Password: TestPassword123!');
+    console.log('Test users created:');
+    console.log('- rod@myroihome.com (ROI Appraisal Group)');
+    console.log('- dashawn@myroihome.com (ROI Appraisal Group)');
+    console.log('- testuser123@gmail.com (Test user\'s Organization)');
+    console.log('\nPassword for all users: test-password');
 }
 
 setupUsers().catch(err => {
