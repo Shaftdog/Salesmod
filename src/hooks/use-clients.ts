@@ -16,7 +16,7 @@ export function useClients() {
         .from('clients')
         .select('*, party_roles(*)')
         .order('company_name')
-      
+
       if (error) throw error
       return (data || []).map(transformClient)
     },
@@ -25,12 +25,30 @@ export function useClients() {
 
   const createClientMutation = useMutation({
     mutationFn: async (client: any) => {
+      // Get current user and their tenant_id
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.tenant_id) {
+        throw new Error('User has no tenant_id assigned - cannot create client')
+      }
+
       const { data, error } = await supabase
         .from('clients')
-        .insert(client)
+        .insert({
+          ...client,
+          org_id: user.id,
+          tenant_id: profile.tenant_id,
+        })
         .select('*, party_roles(*)')
         .single()
-      
+
       if (error) throw error
       return transformClient(data)
     },

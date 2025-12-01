@@ -349,6 +349,18 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create contact' };
+      }
+
       // Verify client exists and user has access to it
       const { data: client, error: clientError } = await supabase
         .from('clients')
@@ -364,6 +376,7 @@ export const agentTools = {
       const { data, error } = await supabase
         .from('contacts')
         .insert({
+          tenant_id: tenantId,
           org_id: user.id,
           client_id: params.clientId,
           first_name: params.firstName,
@@ -982,12 +995,25 @@ export const agentTools = {
     execute: async (params: any) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return { error: 'Not authenticated' };
+
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create activity' };
+      }
 
       const { data, error } = await supabase
         .from('activities')
         .insert({
+          tenant_id: tenantId,
           activity_type: params.activityType,
           subject: params.subject,
           description: params.description || '',
@@ -1183,6 +1209,116 @@ export const agentTools = {
   }),
 
   /**
+   * Create a new opportunity/deal
+   */
+  createOpportunity: tool({
+    description: 'Create a new sales opportunity or deal. Use this when a potential business opportunity is identified that should be tracked in the pipeline.',
+    inputSchema: z.object({
+      clientId: z.string().uuid().describe('Client UUID this opportunity is associated with'),
+      title: z.string().min(1).describe('Title of the opportunity (e.g., "FHA Appraisal - 1010 Dawes Rd")'),
+      description: z.string().optional().describe('Detailed description of the opportunity'),
+      value: z.number().optional().describe('Estimated value/fee for this opportunity'),
+      probability: z.number().min(0).max(100).optional().describe('Probability of winning (0-100%)'),
+      stage: z.enum(['lead', 'qualified', 'proposal', 'negotiation', 'won', 'lost']).optional().describe('Current pipeline stage'),
+      expectedCloseDate: z.string().optional().describe('Expected close date (ISO format)'),
+      contactId: z.string().uuid().optional().describe('Associated contact UUID'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return { error: 'Not authenticated' };
+
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create opportunity' };
+      }
+
+      // Verify client exists and user has access
+      const { data: client, error: clientError } = await supabase
+        .from('clients')
+        .select('id, company_name')
+        .eq('id', params.clientId)
+        .single();
+
+      if (clientError || !client) {
+        return { error: 'Client not found or access denied' };
+      }
+
+      // Build the deal object
+      const dealData: any = {
+        tenant_id: tenantId,
+        client_id: params.clientId,
+        title: params.title,
+        description: params.description || null,
+        value: params.value || null,
+        probability: params.probability || 50,
+        stage: params.stage || 'lead',
+        expected_close_date: params.expectedCloseDate || null,
+        contact_id: params.contactId || null,
+        assigned_to: user.id,
+        created_by: user.id,
+      };
+
+      // Create the deal
+      const { data, error } = await supabase
+        .from('deals')
+        .insert(dealData)
+        .select(`
+          id,
+          title,
+          value,
+          probability,
+          stage,
+          expected_close_date,
+          client:clients(company_name)
+        `)
+        .single();
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      // Log activity
+      await supabase
+        .from('activities')
+        .insert({
+          tenant_id: tenantId,
+          client_id: params.clientId,
+          contact_id: params.contactId || null,
+          deal_id: data.id,
+          activity_type: 'note',
+          subject: `Opportunity Created: ${params.title}`,
+          description: `New opportunity created via agent.\n\nValue: ${params.value ? `$${params.value}` : 'Not specified'}\nStage: ${params.stage || 'lead'}\n\n${params.description || ''}`,
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          created_by: user.id,
+        });
+
+      return {
+        success: true,
+        opportunity: {
+          id: data.id,
+          title: data.title,
+          value: data.value,
+          probability: data.probability,
+          stage: data.stage,
+          expectedCloseDate: data.expected_close_date,
+          client: (data.client as any)?.company_name || null,
+        },
+      };
+    },
+  }),
+
+  /**
    * Delete an opportunity/deal
    */
   deleteOpportunity: tool({
@@ -1197,24 +1333,22 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
-      // Get opportunity info first and verify ownership
+      // RLS will handle tenant isolation, just verify the deal exists and user can access it
       const { data: opportunity, error: fetchError } = await supabase
         .from('deals')
-        .select('id, name, amount, stage, client_id, org_id, client:clients(company_name)')
+        .select('id, title, value, stage, client_id, client:clients(company_name)')
         .eq('id', params.opportunityId)
-        .eq('org_id', user.id)
         .single();
 
       if (fetchError || !opportunity) {
         return { error: 'Opportunity not found or access denied' };
       }
 
-      // Delete the opportunity (with ownership verification)
+      // Delete the opportunity (RLS will verify tenant ownership)
       const { error: deleteError } = await supabase
         .from('deals')
         .delete()
-        .eq('id', params.opportunityId)
-        .eq('org_id', user.id);
+        .eq('id', params.opportunityId);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -1224,8 +1358,8 @@ export const agentTools = {
         success: true,
         deleted: {
           id: opportunity.id,
-          name: opportunity.name,
-          amount: opportunity.amount,
+          title: opportunity.title,
+          value: opportunity.value,
           stage: opportunity.stage,
           client: (opportunity.client as any)?.company_name || null,
         },
@@ -1812,9 +1946,22 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create client' };
+      }
+
       const { data, error } = await supabase
         .from('clients')
         .insert({
+          tenant_id: tenantId,
           org_id: user.id,
           company_name: params.companyName,
           primary_contact: params.primaryContact,
@@ -1868,12 +2015,25 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create property' };
+      }
+
       // Create addr_hash for deduplication
       const addrHash = `${params.addressLine1.toUpperCase()}|${params.city.toUpperCase()}|${params.state.toUpperCase()}|${params.postalCode.substring(0, 5)}`;
 
       const { data, error} = await supabase
         .from('properties')
         .insert({
+          tenant_id: tenantId,
           org_id: user.id,
           address_line1: params.addressLine1,
           address_line2: params.addressLine2,
@@ -1930,9 +2090,22 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create order' };
+      }
+
       const { data, error } = await supabase
         .from('orders')
         .insert({
+          tenant_id: tenantId,
           org_id: user.id,
           client_id: params.clientId,
           order_number: params.orderNumber,

@@ -295,6 +295,18 @@ export async function executeAnthropicTool(
     case 'createContact': {
       const { clientId, firstName, lastName, email, phone, mobile, title, department, isPrimary, notes } = toolInput;
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create contact' };
+      }
+
       // Verify client exists
       const { data: client, error: clientError } = await supabase
         .from('clients')
@@ -310,6 +322,7 @@ export async function executeAnthropicTool(
       const { data, error } = await supabase
         .from('contacts')
         .insert({
+          tenant_id: tenantId,
           org_id: userId,
           client_id: clientId,
           first_name: firstName,
@@ -409,9 +422,22 @@ export async function executeAnthropicTool(
         specialRequirements
       } = toolInput;
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create client' };
+      }
+
       const { data, error } = await supabase
         .from('clients')
         .insert({
+          tenant_id: tenantId,
           org_id: userId,
           company_name: companyName,
           primary_contact: primaryContact,
@@ -493,11 +519,24 @@ export async function executeAnthropicTool(
     case 'createProperty': {
       const { addressLine1, addressLine2, city, state, postalCode, propertyType, apn, yearBuilt, gla, lotSize } = toolInput;
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create property' };
+      }
+
       const addrHash = `${addressLine1.toUpperCase()}|${city.toUpperCase()}|${state.toUpperCase()}|${postalCode.substring(0, 5)}`;
 
       const { data, error } = await supabase
         .from('properties')
         .insert({
+          tenant_id: tenantId,
           org_id: userId,
           address_line1: addressLine1,
           address_line2: addressLine2,
@@ -574,9 +613,22 @@ export async function executeAnthropicTool(
         notes
       } = toolInput;
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create order' };
+      }
+
       const { data, error } = await supabase
         .from('orders')
         .insert({
+          tenant_id: tenantId,
           org_id: userId,
           client_id: clientId,
           order_number: orderNumber,
@@ -815,17 +867,108 @@ export async function executeAnthropicTool(
     }
 
     // ===== Deal/Opportunity Management =====
+    case 'createOpportunity': {
+      const { clientId, title, description, value, probability, stage, expectedCloseDate, contactId } = toolInput;
+
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create opportunity' };
+      }
+
+      // Verify client exists (RLS will filter by tenant)
+      const { data: client, error: clientError } = await supabase
+        .from('clients')
+        .select('id, company_name')
+        .eq('id', clientId)
+        .single();
+
+      if (clientError || !client) {
+        return { error: 'Client not found or access denied' };
+      }
+
+      // Build the deal object
+      const dealData: Record<string, any> = {
+        tenant_id: tenantId,
+        client_id: clientId,
+        title: title,
+        description: description || null,
+        value: value || null,
+        probability: probability || 50,
+        stage: stage || 'lead',
+        expected_close_date: expectedCloseDate || null,
+        contact_id: contactId || null,
+        assigned_to: userId,
+        created_by: userId,
+      };
+
+      // Create the deal
+      const { data, error } = await supabase
+        .from('deals')
+        .insert(dealData)
+        .select(`
+          id,
+          title,
+          value,
+          probability,
+          stage,
+          expected_close_date,
+          client:clients(company_name)
+        `)
+        .single();
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      // Log activity
+      await supabase
+        .from('activities')
+        .insert({
+          tenant_id: tenantId,
+          client_id: clientId,
+          contact_id: contactId || null,
+          deal_id: data.id,
+          activity_type: 'note',
+          subject: `Opportunity Created: ${title}`,
+          description: `New opportunity created via agent.\n\nValue: ${value ? `$${value}` : 'Not specified'}\nStage: ${stage || 'lead'}\n\n${description || ''}`,
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          created_by: userId,
+        });
+
+      return {
+        success: true,
+        opportunity: {
+          id: data.id,
+          title: data.title,
+          value: data.value,
+          probability: data.probability,
+          stage: data.stage,
+          expectedCloseDate: data.expected_close_date,
+          client: (data.client as any)?.company_name || null,
+        },
+      };
+    }
+
     case 'deleteOpportunity': {
       const { opportunityId } = toolInput;
 
+      // RLS will handle tenant isolation
       const { data: opportunity, error: fetchError } = await supabase
         .from('deals')
-        .select('id, name, amount, stage, client_id, client:clients(company_name)')
+        .select('id, title, value, stage, client_id, client:clients(company_name)')
         .eq('id', opportunityId)
         .single();
 
       if (fetchError || !opportunity) {
-        return { error: 'Opportunity not found' };
+        return { error: 'Opportunity not found or access denied' };
       }
 
       const { error: deleteError } = await supabase
@@ -839,8 +982,8 @@ export async function executeAnthropicTool(
         success: true,
         deleted: {
           id: opportunity.id,
-          name: opportunity.name,
-          amount: opportunity.amount,
+          title: opportunity.title,
+          value: opportunity.value,
           stage: opportunity.stage,
           client: (opportunity.client as any)?.company_name || null,
         },
@@ -851,9 +994,22 @@ export async function executeAnthropicTool(
     case 'createActivity': {
       const { activityType, subject, description, clientId, contactId, orderId, outcome, scheduledAt } = toolInput;
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create activity' };
+      }
+
       const { data, error } = await supabase
         .from('activities')
         .insert({
+          tenant_id: tenantId,
           activity_type: activityType,
           subject,
           description: description || '',

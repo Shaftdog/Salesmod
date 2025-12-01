@@ -495,6 +495,49 @@ export const anthropicTools: Anthropic.Messages.Tool[] = [
 
   // ===== Deal/Opportunity Management =====
   {
+    name: 'createOpportunity',
+    description: 'Create a new sales opportunity or deal. Use this when a potential business opportunity is identified that should be tracked in the pipeline.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        clientId: {
+          type: 'string',
+          description: 'Client UUID this opportunity is associated with',
+        },
+        title: {
+          type: 'string',
+          description: 'Title of the opportunity (e.g., "FHA Appraisal - 1010 Dawes Rd")',
+        },
+        description: {
+          type: 'string',
+          description: 'Detailed description of the opportunity',
+        },
+        value: {
+          type: 'number',
+          description: 'Estimated value/fee for this opportunity',
+        },
+        probability: {
+          type: 'number',
+          description: 'Probability of winning (0-100%)',
+        },
+        stage: {
+          type: 'string',
+          enum: ['lead', 'qualified', 'proposal', 'negotiation', 'won', 'lost'],
+          description: 'Current pipeline stage',
+        },
+        expectedCloseDate: {
+          type: 'string',
+          description: 'Expected close date (ISO format)',
+        },
+        contactId: {
+          type: 'string',
+          description: 'Associated contact UUID',
+        },
+      },
+      required: ['clientId', 'title'],
+    },
+  },
+  {
     name: 'deleteOpportunity',
     description: 'Delete an opportunity or deal from the system.',
     input_schema: {

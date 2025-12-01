@@ -191,13 +191,24 @@ export function getGoalProgress(
 
 export function useCreateGoal() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (newGoal: Partial<Goal>) => {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-      
+
+      // Get user's tenant_id
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile?.tenant_id) {
+        throw new Error('User has no tenant_id assigned - cannot create goal');
+      }
+
       const { data, error } = await supabase
         .from('goals')
         .insert({
@@ -208,11 +219,12 @@ export function useCreateGoal() {
           period_end: newGoal.periodEnd,
           assigned_to: newGoal.assignedTo || null,
           description: newGoal.description,
-          created_by: user.id
+          created_by: user.id,
+          tenant_id: profile.tenant_id,
         })
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },

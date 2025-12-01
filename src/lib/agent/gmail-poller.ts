@@ -158,16 +158,33 @@ export async function pollGmailInbox(orgId: string): Promise<PollResult> {
       console.error('[Gmail Poller] Failed to update sync state:', updateError);
     }
 
+    // Get user's tenant_id for multi-tenant card lookup
+    const { data: userProfile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', orgId)
+      .single();
+
+    const tenantId = userProfile?.tenant_id;
+
     // Count auto-executed cards
-    const { count: autoExecuted } = await supabase
+    let autoExecQuery = supabase
       .from('kanban_cards')
       .select('*', { count: 'exact', head: true })
-      .eq('org_id', orgId)
       .in(
         'gmail_message_id',
         messages.map((m) => m.id)
       )
       .eq('state', 'approved');
+
+    // Use tenant_id for multi-tenant lookup, fallback to org_id for legacy
+    if (tenantId) {
+      autoExecQuery = autoExecQuery.eq('tenant_id', tenantId);
+    } else {
+      autoExecQuery = autoExecQuery.eq('org_id', orgId);
+    }
+
+    const { count: autoExecuted } = await autoExecQuery;
 
     result.autoExecutedCards = autoExecuted || 0;
 
@@ -374,18 +391,34 @@ async function findCampaignContext(
   const supabase = await createClient();
 
   try {
+    // Get user's tenant_id for multi-tenant lookup
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', orgId)
+      .single();
+
+    const tenantId = profile?.tenant_id;
+
     // Look for cards with the same thread ID that sent emails
     // This indicates the thread was started by our agent
-    const { data: originalCard } = await supabase
+    let cardQuery = supabase
       .from('kanban_cards')
       .select('id, job_id, task_id, type, action_payload, gmail_thread_id')
-      .eq('org_id', orgId)
       .eq('gmail_thread_id', message.threadId)
       .eq('type', 'send_email')
       .eq('state', 'done')
       .order('executed_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
+
+    // Use tenant_id for multi-tenant lookup, fallback to org_id for legacy
+    if (tenantId) {
+      cardQuery = cardQuery.eq('tenant_id', tenantId);
+    } else {
+      cardQuery = cardQuery.eq('org_id', orgId);
+    }
+
+    const { data: originalCard } = await cardQuery.single();
 
     if (!originalCard || !originalCard.job_id) {
       return null;
@@ -512,17 +545,34 @@ async function buildContextMap(
     { isExistingClient?: boolean; hasActiveOrders?: boolean }
   >();
 
+  // Get the user's tenant_id for multi-tenant lookups
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+
   // Get all unique sender emails
   const senderEmails = Array.from(new Set(messages.map((m) => m.from.email)));
 
   // Check if each sender is an existing contact/client
   for (const email of senderEmails) {
-    const { data: contact } = await supabase
+    // Use tenant_id for multi-tenant lookup, fallback to org_id for legacy
+    let contactQuery = supabase
       .from('contacts')
       .select('id, client_id')
-      .eq('org_id', orgId)
-      .eq('email', email)
-      .single();
+      .eq('email', email);
+
+    if (tenantId) {
+      contactQuery = contactQuery.eq('tenant_id', tenantId);
+    } else {
+      // Fallback to legacy org_id pattern
+      contactQuery = contactQuery.eq('org_id', orgId);
+    }
+
+    const { data: contact } = await contactQuery.single();
 
     if (!contact) {
       contextMap.set(email, { isExistingClient: false, hasActiveOrders: false });

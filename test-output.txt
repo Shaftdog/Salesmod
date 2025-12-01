@@ -1,0 +1,52 @@
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › e2e\task-library-verification.spec.ts:246:7 › Task Library Feature Verification › 8. Overall RLS Fix Verification
+[1A[2K[chromium] › e2e\task-library-verification.spec.ts:246:7 › Task Library Feature Verification › 8. Overall RLS Fix Verification
+Failed to authenticate test user: Invalid login credentials
+
+[1A[2K❌ Failed to get test user session
+
+[1A[2K  1) [chromium] › e2e\task-library-verification.spec.ts:246:7 › Task Library Feature Verification › 8. Overall RLS Fix Verification 
+
+    Error: locator.waitFor: Error: strict mode violation: locator('text=/\\d+ tasks/') resolved to 11 elements:
+        1) <div class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 capitalize text-foreground font-normal">0 tasks, 0 subtasks</div> aka getByText('tasks, 0 subtasks')
+        2) <span class="text-sm text-muted-foreground">0 tasks</span> aka getByText('tasks').nth(2)
+        3) <span class="text-sm text-muted-foreground">0 tasks</span> aka getByText('tasks').nth(4)
+        4) <span class="text-sm text-muted-foreground">0 tasks</span> aka getByText('0 tasks').nth(3)
+        5) <span class="text-sm text-muted-foreground">0 tasks</span> aka getByText('0 tasks').nth(4)
+        6) <span class="text-sm text-muted-foreground">0 tasks</span> aka getByText('0 tasks').nth(5)
+        7) <span class="text-sm text-muted-foreground">0 tasks</span> aka getByText('0 tasks', { exact: true }).nth(5)
+        8) <span class="text-sm text-muted-foreground">0 tasks</span> aka locator('div:nth-child(7) > div > .flex.flex-col > .flex.items-center.justify-between > .flex > .text-sm')
+        9) <span class="text-sm text-muted-foreground">0 tasks</span> aka locator('div:nth-child(8) > div > .flex.flex-col > .flex.items-center.justify-between > .flex > .text-sm')
+        10) <span class="text-sm text-muted-foreground">0 tasks</span> aka locator('div:nth-child(9) > div > .flex.flex-col > .flex.items-center.justify-between > .flex > .text-sm')
+        ...
+
+    Call log:
+    [2m  - waiting for locator('text=/\\d+ tasks/') to be visible[22m
+
+
+      249 |     // 1. Badge check
+      250 |     const badge = page.locator('text=/\\d+ tasks/');
+    > 251 |     await badge.waitFor({ timeout: 10000 });
+          |                 ^
+      252 |     const badgeText = await badge.textContent();
+      253 |     expect(badgeText).not.toContain('0 tasks');
+      254 |
+        at C:\Users\shaug\source\repos\Shaftdog\Salesmod\e2e\task-library-verification.spec.ts:251:17
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\task-library-verification--fcf19-verall-RLS-Fix-Verification-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\task-library-verification--fcf19-verall-RLS-Fix-Verification-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\task-library-verification--fcf19-verall-RLS-Fix-Verification-chromium\error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › e2e\task-library-verification.spec.ts:246:7 › Task Library Feature Verification › 8. Overall RLS Fix Verification 
+
+[36m  Serving HTML report at http://localhost:52946. Press Ctrl+C to quit.[39m

@@ -184,10 +184,10 @@ export function useCreateContact() {
         throw new Error('User not authenticated')
       }
 
-      // Get user's profile to get the correct org_id
+      // Get user's profile to get the correct org_id and tenant_id
       const { data: profile } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, tenant_id')
         .eq('id', user.id)
         .single()
 
@@ -195,11 +195,15 @@ export function useCreateContact() {
         throw new Error('User profile not found')
       }
 
-      // Ensure org_id is set for RLS policies
-      // Use the profile's id as org_id (profiles.id is the organization identifier)
+      if (!profile.tenant_id) {
+        throw new Error('User has no tenant_id assigned - cannot create contact')
+      }
+
+      // Ensure org_id and tenant_id are set for RLS policies
       const contactData = {
         ...contact,
         org_id: contact.org_id || profile.id,
+        tenant_id: profile.tenant_id,
       }
 
       const { data, error } = await supabase
