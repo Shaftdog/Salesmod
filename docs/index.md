@@ -12,6 +12,8 @@ updated_by: Claude Code
 
 ## Quick Navigation
 
+- **[User Manual](USER-MANUAL.md)** - Complete guide to using Salesmod
+- **[Quick Reference](QUICK-REFERENCE.md)** - One-page cheat sheet
 - [Get Started](getting-started/SETUP-STEPS.md) - Setup and installation
 - [Architecture Overview](architecture/) - System design and data model
 - [Features](features/) - Feature documentation by category
@@ -24,6 +26,8 @@ updated_by: Claude Code
 
 **New to Salesmod? Start here:**
 
+- **[User Manual](USER-MANUAL.md)** - Complete guide to using the system
+- **[Quick Reference](QUICK-REFERENCE.md)** - One-page cheat sheet for daily use
 - [Setup Guide](getting-started/SETUP-STEPS.md) - Complete setup instructions
 - [Database Connection](getting-started/HELP-ME-CONNECT-TO-DATABASE.md) - Connect to Supabase
 - [Success Checklist](getting-started/SUCCESS-REFRESH-BROWSER-NOW.md) - Verify everything works
