@@ -36,11 +36,26 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData: CreateJobRequest = CreateJobRequestSchema.parse(body);
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Create job record
     const { data: job, error: insertError } = await supabase
       .from('jobs')
       .insert({
         org_id: user.id,
+        tenant_id: profile.tenant_id,
         owner_id: user.id,
         name: validatedData.name,
         description: validatedData.description || null,

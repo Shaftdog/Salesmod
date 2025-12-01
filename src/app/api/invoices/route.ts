@@ -17,6 +17,7 @@ import {
   validateRequestBody,
   validateQueryParams,
   getAuthenticatedOrgId,
+  getAuthenticatedContext,
   successResponse,
   createdResponse,
 } from '@/lib/errors/api-errors';
@@ -157,7 +158,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
 
     // Validate request body
     const body = await validateRequestBody<CreateInvoiceInput>(
@@ -197,6 +198,7 @@ export async function POST(request: NextRequest) {
       .from('invoices')
       .insert({
         org_id: orgId,
+        tenant_id: tenantId,
         client_id: body.client_id,
         payment_method: body.payment_method,
         invoice_date: body.invoice_date || new Date().toISOString(),

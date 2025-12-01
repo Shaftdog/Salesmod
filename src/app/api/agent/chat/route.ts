@@ -206,6 +206,18 @@ async function saveConversationMemory(
 ): Promise<void> {
   const supabase = await createClient();
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  if (!profile?.tenant_id) {
+    console.error('saveConversationMemory: User has no tenant_id assigned');
+    return;
+  }
+
   // Create a summary key based on timestamp
   const timestamp = new Date().toISOString().split('T')[0];
   const key = `chat_${timestamp}_${messages.length}`;
@@ -217,6 +229,7 @@ async function saveConversationMemory(
     .from('agent_memories')
     .upsert({
       org_id: orgId,
+      tenant_id: profile.tenant_id,
       scope: 'chat',
       key,
       content: {
@@ -237,12 +250,25 @@ async function saveConversationMemory(
 async function saveChatMessages(orgId: string, messages: any[]): Promise<void> {
   const supabase = await createClient();
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  if (!profile?.tenant_id) {
+    console.error('saveChatMessages: User has no tenant_id assigned');
+    return;
+  }
+
   // Only save the last message (to avoid duplicates)
   const lastMessage = messages[messages.length - 1];
 
   if (lastMessage) {
     await supabase.from('chat_messages').insert({
       org_id: orgId,
+      tenant_id: profile.tenant_id,
       role: lastMessage.role,
       content: lastMessage.content,
       metadata: {

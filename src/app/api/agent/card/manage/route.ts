@@ -21,6 +21,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { action, cardId, updates, cardData } = body;
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     let result: any = {};
 
     switch (action) {
@@ -30,6 +41,7 @@ export async function POST(request: NextRequest) {
           .from('kanban_cards')
           .insert({
             org_id: user.id,
+            tenant_id: profile.tenant_id,
             client_id: cardData.clientId,
             type: cardData.type,
             title: cardData.title,

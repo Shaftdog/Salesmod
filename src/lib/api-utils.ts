@@ -16,6 +16,7 @@ export interface ApiContext {
   user: any;
   userId: string;
   orgId: string;
+  tenantId: string;
   supabase: any;
   requestId: string;
 }
@@ -77,10 +78,22 @@ export async function getApiContext(request: NextRequest): Promise<ApiContext> {
     throw new ApiError('Organization ID required', 403, 'ORG_ID_REQUIRED', requestId);
   }
 
+  // Get tenant_id from user's profile for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile?.tenant_id) {
+    throw new ApiError('User has no tenant_id assigned', 403, 'TENANT_ID_REQUIRED', requestId);
+  }
+
   return {
     user,
     userId: user.id,
     orgId,
+    tenantId: profile.tenant_id,
     supabase,
     requestId,
   };

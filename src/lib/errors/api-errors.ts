@@ -353,6 +353,36 @@ export async function getAuthenticatedOrgId(supabase: any): Promise<string> {
 }
 
 /**
+ * Get the authenticated user's org_id and tenant_id from Supabase session
+ */
+export async function getAuthenticatedContext(supabase: any): Promise<{ orgId: string; tenantId: string }> {
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    throw new UnauthorizedError('Authentication required');
+  }
+
+  // Get tenant_id from user's profile
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile?.tenant_id) {
+    throw new ForbiddenError('User has no tenant_id assigned');
+  }
+
+  return {
+    orgId: user.id,
+    tenantId: profile.tenant_id,
+  };
+}
+
+/**
  * Verify that a resource belongs to the authenticated user's org
  */
 // Valid tables for ownership verification (must have org_id column)

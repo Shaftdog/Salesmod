@@ -30,18 +30,31 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
     // Parse query parameters
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get('active_only') === 'true';
     const includeTasksParam = searchParams.get('include_tasks') === 'true';
 
-    // Build query - templates are shared across all users in the organization
-    // All authenticated users can view templates
+    // Build query - filter by tenant_id for multi-tenant isolation
     let query = supabase
       .from('production_templates')
       .select('*')
       .order('is_default', { ascending: false })
       .order('name', { ascending: true });
+
+    // Filter by tenant_id if available, otherwise fall back to org_id
+    if (profile?.tenant_id) {
+      query = query.eq('tenant_id', profile.tenant_id);
+    } else {
+      query = query.eq('org_id', user.id);
+    }
 
     if (activeOnly) {
       query = query.eq('is_active', true);

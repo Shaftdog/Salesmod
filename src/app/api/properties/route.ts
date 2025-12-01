@@ -216,6 +216,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     // Create normalized address hash
     const { normalizeAddressKey } = await import('@/lib/addresses');
     const addrHash = normalizeAddressKey(addressLine1, city, state, postalCode);
@@ -225,6 +236,7 @@ export async function POST(request: NextRequest) {
       .from('properties')
       .upsert({
         org_id: user.id,
+        tenant_id: profile.tenant_id,
         address_line1: addressLine1,
         address_line2: addressLine2,
         city,

@@ -134,6 +134,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     // Parse body
     const body = await request.json();
     const action = body.action || 'start';
@@ -161,6 +172,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         .insert({
           task_id: taskId,
           user_id: user.id,
+          tenant_id: profile.tenant_id,
           started_at: new Date().toISOString(),
           entry_type: 'stopwatch',
         })
@@ -252,6 +264,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         .insert({
           task_id: taskId,
           user_id: user.id,
+          tenant_id: profile.tenant_id,
           started_at: manualData.started_at,
           ended_at: manualData.ended_at,
           duration_minutes: durationMinutes,

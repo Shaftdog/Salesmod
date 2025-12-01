@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     const context = await getApiContext(request);
     await canManageCampaigns(context);
 
-    const { supabase, orgId, userId } = context;
+    const { supabase, orgId, userId, tenantId } = context;
     const body: CreateCampaignRequest = await request.json();
 
     // Validate required fields
@@ -108,6 +108,7 @@ export async function POST(request: NextRequest) {
       .from('campaigns')
       .insert({
         org_id: orgId,
+        tenant_id: tenantId,
         name: body.name,
         description: body.description || null,
         channel: 'email',
