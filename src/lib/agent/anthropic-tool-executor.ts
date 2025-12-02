@@ -709,6 +709,24 @@ export async function executeAnthropicTool(
       console.log(`[Tool Executor] createCard called with userId: ${userId}`);
       console.log(`[Tool Executor] createCard params:`, { type, clientId, title, priority });
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        console.error(`[Tool Executor] User ${userId} has no tenant_id assigned`);
+        return {
+          success: false,
+          error: 'User has no tenant_id assigned - cannot create card',
+        };
+      }
+
+      console.log(`[Tool Executor] Using tenant_id: ${tenantId}`);
+
       // Validate send_email actions have emailDraft
       if (type === 'send_email') {
         if (!emailDraft) {
@@ -735,11 +753,12 @@ export async function executeAnthropicTool(
         actionPayload = taskDetails;
       }
 
-      console.log(`[Tool Executor] Inserting card with org_id: ${userId}`);
+      console.log(`[Tool Executor] Inserting card with org_id: ${userId}, tenant_id: ${tenantId}`);
 
       const { data, error } = await supabase
         .from('kanban_cards')
         .insert({
+          tenant_id: tenantId,
           org_id: userId,
           client_id: clientId || null,
           type,
@@ -1264,9 +1283,22 @@ export async function executeAnthropicTool(
     case 'storeRejectionFeedback': {
       const { cardId, reason, rule, cardType } = toolInput;
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       const { error } = await supabase
         .from('agent_memories')
         .insert({
+          tenant_id: tenantId,
           org_id: userId,
           scope: 'card_feedback',
           key: `rejection_${cardType || 'unknown'}_${Date.now()}`,
@@ -1297,6 +1329,18 @@ export async function executeAnthropicTool(
 
     case 'storeEmailClassificationRule': {
       const { cardId, patternType, patternValue, correctCategory, wrongCategory, reason, confidenceOverride } = toolInput;
+
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
 
       // ===== VALIDATION =====
 
@@ -1438,6 +1482,7 @@ export async function executeAnthropicTool(
       const { error } = await supabase
         .from('agent_memories')
         .insert({
+          tenant_id: tenantId,
           org_id: userId,
           scope: 'email_classification',
           key: ruleKey,
