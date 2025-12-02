@@ -42,6 +42,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     // Parse and validate query parameters
     const { searchParams } = new URL(request.url);
     const paramsResult = QueryParamsSchema.safeParse({
@@ -62,7 +73,7 @@ export async function GET(request: NextRequest) {
     const { stage, appraiser_id, active_only, limit, offset } = paramsResult.data;
     const activeOnly = active_only !== 'false';
 
-    // Build query
+    // Build query - filter by tenant_id for multi-tenant isolation
     let query = supabase
       .from('production_cards')
       .select(
@@ -74,7 +85,7 @@ export async function GET(request: NextRequest) {
       `,
         { count: 'exact' }
       )
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .order('due_date', { ascending: true, nullsFirst: false })
       .range(offset, offset + limit - 1);
 
@@ -99,11 +110,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Calculate stage counts
+    // Calculate stage counts (filtered by tenant_id)
     const { data: stageCounts, error: stageError } = await supabase
       .from('production_cards')
       .select('current_stage')
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .is('completed_at', null);
 
     const byStage: Record<ProductionStage, number> = {} as Record<ProductionStage, number>;

@@ -122,14 +122,20 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-[600px] sm:max-w-[600px] overflow-hidden flex flex-col">
         {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
+          <SheetHeader>
+            <SheetTitle>Loading...</SheetTitle>
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          </SheetHeader>
         ) : error || !card ? (
-          <div className="flex items-center justify-center h-full text-red-500">
-            <AlertTriangle className="h-6 w-6 mr-2" />
-            <span>Failed to load card details</span>
-          </div>
+          <SheetHeader>
+            <SheetTitle>Error</SheetTitle>
+            <div className="flex items-center justify-center h-full text-red-500">
+              <AlertTriangle className="h-6 w-6 mr-2" />
+              <span>Failed to load card details</span>
+            </div>
+          </SheetHeader>
         ) : (
           <>
             <SheetHeader className="space-y-4">

@@ -37,7 +37,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get card with order and template
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
+    // Get card with order and template (filtered by tenant_id)
     const { data: card, error: cardError } = await supabase
       .from('production_cards')
       .select(
@@ -49,7 +60,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       `
       )
       .eq('id', id)
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .single();
 
     if (cardError) {
@@ -143,15 +154,26 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     // Parse request body
     const body = await request.json();
 
-    // Verify card exists and belongs to user
+    // Verify card exists and belongs to user's tenant
     const { data: existing, error: checkError } = await supabase
       .from('production_cards')
       .select('id, current_stage')
       .eq('id', id)
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .single();
 
     if (checkError || !existing) {
@@ -272,12 +294,23 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify card exists and belongs to user
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
+    // Verify card exists and belongs to user's tenant
     const { data: existing, error: checkError } = await supabase
       .from('production_cards')
       .select('id, current_stage')
       .eq('id', id)
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .single();
 
     if (checkError || !existing) {

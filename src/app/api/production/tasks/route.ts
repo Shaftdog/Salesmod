@@ -41,6 +41,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     // Parse and validate query parameters
     const { searchParams } = new URL(request.url);
     const rawParams = {
@@ -56,21 +67,21 @@ export async function GET(request: NextRequest) {
     const params = QueryParamsSchema.parse(rawParams);
     const parent_only = params.parent_only !== 'false';
 
-    // Build query
+    // Build query - filter by tenant_id for multi-tenant isolation
     let query = supabase
       .from('production_tasks')
       .select(
         `
         *,
         production_card:production_cards!inner(
-          id, order_id, current_stage, org_id,
+          id, order_id, current_stage, tenant_id,
           order:orders(id, order_number)
         ),
         assigned_user:profiles!production_tasks_assigned_to_fkey(id, name, email)
       `,
         { count: 'exact' }
       )
-      .eq('production_card.org_id', user.id)
+      .eq('production_card.tenant_id', profile.tenant_id)
       .order('due_date', { ascending: true, nullsFirst: false })
       .range(params.offset, params.offset + params.limit - 1);
 
