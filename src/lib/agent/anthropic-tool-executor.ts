@@ -1494,6 +1494,18 @@ export async function executeAnthropicTool(
     case 'reviseCard': {
       const { cardId, changes, improvementNote } = toolInput;
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot revise card' };
+      }
+
       // Get original card
       const { data: originalCard, error: fetchError } = await supabase
         .from('kanban_cards')
@@ -1514,6 +1526,7 @@ export async function executeAnthropicTool(
       const { data: revisedCard, error: createError } = await supabase
         .from('kanban_cards')
         .insert({
+          tenant_id: tenantId,
           org_id: userId,
           client_id: originalCard.client_id,
           type: originalCard.type,
@@ -1537,6 +1550,7 @@ export async function executeAnthropicTool(
 
       // Store revision memory
       await supabase.from('agent_memories').insert({
+        tenant_id: tenantId,
         org_id: userId,
         scope: 'card_revision',
         key: `revision_${cardId}_${Date.now()}`,
@@ -1668,6 +1682,18 @@ export async function executeAnthropicTool(
     case 'researchContact': {
       const { contactId, includeActivities = true, storeFindings = true } = toolInput;
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot research contact' };
+      }
+
       // Get contact details
       const { data: contact, error: contactError } = await supabase
         .from('contacts')
@@ -1723,6 +1749,7 @@ export async function executeAnthropicTool(
 
       if (storeFindings) {
         await supabase.from('agent_memories').insert({
+          tenant_id: tenantId,
           org_id: userId,
           scope: 'contact_research',
           key: `research_${contactId}_${Date.now()}`,
@@ -1920,6 +1947,18 @@ export async function executeAnthropicTool(
         return { error: 'Maximum 20 cards can be processed in one batch' };
       }
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot apply batch feedback' };
+      }
+
       const results = [];
 
       for (const cardId of cardIds) {
@@ -1952,6 +1991,7 @@ export async function executeAnthropicTool(
 
       // Store batch feedback
       await supabase.from('agent_memories').insert({
+        tenant_id: tenantId,
         org_id: userId,
         scope: 'card_feedback',
         key: `batch_${action}_${Date.now()}`,

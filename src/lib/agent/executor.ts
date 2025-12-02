@@ -845,8 +845,9 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
     // Step 6: Save key insights to agent_memories
     try {
       const insights = extractKeyInsights(summary);
-      
+
       await supabase.from('agent_memories').insert({
+        tenant_id: tenantId,
         org_id: card.org_id,
         scope: 'client_context',
         key: `research_${card.client_id}_${Date.now()}`,

@@ -225,6 +225,7 @@ export async function POST(request: NextRequest) {
 
     // Create line items
     const lineItemsToInsert = body.line_items.map((item, index) => ({
+      tenant_id: tenantId,
       invoice_id: invoice.id,
       order_id: item.order_id,
       description: item.description,

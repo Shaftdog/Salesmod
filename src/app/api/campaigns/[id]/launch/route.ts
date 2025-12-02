@@ -21,11 +21,11 @@ export async function POST(
     const context = await getApiContext(request);
     await canManageCampaigns(context);
 
-    const { orgId } = context;
+    const { orgId, tenantId } = context;
     const { id } = await params;
 
     // Launch campaign
-    const result = await launchCampaign(id, orgId);
+    const result = await launchCampaign(id, orgId, tenantId);
 
     return successResponse(result, 'Campaign launched successfully');
   } catch (error: any) {

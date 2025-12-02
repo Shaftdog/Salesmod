@@ -44,6 +44,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    const tenantId = profile?.tenant_id;
+    if (!tenantId) {
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}/settings/integrations?error=no_tenant`
+      );
+    }
+
     // Exchange code for tokens
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
@@ -70,6 +84,7 @@ export async function GET(request: NextRequest) {
     // Store tokens in database
     const { error: insertError } = await supabase.from('oauth_tokens').upsert(
       {
+        tenant_id: tenantId,
         org_id: orgId,
         provider: 'google',
         account_email: userInfo.email,

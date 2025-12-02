@@ -34,6 +34,23 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
     const orgId = await getAuthenticatedOrgId(supabase);
 
+    // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('Not authenticated');
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    const tenantId = profile?.tenant_id;
+    if (!tenantId) {
+      throw new Error('User has no tenant_id assigned - cannot create invoices');
+    }
+
     // Validate request body
     const body = await validateRequestBody<BatchCreateInvoicesInput>(
       request,
@@ -81,6 +98,7 @@ export async function POST(request: NextRequest) {
         const { data: invoice, error: invoiceError } = await supabase
           .from('invoices')
           .insert({
+            tenant_id: tenantId,
             org_id: orgId,
             client_id: invoiceData.client_id,
             payment_method: invoiceData.payment_method,
@@ -107,6 +125,7 @@ export async function POST(request: NextRequest) {
 
         // Create line items
         const lineItemsToInsert = invoiceData.line_items.map((item, index) => ({
+          tenant_id: tenantId,
           invoice_id: invoice.id,
           order_id: item.order_id,
           description: item.description,

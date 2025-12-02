@@ -14,7 +14,8 @@ import type { LaunchCampaignResponse } from './types';
  */
 export async function launchCampaign(
   campaignId: string,
-  orgId: string
+  orgId: string,
+  tenantId: string
 ): Promise<LaunchCampaignResponse> {
   const supabase = await createClient();
 
@@ -82,6 +83,7 @@ export async function launchCampaign(
     const personalizedBody = replaceMergeTokens(campaign.email_body, mergeData);
 
     return {
+      tenant_id: tenantId,
       org_id: orgId,
       job_id: job.id,
       campaign_id: campaignId, // FIRST-CLASS COLUMN
