@@ -529,8 +529,20 @@ export const agentTools = {
     execute: async (params: any) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return { error: 'Not authenticated' };
+
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create card' };
+      }
 
       // Validate send_email actions have emailDraft
       if (params.type === 'send_email') {
@@ -589,6 +601,7 @@ export const agentTools = {
       const { data, error } = await supabase
         .from('kanban_cards')
         .insert({
+          tenant_id: tenantId,
           org_id: user.id,
           client_id: params.clientId || null, // Allow null for general strategic cards
           type: params.type,
