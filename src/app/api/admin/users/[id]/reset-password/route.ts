@@ -57,37 +57,10 @@ export async function POST(
 
     // Use admin client to send password reset
     const adminClient = getAdminClient()
-
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
-    // Generate password reset link
-    const { data, error } = await adminClient.auth.admin.generateLink({
-      type: 'recovery',
-      email: profile.email,
-      options: {
-        redirectTo: `${appUrl}/auth/reset-password/callback`,
-      },
-    })
-
-    if (error) {
-      console.error('[Admin Reset Password] Error:', error.message)
-      return NextResponse.json(
-        { error: `Failed to generate reset link: ${error.message}` },
-        { status: 500 }
-      )
-    }
-
-    // The generateLink returns the action_link that we need to send via email
-    // For now, we'll use the built-in email method
-    const { error: resetError } = await adminClient.auth.admin.generateLink({
-      type: 'recovery',
-      email: profile.email,
-      options: {
-        redirectTo: `${appUrl}/auth/reset-password/callback`,
-      },
-    })
-
-    // Use resetPasswordForEmail which actually sends the email
+    // Use resetPasswordForEmail which sends the email directly
+    // Note: This is rate-limited by Supabase to 1 email per 60 seconds per email address
     const { error: sendError } = await adminClient.auth.resetPasswordForEmail(
       profile.email,
       {

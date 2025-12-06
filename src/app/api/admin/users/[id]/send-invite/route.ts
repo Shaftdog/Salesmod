@@ -56,25 +56,17 @@ export async function POST(
       )
     }
 
-    // Use admin client to send invite
+    // Use admin client to send magic link
     const adminClient = getAdminClient()
-
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
-    // Send magic link for existing users (acts as a login link)
-    const { error } = await adminClient.auth.admin.generateLink({
-      type: 'magiclink',
-      email: profile.email,
-      options: {
-        redirectTo: `${appUrl}/dashboard`,
-      },
-    })
+    // First check if user exists in auth system
+    const { data: authUser, error: getUserError } = await adminClient.auth.admin.getUserById(userId)
 
-    if (error) {
-      console.error('[Admin Send Invite] Generate link error:', error.message)
+    if (getUserError || !authUser?.user) {
+      console.error('[Admin Send Invite] User not found in auth system:', getUserError?.message)
 
-      // If user doesn't exist in auth, we may need to invite them
-      // Try inviting instead
+      // User doesn't exist in auth - try to invite them
       const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
         profile.email,
         {
@@ -92,11 +84,22 @@ export async function POST(
           { status: 500 }
         )
       }
+
+      console.log('[Admin Send Invite] Invite sent to new user', {
+        userId,
+        email: profile.email,
+        timestamp: new Date().toISOString(),
+      })
+
+      return NextResponse.json({
+        success: true,
+        message: `Invite email sent to ${profile.email}`,
+      })
     }
 
-    // Actually send the magic link email using signInWithOtp
-    // generateLink only creates the link but doesn't send email
-    const { error: sendError } = await adminClient.auth.signInWithOtp({
+    // User exists in auth - send magic link using signInWithOtp
+    // This is the primary method that actually sends the email
+    const { error: otpError } = await adminClient.auth.signInWithOtp({
       email: profile.email,
       options: {
         emailRedirectTo: `${appUrl}/dashboard`,
@@ -104,12 +107,15 @@ export async function POST(
       },
     })
 
-    if (sendError) {
-      console.error('[Admin Send Invite] OTP send error:', sendError.message)
-      // Don't fail - the invite might have worked
+    if (otpError) {
+      console.error('[Admin Send Invite] OTP send error:', otpError.message)
+      return NextResponse.json(
+        { error: `Failed to send login link: ${otpError.message}` },
+        { status: 500 }
+      )
     }
 
-    console.log('[Admin Send Invite] Success', {
+    console.log('[Admin Send Invite] Magic link sent', {
       userId,
       email: profile.email,
       timestamp: new Date().toISOString(),
