@@ -505,7 +505,7 @@ async function getTargetContacts(
   // If explicit contact IDs provided, use those
   if (input.contact_ids && input.contact_ids.length > 0) {
     console.log(`[getTargetContacts] Using explicit contact_ids: ${input.contact_ids.length} IDs`);
-    
+
     const { data: contacts, error } = await supabase
       .from('contacts')
       .select(`
@@ -514,10 +514,10 @@ async function getTargetContacts(
         last_name,
         email,
         client_id,
-        clients!contacts_client_id_fkey!inner(company_name, org_id)
+        clients!contacts_client_id_fkey!inner(company_name, tenant_id)
       `)
       .in('id', input.contact_ids)
-      .eq('clients.org_id', orgId)
+      .eq('clients.tenant_id', tenantId)
       .not('email', 'is', null);
 
     if (error) {
@@ -631,10 +631,10 @@ async function getTargetContacts(
         company_name,
         client_type,
         is_active,
-        org_id
+        tenant_id
       )
     `)
-    .eq('clients.org_id', orgId)
+    .eq('clients.tenant_id', tenantId)
     .not('email', 'is', null);
 
   // Apply filters

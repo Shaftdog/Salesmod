@@ -756,10 +756,10 @@ async function processActiveJobs(orgId: string, runId: string): Promise<number> 
               continue;
             }
 
-            // Insert cards with job_id and task_id
+            // Insert cards with job_id, task_id, and tenant_id for multi-tenant isolation
             const { data: insertedCards, error: cardsError } = await supabase
               .from('kanban_cards')
-              .insert(cards.map(card => ({ ...card, org_id: orgId, run_id: runId })))
+              .insert(cards.map(card => ({ ...card, org_id: orgId, tenant_id: tenantId, run_id: runId })))
               .select('id');
 
             if (cardsError) {
@@ -888,10 +888,10 @@ async function processActiveJobs(orgId: string, runId: string): Promise<number> 
 
           console.log(`[Jobs] Expanding task ${task.id} to ${cards.length} cards`);
 
-          // Insert cards with job_id and task_id
+          // Insert cards with job_id, task_id, and tenant_id for multi-tenant isolation
           const { data: insertedCards, error: cardsError } = await supabase
             .from('kanban_cards')
-            .insert(cards.map(card => ({ ...card, org_id: orgId, run_id: runId })))
+            .insert(cards.map(card => ({ ...card, org_id: orgId, tenant_id: tenantId, run_id: runId })))
             .select('id');
 
           if (cardsError) {
