@@ -95,9 +95,12 @@ function buildPlanningPrompt(context: AgentContext): string {
   }).join('\n');
 
   // Format top clients with recent activity details
-  const topClients = clients.slice(0, 15);
+  // Show up to 25 clients for more variety
+  const topClients = clients.slice(0, 25);
   const clientsText = topClients.map(c => {
     const primaryContact = c.contacts.find((ct: any) => ct.isPrimary) || c.contacts[0];
+    const hasContactsWithEmail = c.contacts.some((ct: any) => ct.email);
+    const needsContactResearch = !hasContactsWithEmail;
 
     // Show recent activities to prevent duplicates
     const recentActivitySummary = c.recentActivities && c.recentActivities.length > 0
@@ -109,10 +112,18 @@ function buildPlanningPrompt(context: AgentContext): string {
         }).join('\n')
       : '    • No recent activities';
 
+    // Show contact status clearly
+    const contactStatus = needsContactResearch
+      ? '⚠️ NO CONTACTS WITH EMAIL - Use RESEARCH to find contacts first'
+      : primaryContact
+        ? `${primaryContact.firstName} ${primaryContact.lastName} <${primaryContact.email}>`
+        : 'None';
+
     return `
 **${c.client.companyName}** (ID: ${c.client.id})
-- Primary Contact: ${primaryContact ? `${primaryContact.firstName} ${primaryContact.lastName} <${primaryContact.email}>` : 'None'}
+- Primary Contact: ${contactStatus}
 - Last Engagement: ${c.lastContactDays === 0 ? 'TODAY (DO NOT CONTACT)' : c.lastContactDays === 999 ? 'Never' : `${c.lastContactDays} days ago`}
+- Total Contacts: ${c.contacts.length} (${c.contacts.filter((ct: any) => ct.email).length} with email)
 - Recent Orders: ${c.recentOrders.length}
 - Engagement Score: ${(c.engagementScore * 100).toFixed(0)}%
 - RFM Score: ${(c.rfmScore * 100).toFixed(0)}%
@@ -240,17 +251,27 @@ Analyze the current situation and propose 3-7 high-impact actions to achieve the
 11. **Quality Over Quantity**: Better to create 3 excellent cards than 7 mediocre ones that will be rejected
 
 ## Action Types Available
-- **send_email**: Reach out via email (follow-ups, check-ins, proposals)
-- **research**: AUTOMATED research about a client using web search and AI analysis. Use this to gather intelligence, find contact info, understand business context, market activity, expansion plans, etc. This executes automatically and saves results to the client's activity feed.
+- **send_email**: Reach out via email (follow-ups, check-ins, proposals). REQUIRES a contact with email address.
+- **research**: AUTOMATED research about a client using web search and AI analysis. This will:
+  - Search for company information and contacts
+  - Extract contact details (name, email, title) from web results
+  - AUTOMATICALLY CREATE new contacts in the database
+  - Save research summary to activities
+  Use this for clients marked "NO CONTACTS WITH EMAIL" or when you need to find more people at a company.
 - **create_task**: Create a task for manual human actions (calls, meetings, in-person visits, physical mail, manual data entry)
 - **follow_up**: Follow up on a previous interaction or order
 - **create_deal**: Create a new deal opportunity in the pipeline
 
+## CRITICAL: Contact Availability Rules
+- **If client shows "NO CONTACTS WITH EMAIL"**: You MUST use **research** first to find contacts. DO NOT create send_email cards for these clients.
+- **If client has contacts with email**: You can create send_email cards
+- Research cards will automatically find and create contacts, then you can email them in the next run
+
 ## Important Notes
 - For calls or meetings: Use **create_task** to request the user schedule and conduct them
-- For research needs (finding contacts, understanding business, market intel): Use **research** - it executes automatically via web search and AI
+- For finding contacts: Use **research** - it automatically finds and creates contacts from web search
 - Only use **create_task** for actions that truly require human presence or manual work
-- Tasks are for actions that require human involvement
+- Spread actions across MANY different clients - don't focus on the same 3-5 clients repeatedly
 
 ## Email Best Practices
 - Keep subject lines clear and actionable

@@ -70,7 +70,7 @@ export async function buildContext(orgId: string): Promise<AgentContext> {
 
   if (goalsError) throw goalsError;
 
-  // Fetch clients with relationships
+  // Fetch clients with relationships - MUST filter by tenant_id for multi-tenant isolation
   const { data: clientsData, error: clientsError } = await supabase
     .from('clients')
     .select(`
@@ -78,9 +78,12 @@ export async function buildContext(orgId: string): Promise<AgentContext> {
       contacts:contacts!contacts_client_id_fkey(*),
       orders:orders(*)
     `)
+    .eq('tenant_id', tenantId)
     .eq('is_active', true);
 
   if (clientsError) throw clientsError;
+
+  console.log(`[Context] Found ${clientsData?.length || 0} clients for tenant ${tenantId}`);
 
   // Fetch orders for goal calculations (up to 3000 most recent)
   const { data: ordersData, error: ordersError } = await supabase
@@ -386,11 +389,17 @@ function rankClients(
 ): Array<any> {
   // Calculate composite score for each client
   const scoredClients = clients.map(c => {
-    // Base score from RFM
+    // Base score from RFM (clients with orders)
     let score = c.rfmScore * 40;
 
     // Boost for engagement
     score += c.engagementScore * 20;
+
+    // NEW: Boost for clients with no contacts (need research to find contacts)
+    const hasContactsWithEmail = c.contacts.some((ct: any) => ct.email);
+    if (!hasContactsWithEmail) {
+      score += 15; // Boost to prioritize finding contacts
+    }
 
     // Penalty for recent contact (avoid spam)
     if (c.lastContactDays < 3) {
@@ -404,15 +413,27 @@ function rankClients(
       score *= 1.3;
     }
 
+    // NEW: Boost for clients never contacted (completely untouched)
+    if (c.lastContactDays >= 999) {
+      score += 10; // These are opportunities
+    }
+
     // Boost based on goal pressure
     const avgPressure = goals.reduce((sum, g) => sum + g.pressureScore, 0) / Math.max(1, goals.length);
     score *= (1 + avgPressure * 0.5); // Up to 50% boost
 
-    return { ...c, priorityScore: score };
+    // NEW: Add small random factor to break ties and add variety (0-5 points)
+    score += Math.random() * 5;
+
+    return { ...c, priorityScore: score, hasContactsWithEmail };
   });
 
   // Sort by priority score descending
-  return scoredClients.sort((a, b) => b.priorityScore - a.priorityScore);
+  const sorted = scoredClients.sort((a, b) => b.priorityScore - a.priorityScore);
+
+  // NEW: Return more clients (up to 50) to give planner more options
+  // The planner will still only show top 15 in prompt but has more to choose from
+  return sorted.slice(0, 50);
 }
 
 /**
