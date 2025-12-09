@@ -767,10 +767,16 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
     }
 
     // Dynamic imports to avoid errors if modules don't exist
-    const { gatherClientIntel, formatClientIntel } = await import('../research/internal-search');
+    const { gatherClientIntel } = await import('../research/internal-search');
     const { searchWeb } = await import('../research/web-search');
     const { summarizeResearch, extractKeyInsights } = await import('../research/summarizer');
     const { indexContent } = await import('../agent/rag');
+    const {
+      buildContactSearchQueries,
+      extractContactsFromResults,
+      validateContacts,
+      checkExistingContact
+    } = await import('../research/contact-extractor');
 
     console.log(`[Research] Starting research for client ${card.client_id}`);
 
@@ -778,15 +784,82 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
     const intel = await gatherClientIntel(card.client_id);
     console.log(`[Research] Gathered internal data: ${intel.metrics.totalOrders} orders, ${intel.metrics.totalRevenue} revenue`);
 
-    // Step 2: Web search (if API key configured)
+    // Step 2: Web search for company info AND contacts (if API key configured)
     let webResults: any[] = [];
+    let contactResults: any[] = [];
+    let contactsCreated = 0;
     const hasSearchAPI = process.env.TAVILY_API_KEY || process.env.BRAVE_SEARCH_API_KEY;
-    
+
     if (hasSearchAPI && intel.client) {
       try {
-        const query = `${intel.client.company_name} company information business`;
-        webResults = await searchWeb(query, 5);
-        console.log(`[Research] Found ${webResults.length} web results`);
+        // Search for company info
+        const companyQuery = `${intel.client.company_name} company information business`;
+        webResults = await searchWeb(companyQuery, 5);
+        console.log(`[Research] Found ${webResults.length} web results for company`);
+
+        // Search specifically for contacts
+        const contactQueries = buildContactSearchQueries(intel.client.company_name);
+        for (const query of contactQueries.slice(0, 2)) { // Limit to 2 contact searches
+          const results = await searchWeb(query, 5);
+          contactResults.push(...results);
+        }
+        console.log(`[Research] Found ${contactResults.length} web results for contacts`);
+
+        // Extract contacts using AI
+        if (contactResults.length > 0) {
+          const allResults = [...webResults, ...contactResults];
+          const extraction = await extractContactsFromResults(intel.client.company_name, allResults);
+          const validatedContacts = validateContacts(extraction.contacts);
+
+          console.log(`[Research] Extracted ${validatedContacts.length} valid contacts`);
+
+          // Create contacts in database
+          for (const contact of validatedContacts) {
+            try {
+              // Check if contact already exists
+              const exists = await checkExistingContact(
+                supabase,
+                tenantId,
+                contact.email,
+                contact.first_name,
+                contact.last_name
+              );
+
+              if (exists) {
+                console.log(`[Research] Contact ${contact.first_name} ${contact.last_name} already exists, skipping`);
+                continue;
+              }
+
+              // Create the contact
+              const { data: newContact, error: contactError } = await supabase
+                .from('contacts')
+                .insert({
+                  tenant_id: tenantId,
+                  client_id: card.client_id,
+                  first_name: contact.first_name,
+                  last_name: contact.last_name,
+                  email: contact.email || null,
+                  phone: contact.phone || null,
+                  title: contact.title || null,
+                  department: contact.department || null,
+                  notes: `Found via research on ${new Date().toISOString().split('T')[0]}. Source: ${contact.source_url || 'web search'}. Confidence: ${contact.confidence}.`,
+                  tags: ['research-found', `confidence-${contact.confidence}`],
+                  is_primary: false,
+                })
+                .select('id, first_name, last_name, email')
+                .single();
+
+              if (contactError) {
+                console.error(`[Research] Failed to create contact ${contact.first_name} ${contact.last_name}:`, contactError);
+              } else {
+                console.log(`[Research] Created contact: ${newContact.first_name} ${newContact.last_name} (${newContact.email || 'no email'})`);
+                contactsCreated++;
+              }
+            } catch (contactErr) {
+              console.error(`[Research] Error creating contact:`, contactErr);
+            }
+          }
+        }
       } catch (error) {
         console.error('[Research] Web search failed, continuing with internal data only:', error);
       }
@@ -798,39 +871,41 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
     const summary = await summarizeResearch(intel, webResults);
     console.log(`[Research] Generated summary (${summary.length} chars)`);
 
-    // Step 4: Save to activities
+    // Step 4: Save to activities (include contact findings)
+    const activityDescription = contactsCreated > 0
+      ? `${summary}\n\n---\n**Contacts Found:** ${contactsCreated} new contact(s) added to this company.`
+      : summary;
+
     const { data: activity, error: activityError } = await supabase
       .from('activities')
       .insert({
         tenant_id: tenantId,
         client_id: card.client_id,
         activity_type: 'research',
-        subject: `Research Complete: ${intel.client.company_name}`,
-        description: summary,
+        subject: `Research Complete: ${intel.client.company_name}${contactsCreated > 0 ? ` (+${contactsCreated} contacts)` : ''}`,
+        description: activityDescription,
         status: 'completed',
         completed_at: new Date().toISOString(),
         created_by: user.id,
       })
       .select()
       .single();
-    
+
     if (activityError) {
       console.error('[Research] Failed to save activity:', activityError);
       throw new Error(`Failed to save research to activities: ${activityError.message}`);
     }
-    
+
     console.log('[Research] Saved to activities:', activity.id);
 
     // Step 5: Index to RAG for future reference
     try {
-      // Get user's org_id for RAG indexing (RAG uses org_id, not tenant_id)
-      const { data: { user } } = await supabase.auth.getUser();
       const orgId = user?.id;
 
       if (orgId) {
         await indexContent(
           orgId,
-          'note', // Changed from 'research' to match DB constraint
+          'note',
           card.id,
           `Research: ${intel.client.company_name}`,
           summary,
@@ -840,6 +915,7 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
             research_date: new Date().toISOString(),
             sources: webResults.length > 0 ? ['internal', 'web'] : ['internal'],
             web_results_count: webResults.length,
+            contacts_found: contactsCreated,
             metrics: intel.metrics,
           }
         );
@@ -851,22 +927,22 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
 
     // Step 6: Save key insights to agent_memories
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       const insights = extractKeyInsights(summary);
 
       await supabase.from('agent_memories').insert({
         tenant_id: tenantId,
-        org_id: user?.id, // Keep org_id for backwards compatibility
+        org_id: user?.id,
         scope: 'client_context',
         key: `research_${card.client_id}_${Date.now()}`,
         content: {
           client_id: card.client_id,
           client_name: intel.client.company_name,
           ...insights,
+          contacts_found: contactsCreated,
           metrics: intel.metrics,
         },
         importance: 0.8,
-        expires_at: null, // Never expires
+        expires_at: null,
       });
       console.log('[Research] Saved insights to agent_memories');
     } catch (error) {
@@ -876,11 +952,14 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
     return {
       success: true,
       cardId: card.id,
-      message: 'Research completed and indexed',
+      message: contactsCreated > 0
+        ? `Research completed. Found and added ${contactsCreated} new contact(s).`
+        : 'Research completed and indexed',
       metadata: {
         summary: summary.substring(0, 200) + '...',
         sources: webResults.length > 0 ? 'internal + web' : 'internal only',
         web_results: webResults.length,
+        contacts_found: contactsCreated,
       },
     };
   } catch (error: any) {

@@ -1,6 +1,75 @@
 {
-  "decisions": [],
-  "improvements": [],
-  "patterns": [],
-  "last_updated": "2025-11-03"
+  "decisions": [
+    {
+      "date": "2025-12-09",
+      "context": "Agent duplicate card spam - research on same client 5+ times per day",
+      "decision": "Changed research activity_type from 'note' to 'research' and expanded calculateLastContactDays() to include all engagement types",
+      "rationale": "Activity-based timing logic only counted email/call/meeting, making research invisible to the 'smart timing' feature"
+    },
+    {
+      "date": "2025-12-09",
+      "context": "Jobs not producing cards after multi-tenant migration",
+      "decision": "Pass tenant_id directly to getTargetContacts() instead of looking it up from org_id via profiles",
+      "rationale": "Looking up tenant from org_id is fragile and can fail. Jobs table has tenant_id, use it directly"
+    },
+    {
+      "date": "2025-12-09",
+      "context": "Learning rules capped at exactly 20 despite having 59 in database",
+      "decision": "Fetch card_feedback memories separately with dedicated 100 limit instead of sharing 50 limit with all memory types",
+      "rationale": "Shared memory limit was silently truncating card_feedback rules, breaking agent learning"
+    }
+  ],
+  "improvements": [
+    {
+      "date": "2025-12-09",
+      "area": "Agent Planner Prompt",
+      "change": "Added 'Recent Activities (AVOID DUPLICATING)' section per client with timestamps showing hours/days ago",
+      "impact": "AI can now SEE what actions were recently taken, not just be told to avoid duplicates"
+    },
+    {
+      "date": "2025-12-09",
+      "area": "Activity Tracking",
+      "change": "Research cards now log as activity_type: 'research' instead of 'note'",
+      "impact": "Research engagements now visible to timing logic, prevents research spam"
+    },
+    {
+      "date": "2025-12-09",
+      "area": "Tenant Consolidation",
+      "change": "Created scripts to diagnose and fix fragmented tenant memories (check-agent-memories-tenant.js, fix-agent-memories-tenant.js)",
+      "impact": "Consolidated 59 memories from 6 duplicate tenants into correct tenant"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Activity Type Visibility",
+      "description": "When creating new activity types, ensure they're included in ALL filtering logic that determines engagement - calculateLastContactDays(), getRecentActivities(), engagement scoring, etc.",
+      "files": ["src/lib/agent/context-builder.ts", "src/lib/agent/executor.ts"]
+    },
+    {
+      "name": "TypeScript Interface Alignment",
+      "description": "When database tables have tenant_id, TypeScript interfaces MUST include tenant_id. Always check interfaces after schema changes.",
+      "files": ["src/types/jobs.ts"]
+    },
+    {
+      "name": "Direct Tenant ID Passing",
+      "description": "Never look up tenant_id from org_id via profiles. Pass tenant_id directly from the source (job.tenant_id, context.tenantId, etc.).",
+      "files": ["src/lib/agent/job-planner.ts"]
+    },
+    {
+      "name": "AI Prompt Visibility",
+      "description": "Soft rules in AI prompts ('do not duplicate') are not enough. The AI needs to SEE the data (recent activities, timestamps) to make informed decisions.",
+      "files": ["src/lib/agent/planner.ts"]
+    },
+    {
+      "name": "Memory Limit Separation",
+      "description": "Different memory scopes need separate limits. card_feedback rules should not compete with chat/classification for a shared limit.",
+      "files": ["src/lib/agent/context-builder.ts"]
+    },
+    {
+      "name": "Multi-Tenant Migration Checklist",
+      "description": "When migrating org_id to tenant_id: 1) Update TypeScript interfaces, 2) Update all function signatures, 3) Remove profile-based tenant lookups, 4) Consolidate fragmented records, 5) Verify memory/rule associations",
+      "files": ["src/types/*.ts", "src/lib/agent/*.ts"]
+    }
+  ],
+  "last_updated": "2025-12-09"
 }
