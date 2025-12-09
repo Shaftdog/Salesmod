@@ -329,6 +329,12 @@ function calculateEngagementScore(activities: any[]): number {
       case 'meeting':
         score += 1.0;
         break;
+      case 'research':
+        score += 0.3; // Research counts as engagement
+        break;
+      case 'task':
+        score += 0.2;
+        break;
       default:
         score += 0.1;
     }
@@ -338,18 +344,21 @@ function calculateEngagementScore(activities: any[]): number {
 }
 
 /**
- * Calculate days since last contact
+ * Calculate days since last contact/engagement
+ * Includes all meaningful agent interactions, not just direct contact
  */
 function calculateLastContactDays(activities: any[], now: Date): number {
   if (activities.length === 0) return 999;
 
-  const contactActivities = activities.filter(a =>
-    ['email', 'call', 'meeting'].includes(a.activity_type)
+  // Include ALL agent activities that represent engagement with the client
+  // This prevents the agent from spamming the same client with repeated actions
+  const engagementActivities = activities.filter(a =>
+    ['email', 'call', 'meeting', 'research', 'task', 'note'].includes(a.activity_type)
   );
 
-  if (contactActivities.length === 0) return 999;
+  if (engagementActivities.length === 0) return 999;
 
-  const lastActivity = contactActivities[0]; // Already sorted by created_at DESC
+  const lastActivity = engagementActivities[0]; // Already sorted by created_at DESC
   const lastDate = new Date(lastActivity.created_at);
   return Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
 }

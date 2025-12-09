@@ -94,18 +94,31 @@ function buildPlanningPrompt(context: AgentContext): string {
     return `- ${g.goal.metricType}: ${g.progress.toFixed(1)}% complete (Target: ${g.goal.targetValue}, Gap: ${g.gapToTarget.toFixed(0)}, ${g.daysRemaining} days left) ${status}`;
   }).join('\n');
 
-  // Format top clients
+  // Format top clients with recent activity details
   const topClients = clients.slice(0, 15);
   const clientsText = topClients.map(c => {
     const primaryContact = c.contacts.find((ct: any) => ct.isPrimary) || c.contacts[0];
+
+    // Show recent activities to prevent duplicates
+    const recentActivitySummary = c.recentActivities && c.recentActivities.length > 0
+      ? c.recentActivities.slice(0, 5).map((a: any) => {
+          const activityDate = new Date(a.createdAt);
+          const hoursAgo = Math.floor((currentTime.getTime() - activityDate.getTime()) / (1000 * 60 * 60));
+          const timeAgo = hoursAgo < 24 ? `${hoursAgo}h ago` : `${Math.floor(hoursAgo / 24)}d ago`;
+          return `    • ${a.activityType}: ${a.subject || 'No subject'} (${timeAgo})`;
+        }).join('\n')
+      : '    • No recent activities';
+
     return `
 **${c.client.companyName}** (ID: ${c.client.id})
 - Primary Contact: ${primaryContact ? `${primaryContact.firstName} ${primaryContact.lastName} <${primaryContact.email}>` : 'None'}
-- Last Contact: ${c.lastContactDays} days ago
+- Last Engagement: ${c.lastContactDays === 0 ? 'TODAY (DO NOT CONTACT)' : c.lastContactDays === 999 ? 'Never' : `${c.lastContactDays} days ago`}
 - Recent Orders: ${c.recentOrders.length}
 - Engagement Score: ${(c.engagementScore * 100).toFixed(0)}%
 - RFM Score: ${(c.rfmScore * 100).toFixed(0)}%
 - Priority Score: ${c.priorityScore.toFixed(1)}
+- Recent Activities (AVOID DUPLICATING):
+${recentActivitySummary}
 `;
   }).join('\n');
 
@@ -214,16 +227,17 @@ ${memoriesText || 'No other relevant memories'}
 ## Your Task
 Analyze the current situation and propose 3-7 high-impact actions to achieve the goals. Focus on:
 
-1. **Learn from Feedback**: CRITICAL - Review the "Card Rejection Feedback" and "Avoidance Rules" sections above. Do NOT create cards that will be rejected for the same reasons. Apply these learnings to all your recommendations.
-2. **Goal-Driven**: Prioritize actions that directly move the needle on behind-schedule goals
-3. **High-Value Clients**: Target clients with high RFM scores and recent engagement
-4. **Re-engagement**: Reach out to previously active clients who haven't been contacted recently (>10 days)
-5. **Nurture Pipeline**: Follow up on deals in progress, propose new opportunities
-6. **Smart Timing**: Avoid clients contacted in the last 3-5 days
-7. **Personalization**: Use client context to craft relevant, specific messages
-8. **Case Management**: Address high-priority or urgent support cases that need attention
-9. **Service Recovery**: Follow up with clients who have open complaints or quality concerns
-10. **Quality Over Quantity**: Better to create 3 excellent cards than 7 mediocre ones that will be rejected
+1. **NO DUPLICATES - CRITICAL**: Check each client's "Recent Activities" list above. If you see a recent activity (especially within the last 24 hours), DO NOT create another action of the same type for that client. For example, if you see "research: Research Complete" in the last 24h, DO NOT propose another research card for that client.
+2. **Learn from Feedback**: Review the "Card Rejection Feedback" and "Avoidance Rules" sections above. Do NOT create cards that will be rejected for the same reasons.
+3. **Goal-Driven**: Prioritize actions that directly move the needle on behind-schedule goals
+4. **High-Value Clients**: Target clients with high RFM scores and recent engagement
+5. **Re-engagement**: Reach out to previously active clients who haven't been contacted recently (>10 days)
+6. **Nurture Pipeline**: Follow up on deals in progress, propose new opportunities
+7. **Smart Timing**: STRICT RULE - If "Last Engagement" shows "TODAY" or "0 days ago", skip that client entirely. If less than 3 days, strongly prefer other clients.
+8. **Personalization**: Use client context to craft relevant, specific messages
+9. **Case Management**: Address high-priority or urgent support cases that need attention
+10. **Service Recovery**: Follow up with clients who have open complaints or quality concerns
+11. **Quality Over Quantity**: Better to create 3 excellent cards than 7 mediocre ones that will be rejected
 
 ## Action Types Available
 - **send_email**: Reach out via email (follow-ups, check-ins, proposals)

@@ -804,7 +804,7 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
       .insert({
         tenant_id: tenantId,
         client_id: card.client_id,
-        activity_type: 'note',
+        activity_type: 'research',
         subject: `Research Complete: ${intel.client.company_name}`,
         description: summary,
         status: 'completed',
