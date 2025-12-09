@@ -47,10 +47,47 @@ function ResetPasswordCallbackContent() {
 
         // Handle PKCE code exchange
         if (code) {
+          // First, try client-side exchange (works when user initiated the reset)
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+
           if (exchangeError) {
-            throw exchangeError;
+            console.log("Client-side PKCE exchange failed, trying server fallback:", exchangeError.message);
+
+            // If client-side fails (e.g., admin-initiated reset, no code verifier),
+            // try server-side exchange using service role key
+            try {
+              const response = await fetch('/api/auth/exchange-code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code }),
+              });
+
+              const data = await response.json();
+
+              if (!response.ok) {
+                throw new Error(data.error || 'Failed to exchange code');
+              }
+
+              // Set the session using the tokens from server
+              const { error: sessionError } = await supabase.auth.setSession({
+                access_token: data.access_token,
+                refresh_token: data.refresh_token,
+              });
+
+              if (sessionError) {
+                throw sessionError;
+              }
+
+              setStatus("success");
+              setMessage("Verified! Redirecting to password update...");
+              setTimeout(() => router.push("/update-password"), 1000);
+              return;
+            } catch (serverError: any) {
+              console.error("Server-side exchange also failed:", serverError);
+              throw new Error(serverError.message || "Failed to verify password reset link");
+            }
           }
+
           setStatus("success");
           setMessage("Verified! Redirecting to password update...");
           setTimeout(() => router.push("/update-password"), 1000);
