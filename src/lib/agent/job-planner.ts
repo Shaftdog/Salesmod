@@ -279,9 +279,9 @@ async function expandDraftEmailTask(
   console.log(`[expandDraftEmailTask] Task ${task.id}: Getting target contacts...`);
   console.log(`[expandDraftEmailTask] Input:`, JSON.stringify(input));
 
-  // Get target contacts
-  const targets = await getTargetContacts(input, params, supabase, job.org_id);
-  
+  // Get target contacts using job's tenant_id directly
+  const targets = await getTargetContacts(input, params, supabase, job.tenant_id);
+
   console.log(`[expandDraftEmailTask] Found ${targets.length} target contacts`);
 
   if (targets.length === 0) {
@@ -380,8 +380,8 @@ async function expandCreateTaskTask(
 ): Promise<ExpandTaskResult> {
   const input = task.input;
 
-  // Get target contacts
-  const targets = await getTargetContacts(input, params, supabase, job.org_id);
+  // Get target contacts using job's tenant_id directly
+  const targets = await getTargetContacts(input, params, supabase, job.tenant_id);
 
   // Determine card state based on job settings
   let cardState: string;
@@ -483,22 +483,14 @@ async function getTargetContacts(
   input: any,
   params: JobParams,
   supabase: any,
-  orgId: string
+  tenantId: string
 ): Promise<TargetContact[]> {
   console.log(`[getTargetContacts] Called with input:`, JSON.stringify(input));
   console.log(`[getTargetContacts] Params filter:`, JSON.stringify(params.target_filter));
-
-  // SECURITY: Get user's tenant_id for proper multi-tenant isolation
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('tenant_id')
-    .eq('id', orgId)
-    .single();
-
-  const tenantId = profile?.tenant_id;
+  console.log(`[getTargetContacts] Using tenant_id: ${tenantId}`);
 
   if (!tenantId) {
-    console.error(`[getTargetContacts] User ${orgId} has no tenant_id assigned`);
+    console.error(`[getTargetContacts] No tenant_id provided - cannot query contacts`);
     return [];
   }
   

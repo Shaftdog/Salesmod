@@ -120,6 +120,7 @@ export type JobParams = z.infer<typeof JobParamsSchema>;
 export interface Job {
   id: string;
   org_id: string;
+  tenant_id: string;
   name: string;
   description: string | null;
   status: JobStatus;
