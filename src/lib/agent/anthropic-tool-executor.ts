@@ -147,6 +147,18 @@ export async function executeAnthropicTool(
     case 'getAllCards': {
       const { includeCompleted = false, limit = 50 } = toolInput;
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       let query = supabase
         .from('kanban_cards')
         .select(`
@@ -159,7 +171,7 @@ export async function executeAnthropicTool(
           created_at,
           client:clients(id, company_name)
         `)
-        .eq('org_id', userId)
+        .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false })
         .limit(limit);
 
@@ -192,6 +204,18 @@ export async function executeAnthropicTool(
     case 'getPendingCards': {
       const { state } = toolInput;
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       let query = supabase
         .from('kanban_cards')
         .select(`
@@ -204,7 +228,7 @@ export async function executeAnthropicTool(
           created_at,
           client:clients(company_name)
         `)
-        .eq('org_id', userId)
+        .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -377,24 +401,36 @@ export async function executeAnthropicTool(
     case 'deleteContact': {
       const { contactId } = toolInput;
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       // Get contact info first and verify ownership
       const { data: contact, error: fetchError } = await supabase
         .from('contacts')
-        .select('id, first_name, last_name, email, org_id')
+        .select('id, first_name, last_name, email')
         .eq('id', contactId)
-        .eq('org_id', userId)
+        .eq('tenant_id', tenantId)
         .single();
 
       if (fetchError || !contact) {
         return { error: 'Contact not found or access denied' };
       }
 
-      // Delete the contact (with org_id verification for security)
+      // Delete the contact (with tenant_id verification for security)
       const { error: deleteError } = await supabase
         .from('contacts')
         .delete()
         .eq('id', contactId)
-        .eq('org_id', userId);
+        .eq('tenant_id', tenantId);
 
       if (deleteError) return { error: deleteError.message };
 
@@ -469,12 +505,24 @@ export async function executeAnthropicTool(
     case 'deleteClient': {
       const { clientId } = toolInput;
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       // Get client info first and verify ownership
       const { data: client, error: fetchError } = await supabase
         .from('clients')
-        .select('id, company_name, email, primary_contact, org_id')
+        .select('id, company_name, email, primary_contact, tenant_id')
         .eq('id', clientId)
-        .eq('org_id', userId)
+        .eq('tenant_id', tenantId)
         .single();
 
       if (fetchError || !client) {
@@ -491,12 +539,12 @@ export async function executeAnthropicTool(
         .select('*', { count: 'exact', head: true })
         .eq('client_id', clientId);
 
-      // Delete the client (with org_id verification for security)
+      // Delete the client (with tenant_id verification for security)
       const { error: deleteError } = await supabase
         .from('clients')
         .delete()
         .eq('id', clientId)
-        .eq('org_id', userId);
+        .eq('tenant_id', tenantId);
 
       if (deleteError) return { error: deleteError.message };
 
@@ -804,6 +852,18 @@ export async function executeAnthropicTool(
     case 'updateCard': {
       const { cardId, state, priority, title, rationale } = toolInput;
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profileUpdate } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantIdUpdate = profileUpdate?.tenant_id;
+      if (!tenantIdUpdate) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       const updates: any = {};
       if (state) updates.state = state;
       if (priority) updates.priority = priority;
@@ -814,7 +874,7 @@ export async function executeAnthropicTool(
         .from('kanban_cards')
         .update(updates)
         .eq('id', cardId)
-        .eq('org_id', userId)
+        .eq('tenant_id', tenantIdUpdate)
         .select('id, title, type, state, priority')
         .single();
 
@@ -829,10 +889,22 @@ export async function executeAnthropicTool(
     case 'deleteCard': {
       const { cardId, priority, type, titleMatch, clientId } = toolInput;
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profileDelete } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantIdDelete = profileDelete?.tenant_id;
+      if (!tenantIdDelete) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       const { data: allCards, error: fetchError } = await supabase
         .from('kanban_cards')
         .select('id, title, type, priority, state, client_id, client:clients(company_name)')
-        .eq('org_id', userId);
+        .eq('tenant_id', tenantIdDelete);
 
       if (fetchError) return { error: fetchError.message };
 
@@ -868,7 +940,7 @@ export async function executeAnthropicTool(
         .from('kanban_cards')
         .delete()
         .in('id', cardIds)
-        .eq('org_id', userId);
+        .eq('tenant_id', tenantIdDelete);
 
       if (deleteError) return { error: deleteError.message };
 
@@ -1433,7 +1505,7 @@ export async function executeAnthropicTool(
       const { count: ruleCount } = await supabase
         .from('agent_memories')
         .select('*', { count: 'exact', head: true })
-        .eq('org_id', userId)
+        .eq('tenant_id', tenantId)
         .eq('scope', 'email_classification');
 
       if ((ruleCount || 0) >= 50) {
@@ -1447,7 +1519,7 @@ export async function executeAnthropicTool(
       const { data: existingRules } = await supabase
         .from('agent_memories')
         .select('content, key')
-        .eq('org_id', userId)
+        .eq('tenant_id', tenantId)
         .eq('scope', 'email_classification');
 
       const isDuplicate = existingRules?.some(
@@ -1625,10 +1697,22 @@ export async function executeAnthropicTool(
     case 'detectPatternAndSuggest': {
       const { limit = 20 } = toolInput;
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profilePattern } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantIdPattern = profilePattern?.tenant_id;
+      if (!tenantIdPattern) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       const { data: rejections } = await supabase
         .from('agent_memories')
         .select('*')
-        .eq('org_id', userId)
+        .eq('tenant_id', tenantIdPattern)
         .eq('scope', 'card_feedback')
         .order('created_at', { ascending: false })
         .limit(limit);
@@ -1685,10 +1769,22 @@ export async function executeAnthropicTool(
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - days);
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profileTrends } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantIdTrends = profileTrends?.tenant_id;
+      if (!tenantIdTrends) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       const { data: rejections } = await supabase
         .from('agent_memories')
         .select('*')
-        .eq('org_id', userId)
+        .eq('tenant_id', tenantIdTrends)
         .eq('scope', 'card_feedback')
         .gte('created_at', cutoffDate.toISOString())
         .order('created_at', { ascending: true });
@@ -1839,11 +1935,20 @@ export async function executeAnthropicTool(
         pattern = null;
       }
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profileSuggest } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantIdSuggest = profileSuggest?.tenant_id;
+
       // Check for similar existing rules
       const { data: existingFeedback } = await supabase
         .from('agent_memories')
         .select('*')
-        .eq('org_id', userId)
+        .eq('tenant_id', tenantIdSuggest)
         .eq('scope', 'card_feedback')
         .ilike('content->>rule', `%${suggestedRule?.substring(0, 20) || ''}%`)
         .limit(3);
@@ -1863,6 +1968,18 @@ export async function executeAnthropicTool(
     case 'detectSimilarFeedback': {
       const { reason, maxResults = 5 } = toolInput;
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profileSimilar } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantIdSimilar = profileSimilar?.tenant_id;
+      if (!tenantIdSimilar) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       // Extract keywords from reason
       const keywords = reason
         .toLowerCase()
@@ -1872,7 +1989,7 @@ export async function executeAnthropicTool(
       const { data: similarFeedback } = await supabase
         .from('agent_memories')
         .select('*')
-        .eq('org_id', userId)
+        .eq('tenant_id', tenantIdSimilar)
         .eq('scope', 'card_feedback')
         .order('created_at', { ascending: false })
         .limit(50);
@@ -1920,6 +2037,18 @@ export async function executeAnthropicTool(
     case 'findSimilarCards': {
       const { issueType, pattern, limit = 20 } = toolInput;
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profileFindCards } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const tenantIdFindCards = profileFindCards?.tenant_id;
+      if (!tenantIdFindCards) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       const { data: cards } = await supabase
         .from('kanban_cards')
         .select(`
@@ -1931,7 +2060,7 @@ export async function executeAnthropicTool(
           action_payload,
           client:clients(company_name)
         `)
-        .eq('org_id', userId)
+        .eq('tenant_id', tenantIdFindCards)
         .eq('state', 'suggested')
         .order('created_at', { ascending: false })
         .limit(100);
@@ -2012,7 +2141,7 @@ export async function executeAnthropicTool(
             .from('kanban_cards')
             .delete()
             .eq('id', cardId)
-            .eq('org_id', userId);
+            .eq('tenant_id', tenantId);
 
           results.push({
             cardId,
@@ -2024,7 +2153,7 @@ export async function executeAnthropicTool(
             .from('kanban_cards')
             .update({ state: 'rejected' })
             .eq('id', cardId)
-            .eq('org_id', userId);
+            .eq('tenant_id', tenantId);
 
           results.push({
             cardId,

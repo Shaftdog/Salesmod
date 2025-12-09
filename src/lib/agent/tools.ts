@@ -684,14 +684,26 @@ export const agentTools = {
     execute: async (params: any) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return { error: 'Not authenticated' };
+
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
 
       // Get all cards first to match
       const { data: allCards, error: fetchError } = await supabase
         .from('kanban_cards')
         .select('id, title, type, priority, state, client_id, client:clients(company_name)')
-        .eq('org_id', user.id);
+        .eq('tenant_id', tenantId);
 
       if (fetchError) {
         return { error: fetchError.message };
@@ -745,7 +757,7 @@ export const agentTools = {
         .from('kanban_cards')
         .delete()
         .in('id', cardIds)
-        .eq('org_id', user.id);
+        .eq('tenant_id', tenantId);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -781,8 +793,20 @@ export const agentTools = {
     execute: async (params: any) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return { error: 'Not authenticated' };
+
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
 
       const updates: any = {};
       if (params.state) updates.state = params.state;
@@ -794,7 +818,7 @@ export const agentTools = {
         .from('kanban_cards')
         .update(updates)
         .eq('id', params.cardId)
-        .eq('org_id', user.id)
+        .eq('tenant_id', tenantId)
         .select('id, title, type, state, priority')
         .single();
 
@@ -1072,24 +1096,36 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       // Get contact info first and verify ownership
       const { data: contact, error: fetchError } = await supabase
         .from('contacts')
-        .select('id, first_name, last_name, email, org_id')
+        .select('id, first_name, last_name, email')
         .eq('id', params.contactId)
-        .eq('org_id', user.id)
+        .eq('tenant_id', tenantId)
         .single();
 
       if (fetchError || !contact) {
         return { error: 'Contact not found or access denied' };
       }
 
-      // Delete the contact (with org_id verification for security)
+      // Delete the contact (with tenant_id verification for security)
       const { error: deleteError } = await supabase
         .from('contacts')
         .delete()
         .eq('id', params.contactId)
-        .eq('org_id', user.id);
+        .eq('tenant_id', tenantId);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -1121,12 +1157,24 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       // Get client info first and verify ownership
       const { data: client, error: fetchError } = await supabase
         .from('clients')
-        .select('id, company_name, email, primary_contact, org_id')
+        .select('id, company_name, email, primary_contact')
         .eq('id', params.clientId)
-        .eq('org_id', user.id)
+        .eq('tenant_id', tenantId)
         .single();
 
       if (fetchError || !client) {
@@ -1144,12 +1192,12 @@ export const agentTools = {
         .select('*', { count: 'exact', head: true })
         .eq('client_id', params.clientId);
 
-      // Delete the client (cascade should handle related records, org_id for security)
+      // Delete the client (cascade should handle related records, tenant_id for security)
       const { error: deleteError } = await supabase
         .from('clients')
         .delete()
         .eq('id', params.clientId)
-        .eq('org_id', user.id);
+        .eq('tenant_id', tenantId);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -1395,12 +1443,24 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       // Get order info first and verify ownership
       const { data: order, error: fetchError } = await supabase
         .from('orders')
-        .select('id, order_number, status, order_type, client_id, org_id, client:clients(company_name)')
+        .select('id, order_number, status, order_type, client_id, client:clients(company_name)')
         .eq('id', params.orderId)
-        .eq('org_id', user.id)
+        .eq('tenant_id', tenantId)
         .single();
 
       if (fetchError || !order) {
@@ -1418,7 +1478,7 @@ export const agentTools = {
         .from('orders')
         .delete()
         .eq('id', params.orderId)
-        .eq('org_id', user.id);
+        .eq('tenant_id', tenantId);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -1455,12 +1515,24 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       // Get property info first and verify ownership
       const { data: property, error: fetchError } = await supabase
         .from('properties')
-        .select('id, address, city, state, zip_code, property_type, org_id')
+        .select('id, address, city, state, zip_code, property_type')
         .eq('id', params.propertyId)
-        .eq('org_id', user.id)
+        .eq('tenant_id', tenantId)
         .single();
 
       if (fetchError || !property) {
@@ -1472,7 +1544,7 @@ export const agentTools = {
         .from('properties')
         .delete()
         .eq('id', params.propertyId)
-        .eq('org_id', user.id);
+        .eq('tenant_id', tenantId);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -1617,8 +1689,20 @@ export const agentTools = {
     execute: async ({ state }: { state?: 'suggested' | 'in_review' | 'approved' }) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return { error: 'Not authenticated' };
+
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
 
       let query = supabase
         .from('kanban_cards')
@@ -1632,7 +1716,7 @@ export const agentTools = {
           created_at,
           client:clients(company_name)
         `)
-        .eq('org_id', user.id)
+        .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -1669,8 +1753,20 @@ export const agentTools = {
     execute: async ({ includeCompleted = false, limit = 50 }: { includeCompleted?: boolean; limit?: number }) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return { error: 'Not authenticated' };
+
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
 
       let query = supabase
         .from('kanban_cards')
@@ -1684,7 +1780,7 @@ export const agentTools = {
           created_at,
           client:clients(id, company_name)
         `)
-        .eq('org_id', user.id)
+        .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false })
         .limit(limit);
 
@@ -1736,10 +1832,22 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       const { data, error } = await supabase
         .from('agent_runs')
         .select('*')
-        .eq('org_id', user.id)
+        .eq('tenant_id', tenantId)
         .order('started_at', { ascending: false })
         .limit(limit);
 

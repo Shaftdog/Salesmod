@@ -22,6 +22,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Get mode from request body (default: review)
     const body = await request.json().catch(() => ({}));
     const mode = body.mode === 'auto' ? 'auto' : 'review';
@@ -30,7 +44,7 @@ export async function POST(request: NextRequest) {
     const { data: settings } = await supabase
       .from('agent_settings')
       .select('*')
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .single();
 
     if (settings && !settings.enabled) {
@@ -74,6 +88,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Get query params
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
@@ -81,7 +109,7 @@ export async function GET(request: NextRequest) {
     const { data: runs, error } = await supabase
       .from('agent_runs')
       .select('*')
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .order('started_at', { ascending: false })
       .limit(limit);
 
@@ -116,11 +144,25 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Get the currently running agent run
     const { data: runningRun, error: fetchError } = await supabase
       .from('agent_runs')
       .select('*')
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .eq('status', 'running')
       .order('started_at', { ascending: false })
       .limit(1)

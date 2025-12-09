@@ -113,11 +113,22 @@ async function createAutoRule(supabase: any, orgId: string, data: any) {
 async function consolidateRules(supabase: any, orgId: string, data: any) {
   const { rule1Id, rule2Id, mergedRule, mergedImportance } = data;
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  if (!profile?.tenant_id) {
+    throw new Error('User has no tenant_id assigned');
+  }
+
   // Fetch both rules
   const { data: rules, error: fetchError } = await supabase
     .from('agent_memories')
     .select('*')
-    .eq('org_id', orgId)
+    .eq('tenant_id', profile.tenant_id)
     .in('id', [rule1Id, rule2Id]);
 
   if (fetchError || !rules || rules.length !== 2) {
@@ -196,6 +207,17 @@ async function consolidateRules(supabase: any, orgId: string, data: any) {
 async function resolveConflict(supabase: any, orgId: string, data: any) {
   const { keepRuleId, removeRuleId, resolution } = data;
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  if (!profile?.tenant_id) {
+    throw new Error('User has no tenant_id assigned');
+  }
+
   if (resolution === 'keep_both') {
     // User wants to keep both, just mark as reviewed
     const { error } = await supabase
@@ -222,7 +244,7 @@ async function resolveConflict(supabase: any, orgId: string, data: any) {
     .from('agent_memories')
     .select('*')
     .eq('id', removeRuleId)
-    .eq('org_id', orgId)
+    .eq('tenant_id', profile.tenant_id)
     .single();
 
   if (fetchError) {
@@ -255,12 +277,23 @@ async function resolveConflict(supabase: any, orgId: string, data: any) {
 async function deprecateRule(supabase: any, orgId: string, data: any) {
   const { ruleId, reason } = data;
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  if (!profile?.tenant_id) {
+    throw new Error('User has no tenant_id assigned');
+  }
+
   // Fetch the rule
   const { data: rule, error: fetchError } = await supabase
     .from('agent_memories')
     .select('*')
     .eq('id', ruleId)
-    .eq('org_id', orgId)
+    .eq('tenant_id', profile.tenant_id)
     .single();
 
   if (fetchError) {

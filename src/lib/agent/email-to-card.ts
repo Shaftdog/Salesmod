@@ -480,11 +480,23 @@ async function findOrCreateContact(
 ): Promise<string> {
   const supabase = await createClient();
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+  if (!tenantId) {
+    throw new Error('User has no tenant_id assigned');
+  }
+
   // Try to find existing contact by email
   const { data: existingContact } = await supabase
     .from('contacts')
     .select('id')
-    .eq('org_id', orgId)
+    .eq('tenant_id', tenantId)
     .eq('email', email.from.email)
     .single();
 
@@ -496,7 +508,8 @@ async function findOrCreateContact(
   const { data: newContact, error } = await supabase
     .from('contacts')
     .insert({
-      org_id: orgId,
+      tenant_id: tenantId,
+      org_id: orgId, // Keep for backwards compatibility
       email: email.from.email,
       name: email.from.name || email.from.email,
       created_at: new Date().toISOString(),

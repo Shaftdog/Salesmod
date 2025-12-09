@@ -203,11 +203,24 @@ async function buildBusinessContext(
   const supabase = await createClient();
   const context: BusinessContext = {};
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+  if (!tenantId) {
+    console.error('[Email Response] User has no tenant_id assigned');
+    return context;
+  }
+
   // Find contact and client
   const { data: contact } = await supabase
     .from('contacts')
     .select('id, name, client_id')
-    .eq('org_id', orgId)
+    .eq('tenant_id', tenantId)
     .eq('email', email.from.email)
     .single();
 

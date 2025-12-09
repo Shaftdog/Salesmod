@@ -554,8 +554,8 @@ async function getTargetContacts(
 
     let clientQuery = supabase
       .from('clients')
-      .select('id, company_name, client_type, is_active, email, primary_contact, org_id')
-      .eq('org_id', orgId)
+      .select('id, company_name, client_type, is_active, email, primary_contact, tenant_id')
+      .eq('tenant_id', tenantId)
       .not('email', 'is', null);
 
     // Apply filters
@@ -751,13 +751,13 @@ async function getTargetContacts(
   const filteredByBounce = contactsWithoutSuppressions;
 
   // Fetch avoidance rules from agent_memories
-  // Note: orgId is now passed as a parameter instead of from getUser()
+  // Note: Using tenant_id for proper multi-tenant isolation
   let avoidanceRules: any[] = [];
-  if (orgId) {
+  if (tenantId) {
     const { data: memories } = await supabase
       .from('agent_memories')
       .select('*')
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .or('scope.eq.card_feedback,key.ilike.%rejection_%,key.ilike.%deletion_%')
       .gte('importance', 0.7); // Only high-importance feedback
 

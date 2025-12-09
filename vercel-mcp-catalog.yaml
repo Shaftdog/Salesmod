@@ -1,0 +1,26 @@
+registry:
+    vercel:
+        dateAdded: "2025-12-02T00:00:00Z"
+        description: Vercel MCP Server for deployments and project management (filtered tools)
+        icon: https://vercel.com/favicon.ico
+        metadata:
+            category: devops
+            owner: vercel
+            tags:
+                - vercel
+                - deployment
+                - hosting
+        title: Vercel (Filtered)
+        type: http
+        url: https://mcp.vercel.com
+        tools:
+            - name: list_deployments
+              description: List all deployments for a project
+            - name: get_deployment_build_logs
+              description: Get build logs for a deployment
+            - name: deploy_to_vercel
+              description: Deploy the current project
+            - name: list_projects
+              description: List Vercel projects
+            - name: get_project
+              description: Get project details

@@ -182,20 +182,7 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
   const supabase = await createClient();
   const startTime = new Date().toISOString();
 
-  // Check for idempotency: only one running work block per org
-  const { data: existingRun } = await supabase
-    .from('agent_runs')
-    .select('*')
-    .eq('org_id', orgId)
-    .eq('status', 'running')
-    .single();
-
-  if (existingRun) {
-    console.log(`Work block already running for org ${orgId}`);
-    return existingRun as AgentRun;
-  }
-
-  // SECURITY: Get user's tenant_id
+  // SECURITY: Get user's tenant_id first
   const { data: profile } = await supabase
     .from('profiles')
     .select('tenant_id')
@@ -206,6 +193,19 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
 
   if (!tenantId) {
     throw new Error(`User ${orgId} has no tenant_id assigned`);
+  }
+
+  // Check for idempotency: only one running work block per tenant
+  const { data: existingRun } = await supabase
+    .from('agent_runs')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('status', 'running')
+    .single();
+
+  if (existingRun) {
+    console.log(`Work block already running for tenant ${tenantId}`);
+    return existingRun as AgentRun;
   }
 
   // Create agent run record
@@ -339,7 +339,7 @@ async function createKanbanCards(
   const { data: existingPendingCards } = await supabase
     .from('kanban_cards')
     .select('client_id, contact_id, type')
-    .eq('org_id', orgId)
+    .eq('tenant_id', tenantId)
     .in('state', ['suggested', 'in_review', 'approved']);
 
   // Create a Set of existing card keys for O(1) lookup
@@ -454,11 +454,23 @@ async function createKanbanCards(
 async function executeApprovedCards(orgId: string): Promise<ExecutionResult[]> {
   const supabase = await createClient();
 
-  // Get all approved cards
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  if (!profile?.tenant_id) {
+    console.error('[Execute] User has no tenant_id assigned');
+    return [];
+  }
+
+  // Get all approved cards for this tenant
   const { data: approvedCards, error } = await supabase
     .from('kanban_cards')
     .select('*')
-    .eq('org_id', orgId)
+    .eq('tenant_id', profile.tenant_id)
     .eq('state', 'approved')
     .order('priority', { ascending: false }); // High priority first
 
@@ -558,10 +570,21 @@ Validation: ${validation.valid ? 'Passed' : 'Failed'} (${validation.errors.lengt
 export async function getLatestRun(orgId: string): Promise<AgentRun | null> {
   const supabase = await createClient();
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  if (!profile?.tenant_id) {
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('agent_runs')
     .select('*')
-    .eq('org_id', orgId)
+    .eq('tenant_id', profile.tenant_id)
     .order('started_at', { ascending: false })
     .limit(1)
     .single();
@@ -579,10 +602,21 @@ export async function getLatestRun(orgId: string): Promise<AgentRun | null> {
 export async function getRunHistory(orgId: string, limit: number = 20): Promise<AgentRun[]> {
   const supabase = await createClient();
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  if (!profile?.tenant_id) {
+    return [];
+  }
+
   const { data, error } = await supabase
     .from('agent_runs')
     .select('*')
-    .eq('org_id', orgId)
+    .eq('tenant_id', profile.tenant_id)
     .order('started_at', { ascending: false })
     .limit(limit);
 

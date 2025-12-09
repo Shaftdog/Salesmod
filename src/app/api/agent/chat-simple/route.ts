@@ -233,6 +233,20 @@ export async function POST(request: Request) {
       console.log(`[Chat] Loaded ${cases?.length || 0} cases`);
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return Response.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Get current Kanban cards
     const { data: kanbanCards } = await supabase
       .from('kanban_cards')
@@ -246,7 +260,7 @@ export async function POST(request: Request) {
         created_at,
         client:clients(company_name)
       `)
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .in('state', ['suggested', 'in_review', 'approved'])
       .order('created_at', { ascending: false })
       .limit(20);
@@ -378,7 +392,7 @@ export async function POST(request: Request) {
                   .from('kanban_cards')
                   .delete()
                   .eq('id', card.id)
-                  .eq('org_id', user.id);
+                  .eq('tenant_id', profile.tenant_id);
                 
                 if (deleteError) {
                   errors.push(deleteError.message);
@@ -418,7 +432,7 @@ export async function POST(request: Request) {
                 .from('kanban_cards')
                 .update({ state: 'approved' })
                 .eq('id', card.id)
-                .eq('org_id', user.id);
+                .eq('tenant_id', profile.tenant_id);
               
               if (!error) approved++;
             }
@@ -865,12 +879,24 @@ async function parseAndDeleteCards(supabase: any, response: string, orgId: strin
       
       console.log(`[Chat] Attempting to delete card: ${cardId}`);
       
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', orgId)
+        .single();
+
+      if (!profile?.tenant_id) {
+        console.error(`[Chat] User ${orgId} has no tenant_id assigned`);
+        continue;
+      }
+
       // Get card info before deleting for logging
       const { data: card } = await supabase
         .from('kanban_cards')
         .select('id, title, type')
         .eq('id', cardId)
-        .eq('org_id', orgId)
+        .eq('tenant_id', profile.tenant_id)
         .single();
       
       if (!card) {
@@ -880,12 +906,12 @@ async function parseAndDeleteCards(supabase: any, response: string, orgId: strin
       
       console.log(`[Chat] Found card to delete: "${card.title}" (${card.type})`);
       
-      // Delete the card using service role to bypass RLS
+      // Delete the card
       const { error: deleteError } = await supabase
         .from('kanban_cards')
         .delete()
         .eq('id', cardId)
-        .eq('org_id', orgId);
+        .eq('tenant_id', profile.tenant_id);
       
       if (deleteError) {
         console.error('[Chat] Auto-delete error:', deleteError);

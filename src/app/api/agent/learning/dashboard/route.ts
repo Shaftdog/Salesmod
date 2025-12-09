@@ -21,11 +21,25 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Fetch all feedback from agent_memories
     const { data: allFeedback, error: feedbackError } = await supabase
       .from('agent_memories')
       .select('*')
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .or('key.ilike.%rejection_%,key.ilike.%deletion_%,key.ilike.%batch_%')
       .order('created_at', { ascending: false });
 
@@ -38,7 +52,7 @@ export async function GET() {
     const { data: allCards, error: cardsError } = await supabase
       .from('kanban_cards')
       .select('id, state, created_at, type')
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()) // Last 30 days
       .order('created_at', { ascending: true });
 

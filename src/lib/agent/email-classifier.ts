@@ -179,10 +179,24 @@ async function fetchClassificationRules(orgId: string): Promise<any[]> {
 
   try {
     const supabase = await createClient();
+
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', orgId)
+      .single();
+
+    const tenantId = profile?.tenant_id;
+    if (!tenantId) {
+      console.error(`[Email Classifier] User ${orgId} has no tenant_id assigned`);
+      return [];
+    }
+
     const { data: rules, error } = await supabase
       .from('agent_memories')
       .select('content, key')
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .eq('scope', 'email_classification')
       .gte('importance', 0.8) // Only high-importance rules
       .order('importance', { ascending: false })
@@ -344,11 +358,21 @@ async function updateRuleMatchStats(orgId: string, ruleKey: string, emailId: str
   try {
     const supabase = await createClient();
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', orgId)
+      .single();
+
+    const tenantId = profile?.tenant_id;
+    if (!tenantId) return;
+
     // Get current rule
     const { data: memory } = await supabase
       .from('agent_memories')
       .select('content')
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .eq('key', ruleKey)
       .single();
 
@@ -368,7 +392,7 @@ async function updateRuleMatchStats(orgId: string, ruleKey: string, emailId: str
         content: updatedContent,
         last_used_at: new Date().toISOString(),
       })
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .eq('key', ruleKey);
 
     console.log(`[Email Classifier] Updated rule stats for ${ruleKey}: ${updatedContent.match_count} matches`);

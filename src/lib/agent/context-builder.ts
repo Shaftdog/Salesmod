@@ -49,6 +49,18 @@ export async function buildContext(orgId: string): Promise<AgentContext> {
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+  if (!tenantId) {
+    throw new Error(`User ${orgId} has no tenant_id assigned`);
+  }
+
   // Fetch active goals
   const { data: goalsData, error: goalsError } = await supabase
     .from('goals')
@@ -127,11 +139,11 @@ export async function buildContext(orgId: string): Promise<AgentContext> {
 
   if (casesError) throw casesError;
 
-  // Fetch agent memories
+  // Fetch agent memories - using tenant_id for multi-tenant isolation
   const { data: memoriesData, error: memoriesError } = await supabase
     .from('agent_memories')
     .select('*')
-    .eq('org_id', orgId)
+    .eq('tenant_id', tenantId)
     .or(`expires_at.is.null,expires_at.gt.${now.toISOString()}`)
     .order('importance', { ascending: false })
     .limit(50);

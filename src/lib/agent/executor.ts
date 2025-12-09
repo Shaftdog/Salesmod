@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 export interface KanbanCard {
   id: string;
   org_id: string;
+  tenant_id: string;
   run_id?: string;
   client_id: string;
   contact_id?: string;
@@ -324,7 +325,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
     const { data: suppression } = await supabase
       .from('email_suppressions')
       .select('*')
-      .eq('org_id', card.org_id)
+      .eq('tenant_id', card.tenant_id)
       .eq('contact_id', contactId)
       .single();
 
@@ -822,33 +823,40 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
 
     // Step 5: Index to RAG for future reference
     try {
-      await indexContent(
-        card.org_id,
-        'note', // Changed from 'research' to match DB constraint
-        card.id,
-        `Research: ${intel.client.company_name}`,
-        summary,
-        {
-          client_id: card.client_id,
-          client_name: intel.client.company_name,
-          research_date: new Date().toISOString(),
-          sources: webResults.length > 0 ? ['internal', 'web'] : ['internal'],
-          web_results_count: webResults.length,
-          metrics: intel.metrics,
-        }
-      );
-      console.log('[Research] Indexed to RAG');
+      // Get user's org_id for RAG indexing (RAG uses org_id, not tenant_id)
+      const { data: { user } } = await supabase.auth.getUser();
+      const orgId = user?.id;
+
+      if (orgId) {
+        await indexContent(
+          orgId,
+          'note', // Changed from 'research' to match DB constraint
+          card.id,
+          `Research: ${intel.client.company_name}`,
+          summary,
+          {
+            client_id: card.client_id,
+            client_name: intel.client.company_name,
+            research_date: new Date().toISOString(),
+            sources: webResults.length > 0 ? ['internal', 'web'] : ['internal'],
+            web_results_count: webResults.length,
+            metrics: intel.metrics,
+          }
+        );
+        console.log('[Research] Indexed to RAG');
+      }
     } catch (error) {
       console.error('[Research] RAG indexing failed:', error);
     }
 
     // Step 6: Save key insights to agent_memories
     try {
+      const { data: { user } } = await supabase.auth.getUser();
       const insights = extractKeyInsights(summary);
 
       await supabase.from('agent_memories').insert({
         tenant_id: tenantId,
-        org_id: card.org_id,
+        org_id: user?.id, // Keep org_id for backwards compatibility
         scope: 'client_context',
         key: `research_${card.client_id}_${Date.now()}`,
         content: {
@@ -1018,9 +1026,16 @@ async function executeReplyToEmail(card: KanbanCard): Promise<ExecutionResult> {
       }
     }
 
+    // Get user for org_id (needed by email-response-generator and GmailService)
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    const orgId = currentUser?.id;
+    if (!orgId) {
+      throw new Error('User not authenticated');
+    }
+
     // Generate response using AI (with campaign context if available)
     const response = await generateEmailResponse(
-      card.org_id,
+      orgId,
       email,
       payload.classification,
       undefined, // business context (will be built automatically)
@@ -1028,7 +1043,7 @@ async function executeReplyToEmail(card: KanbanCard): Promise<ExecutionResult> {
     );
 
     // Create Gmail service
-    const gmailService = await GmailService.create(card.org_id);
+    const gmailService = await GmailService.create(orgId);
 
     // Send reply via Gmail API
     const sentMessageId = await gmailService.sendReply({
@@ -1042,19 +1057,15 @@ async function executeReplyToEmail(card: KanbanCard): Promise<ExecutionResult> {
     // Log activity
     await supabase.from('activities').insert({
       tenant_id: tenantId,
-      org_id: card.org_id,
       client_id: card.client_id,
       contact_id: card.contact_id,
-      type: 'email_sent',
+      activity_type: 'email',
       subject: `Replied to: ${email.subject}`,
-      body: response.bodyText,
-      metadata: {
-        cardId: card.id,
-        gmailMessageId: sentMessageId,
-        threadId: email.threadId,
-        category: payload.category,
-        autoSent: response.shouldAutoSend,
-      },
+      description: response.bodyText,
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      outcome: 'sent',
+      created_by: user.id,
     });
 
     return {
@@ -1109,17 +1120,13 @@ async function executeNeedsHumanResponse(card: KanbanCard): Promise<ExecutionRes
   // Log activity to notify
   await supabase.from('activities').insert({
     tenant_id: tenantId,
-    org_id: card.org_id,
     client_id: card.client_id,
     contact_id: card.contact_id,
-    type: 'note',
+    activity_type: 'note',
     subject: `Email requires human response: ${card.title}`,
-    body: card.description || '',
-    metadata: {
-      cardId: card.id,
-      emailCategory: card.action_payload?.category,
-      urgent: card.priority === 'high',
-    },
+    description: card.description || '',
+    status: 'pending',
+    created_by: user.id,
   });
 
   return {

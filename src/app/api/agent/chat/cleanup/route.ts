@@ -102,18 +102,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Count messages that will be cleaned
     const { count: expiredCount } = await supabase
       .from('chat_messages')
       .select('*', { count: 'exact', head: true })
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .lt('expires_at', new Date().toISOString());
 
     // Count total messages
     const { count: totalCount } = await supabase
       .from('chat_messages')
       .select('*', { count: 'exact', head: true })
-      .eq('org_id', user.id);
+      .eq('tenant_id', profile.tenant_id);
 
     return NextResponse.json({
       total_messages: totalCount || 0,

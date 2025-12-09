@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
           .from('kanban_cards')
           .update(updates)
           .eq('id', cardId)
-          .eq('org_id', user.id)
+          .eq('tenant_id', profile.tenant_id)
           .select()
           .single();
 
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
           .from('kanban_cards')
           .delete()
           .eq('id', cardId)
-          .eq('org_id', user.id);
+          .eq('tenant_id', profile.tenant_id);
 
         if (deleteError) throw deleteError;
 
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
           .from('kanban_cards')
           .update({ state: 'approved' })
           .eq('id', cardId)
-          .eq('org_id', user.id)
+          .eq('tenant_id', profile.tenant_id)
           .select()
           .single();
 
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
           .from('kanban_cards')
           .update({ state: 'rejected' })
           .eq('id', cardId)
-          .eq('org_id', user.id)
+          .eq('tenant_id', profile.tenant_id)
           .select()
           .single();
 
