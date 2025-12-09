@@ -200,7 +200,7 @@ async function fetchClassificationRules(orgId: string): Promise<any[]> {
       .eq('scope', 'email_classification')
       .gte('importance', 0.8) // Only high-importance rules
       .order('importance', { ascending: false })
-      .limit(20); // Limit to prevent prompt bloat
+      .limit(50); // Allow up to 50 classification rules
 
     if (error) {
       console.error('[Email Classifier] Database error fetching classification rules:', {

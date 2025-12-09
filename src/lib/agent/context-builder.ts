@@ -140,15 +140,32 @@ export async function buildContext(orgId: string): Promise<AgentContext> {
   if (casesError) throw casesError;
 
   // Fetch agent memories - using tenant_id for multi-tenant isolation
-  const { data: memoriesData, error: memoriesError } = await supabase
+  // First, fetch ALL card_feedback memories (learning rules) - these are critical
+  const { data: feedbackMemories, error: feedbackError } = await supabase
     .from('agent_memories')
     .select('*')
     .eq('tenant_id', tenantId)
+    .eq('scope', 'card_feedback')
+    .or(`expires_at.is.null,expires_at.gt.${now.toISOString()}`)
+    .order('importance', { ascending: false })
+    .limit(100); // Allow up to 100 learning rules
+
+  if (feedbackError) throw feedbackError;
+
+  // Then fetch other memories (client_context, chat, etc.)
+  const { data: otherMemories, error: otherError } = await supabase
+    .from('agent_memories')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .neq('scope', 'card_feedback')
     .or(`expires_at.is.null,expires_at.gt.${now.toISOString()}`)
     .order('importance', { ascending: false })
     .limit(50);
 
-  if (memoriesError) throw memoriesError;
+  if (otherError) throw otherError;
+
+  // Combine: all feedback rules + top 50 other memories
+  const memoriesData = [...(feedbackMemories || []), ...(otherMemories || [])];
 
   // Process goals with progress
   const goals = (goalsData || []).map((goal: any) => {
