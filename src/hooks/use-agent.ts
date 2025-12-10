@@ -25,6 +25,9 @@ export interface KanbanCard {
   run_id?: string;
   client_id: string;
   contact_id?: string;
+  gmail_message_id?: string;
+  gmail_thread_id?: string;
+  email_category?: string;
   type: string;
   title: string;
   description?: string;
