@@ -533,7 +533,15 @@ export function CardDetailSheet({ card, open, onOpenChange }: CardDetailSheetPro
                     </p>
                     <CardReviewChat
                       card={card}
-                      emailContent={emailData}
+                      emailContent={emailData || (card.action_payload?.bodyText || card.action_payload?.bodyHtml ? {
+                        from_email: card.action_payload?.from?.email || '',
+                        from_name: card.action_payload?.from?.name || null,
+                        subject: card.action_payload?.subject || '',
+                        body_text: card.action_payload?.bodyText || null,
+                        body_html: card.action_payload?.bodyHtml || null,
+                        received_at: card.created_at || new Date().toISOString(),
+                        category: card.action_payload?.classification?.category || null,
+                      } : null)}
                       onCardRevised={() => {
                         toast({
                           title: 'Card Revised',
