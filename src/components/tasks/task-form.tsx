@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -57,15 +58,7 @@ type TaskFormProps = {
 export function TaskForm({ open, onOpenChange, onSubmit, appraisers, clients, task, isLoading, defaultClientId }: TaskFormProps) {
   const form = useForm<TaskFormData>({
     resolver: zodResolver(taskSchema),
-    defaultValues: task ? {
-      title: task.title,
-      description: task.description || "",
-      clientId: task.clientId,
-      priority: task.priority,
-      status: task.status,
-      dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
-      assignedTo: task.assignedTo,
-    } : {
+    defaultValues: {
       title: "",
       description: "",
       clientId: defaultClientId || "",
@@ -75,6 +68,33 @@ export function TaskForm({ open, onOpenChange, onSubmit, appraisers, clients, ta
       assignedTo: "",
     },
   });
+
+  // Reset form when task changes (for edit mode)
+  useEffect(() => {
+    if (open) {
+      if (task) {
+        form.reset({
+          title: task.title,
+          description: task.description || "",
+          clientId: task.clientId || "",
+          priority: task.priority,
+          status: task.status,
+          dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
+          assignedTo: task.assignedTo || "",
+        });
+      } else {
+        form.reset({
+          title: "",
+          description: "",
+          clientId: defaultClientId || "",
+          priority: "normal",
+          status: "pending",
+          dueDate: undefined,
+          assignedTo: "",
+        });
+      }
+    }
+  }, [open, task, form, defaultClientId]);
 
   const handleSubmit = async (data: TaskFormData) => {
     await onSubmit(data);
