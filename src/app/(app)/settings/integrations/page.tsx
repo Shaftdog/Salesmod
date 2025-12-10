@@ -98,6 +98,9 @@ export default function IntegrationsPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [autoPollEnabled, setAutoPollEnabled] = useState(true);
+  const [lastAutoSync, setLastAutoSync] = useState<Date | null>(null);
+  const [nextSyncIn, setNextSyncIn] = useState<number>(0);
 
   // Processed messages state
   const [messages, setMessages] = useState<ProcessedMessage[]>([]);
@@ -105,10 +108,73 @@ export default function IntegrationsPage() {
   const [messagesTotal, setMessagesTotal] = useState(0);
   const [messagesPage, setMessagesPage] = useState(0);
   const PAGE_SIZE = 20;
+  const POLL_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 
   useEffect(() => {
     fetchGmailStatus();
   }, []);
+
+  // Auto-poll every 2 minutes when Gmail is connected and auto-poll is enabled
+  useEffect(() => {
+    if (!gmailStatus?.connected || !autoPollEnabled) {
+      return;
+    }
+
+    // Run initial sync after a short delay
+    const initialTimeout = setTimeout(() => {
+      runAutoSync();
+    }, 5000); // Wait 5 seconds after page load
+
+    // Set up interval for subsequent syncs
+    const pollInterval = setInterval(() => {
+      runAutoSync();
+    }, POLL_INTERVAL_MS);
+
+    // Countdown timer for UI
+    const countdownInterval = setInterval(() => {
+      if (lastAutoSync) {
+        const elapsed = Date.now() - lastAutoSync.getTime();
+        const remaining = Math.max(0, Math.ceil((POLL_INTERVAL_MS - elapsed) / 1000));
+        setNextSyncIn(remaining);
+      }
+    }, 1000);
+
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(pollInterval);
+      clearInterval(countdownInterval);
+    };
+  }, [gmailStatus?.connected, autoPollEnabled, lastAutoSync]);
+
+  const runAutoSync = async () => {
+    // Don't run if already syncing
+    if (syncing) return;
+
+    try {
+      setSyncing(true);
+      const response = await fetch('/api/agent/gmail/poll', {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setLastAutoSync(new Date());
+        // Only refresh data, don't show alert for auto-sync
+        await fetchGmailStatus();
+        await fetchMessages();
+        console.log('[Gmail Auto-Sync]', {
+          messagesProcessed: result.data.messagesProcessed,
+          cardsCreated: result.data.cardsCreated,
+          autoExecuted: result.data.autoExecutedCards,
+        });
+      }
+    } catch (error) {
+      console.error('[Gmail Auto-Sync] Error:', error);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   useEffect(() => {
     if (gmailStatus?.connected) {
@@ -313,6 +379,19 @@ export default function IntegrationsPage() {
               <div className="space-y-4 pt-4 border-t">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
+                    <Label htmlFor="auto-poll">Auto-Poll (Every 2 min)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Automatically check for new emails every 2 minutes
+                    </p>
+                  </div>
+                  <Switch
+                    id="auto-poll"
+                    checked={autoPollEnabled}
+                    onCheckedChange={setAutoPollEnabled}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
                     <Label htmlFor="sync-enabled">Email Processing</Label>
                     <p className="text-xs text-muted-foreground">
                       Automatically process incoming emails
@@ -340,7 +419,23 @@ export default function IntegrationsPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2 pt-4">
+              <div className="space-y-3 pt-4">
+                {autoPollEnabled && (
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground bg-muted/50 py-2 px-3 rounded-lg">
+                    <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin text-blue-500' : ''}`} />
+                    {syncing ? (
+                      <span>Syncing emails...</span>
+                    ) : lastAutoSync ? (
+                      <span>
+                        Next auto-sync in {Math.floor(nextSyncIn / 60)}:{(nextSyncIn % 60).toString().padStart(2, '0')}
+                        {' '}• Last sync: {lastAutoSync.toLocaleTimeString()}
+                      </span>
+                    ) : (
+                      <span>Auto-sync starting soon...</span>
+                    )}
+                  </div>
+                )}
+                <div className="flex gap-2">
                 <Button
                   onClick={handleManualSync}
                   disabled={syncing}
@@ -373,6 +468,7 @@ export default function IntegrationsPage() {
                     'Disconnect'
                   )}
                 </Button>
+                </div>
               </div>
 
               {gmailStatus.tokenExpired && (
