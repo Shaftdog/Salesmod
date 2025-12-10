@@ -543,7 +543,7 @@ async function findOrCreateContact(
   }
 
   // Parse name into first_name and last_name
-  const { firstName, lastName } = parseFullName(email.from.name, email.from.email);
+  const { firstName, lastName } = parseFullName(email.from.name ?? null, email.from.email);
 
   // Create new contact
   const { data: newContact, error } = await supabase
