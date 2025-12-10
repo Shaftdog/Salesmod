@@ -486,6 +486,30 @@ function getSuggestedActions(
 }
 
 /**
+ * Parses a full name into first and last name components
+ */
+function parseFullName(fullName: string | null, fallbackEmail: string): { firstName: string; lastName: string } {
+  if (!fullName || !fullName.trim()) {
+    // Use email username as first name, empty last name
+    const emailUsername = fallbackEmail.split('@')[0];
+    return { firstName: emailUsername, lastName: '' };
+  }
+
+  const trimmed = fullName.trim();
+  const parts = trimmed.split(/\s+/);
+
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: '' };
+  }
+
+  // First word is first name, rest is last name
+  const firstName = parts[0];
+  const lastName = parts.slice(1).join(' ');
+
+  return { firstName, lastName };
+}
+
+/**
  * Finds or creates a contact from email
  */
 async function findOrCreateContact(
@@ -518,6 +542,9 @@ async function findOrCreateContact(
     return existingContact.id;
   }
 
+  // Parse name into first_name and last_name
+  const { firstName, lastName } = parseFullName(email.from.name, email.from.email);
+
   // Create new contact
   const { data: newContact, error } = await supabase
     .from('contacts')
@@ -525,7 +552,8 @@ async function findOrCreateContact(
       tenant_id: tenantId,
       org_id: orgId, // Keep for backwards compatibility
       email: email.from.email,
-      name: email.from.name || email.from.email,
+      first_name: firstName,
+      last_name: lastName,
       created_at: new Date().toISOString(),
     })
     .select('id')
