@@ -107,13 +107,14 @@ export async function GET(request: NextRequest) {
     // Initialize Gmail sync state
     const { error: syncError } = await supabase.from('gmail_sync_state').upsert(
       {
+        tenant_id: tenantId,
         org_id: orgId,
         is_enabled: true,
         auto_process: true,
         updated_at: new Date().toISOString(),
       },
       {
-        onConflict: 'org_id',
+        onConflict: 'tenant_id',
       }
     );
 

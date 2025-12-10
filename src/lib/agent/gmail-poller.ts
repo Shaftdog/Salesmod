@@ -252,6 +252,7 @@ async function processMessage(
   const { data: gmailMessage, error: insertError } = await supabase
     .from('gmail_messages')
     .insert({
+      tenant_id: tenantId,
       org_id: orgId,
       gmail_message_id: message.id,
       gmail_thread_id: message.threadId,

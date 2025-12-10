@@ -43,6 +43,7 @@ import {
   Package,
   Kanban,
   ListTodo,
+  Blocks,
 } from "lucide-react";
 
 export interface NavItem {
@@ -168,6 +169,7 @@ export const AI_SECTION: NavSection = {
     { href: "/agent", icon: Bot, label: "AI Agent" },
     { href: "/agent/jobs", icon: Calendar, label: "Jobs" },
     { href: "/ai-analytics", icon: Brain, label: "AI Analytics" },
+    { href: "/settings/integrations", icon: Blocks, label: "Integrations" },
   ],
 };
 

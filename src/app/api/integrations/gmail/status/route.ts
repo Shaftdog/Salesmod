@@ -18,16 +18,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get org_id
+    // Get profile with tenant_id
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, tenant_id')
       .eq('id', user.id)
       .single();
 
     if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
+
+    const tenantId = profile.tenant_id;
 
     // Check for OAuth tokens
     const { data: token } = await supabase
@@ -37,11 +39,11 @@ export async function GET(request: NextRequest) {
       .eq('provider', 'google')
       .single();
 
-    // Get sync state
+    // Get sync state using tenant_id for multi-tenant isolation
     const { data: syncState } = await supabase
       .from('gmail_sync_state')
       .select('*')
-      .eq('org_id', profile.id)
+      .eq('tenant_id', tenantId)
       .single();
 
     // Get stats from last 24 hours
