@@ -1,7 +1,10 @@
 /**
  * User Registration API Route
  *
- * Creates new user + tenant in atomic operation
+ * Creates new user and adds them to the existing main tenant.
+ * IMPORTANT: This system uses a SINGLE TENANT model - all users belong to the same organization.
+ * Do NOT create new tenants for each user!
+ *
  * Requirements: FR-1.1
  * Reference: docs/client-portal/04-TASKS/phase-1/1.1-multi-tenant-auth.md
  */
@@ -11,6 +14,9 @@ import { createClient } from '@/lib/supabase/server';
 import { executeAsAdmin, deleteOrphanedUser } from '@/lib/supabase/admin';
 import { registerSchema } from '@/lib/validations/auth';
 import { z } from 'zod';
+
+// The single main tenant ID - all users belong to this organization
+const MAIN_TENANT_ID = 'da0563f7-7d29-4c02-b835-422f31c82b7b';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,7 +34,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email, password, name, tenantName, tenantType } = validation.data;
+    const { email, password, name } = validation.data;
+    // Note: tenantName and tenantType are ignored - we use the single main tenant
 
     // 2. Create user with Supabase Auth
     const supabase = await createClient();
@@ -39,7 +46,6 @@ export async function POST(request: NextRequest) {
       options: {
         data: {
           name,
-          // Will be updated after tenant creation
         },
         emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
       },
@@ -74,37 +80,34 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
 
-    // 3. Create tenant (requires service-role)
+    // 3. Add user to the EXISTING main tenant (NO NEW TENANT CREATION!)
     try {
-      const tenant = await executeAsAdmin(
-        'create_tenant_during_registration',
+      // Verify main tenant exists
+      const tenantCheck = await executeAsAdmin(
+        'verify_main_tenant',
         userId,
         async (adminClient) => {
           const { data, error } = await adminClient
             .from('tenants')
-            .insert({
-              name: tenantName,
-              type: tenantType,
-              owner_id: userId,
-            })
-            .select()
+            .select('id, name')
+            .eq('id', MAIN_TENANT_ID)
             .single();
 
-          if (error) {
-            throw new Error(`Tenant creation failed: ${error.message}`);
+          if (error || !data) {
+            throw new Error('Main tenant not found - contact administrator');
           }
 
           return data;
         }
       );
 
-      console.log('[Registration] Tenant created', {
-        tenantId: tenant.id,
-        tenantName: tenant.name,
+      console.log('[Registration] Using existing tenant', {
+        tenantId: tenantCheck.id,
+        tenantName: tenantCheck.name,
         userId,
       });
 
-      // 4. Update profile with tenant info (requires service-role)
+      // 4. Update profile with main tenant info (requires service-role)
       await executeAsAdmin(
         'link_user_to_tenant',
         userId,
@@ -112,8 +115,8 @@ export async function POST(request: NextRequest) {
           const { error } = await adminClient
             .from('profiles')
             .update({
-              tenant_id: tenant.id,
-              tenant_type: tenantType,
+              tenant_id: MAIN_TENANT_ID,
+              tenant_type: 'internal',
             })
             .eq('id', userId);
 
@@ -123,9 +126,9 @@ export async function POST(request: NextRequest) {
         }
       );
 
-      console.log('[Registration] Profile updated with tenant', {
+      console.log('[Registration] Profile linked to main tenant', {
         userId,
-        tenantId: tenant.id,
+        tenantId: MAIN_TENANT_ID,
       });
 
       // 5. Success response
@@ -133,7 +136,7 @@ export async function POST(request: NextRequest) {
         success: true,
         message: 'Registration successful! Please check your email to verify your account.',
         userId,
-        tenantId: tenant.id,
+        tenantId: MAIN_TENANT_ID,
         email,
       });
 
@@ -142,7 +145,7 @@ export async function POST(request: NextRequest) {
       try {
         await deleteOrphanedUser(
           userId,
-          `Tenant creation failed: ${tenantError instanceof Error ? tenantError.message : 'Unknown error'}`
+          `Tenant linking failed: ${tenantError instanceof Error ? tenantError.message : 'Unknown error'}`
         );
       } catch (deleteError) {
         console.error('[Registration] Failed to delete orphaned user', {
@@ -152,7 +155,7 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      console.error('[Registration] Tenant creation failed, user deleted', {
+      console.error('[Registration] Tenant linking failed, user deleted', {
         userId,
         email,
         error: tenantError instanceof Error ? tenantError.message : 'Unknown error',
@@ -161,7 +164,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: 'Registration failed. Please try again.',
-          code: 'TENANT_CREATION_FAILED',
+          code: 'TENANT_LINKING_FAILED',
         },
         { status: 500 }
       );
