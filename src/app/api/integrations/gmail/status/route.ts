@@ -31,13 +31,16 @@ export async function GET(request: NextRequest) {
 
     const tenantId = profile.tenant_id;
 
-    // Check for OAuth tokens
-    const { data: token } = await supabase
+    // Check for OAuth tokens (get the most recently updated one if multiple exist)
+    const { data: tokens } = await supabase
       .from('oauth_tokens')
-      .select('account_email, expires_at, scopes')
+      .select('account_email, expires_at, scopes, updated_at')
       .eq('org_id', profile.id)
       .eq('provider', 'google')
-      .single();
+      .order('updated_at', { ascending: false })
+      .limit(1);
+
+    const token = tokens?.[0] || null;
 
     // Get sync state using tenant_id for multi-tenant isolation
     const { data: syncState } = await supabase
