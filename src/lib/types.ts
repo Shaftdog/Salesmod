@@ -219,6 +219,7 @@ export interface Activity {
   contactId?: string;
   orderId?: string;
   dealId?: string;
+  gmailMessageId?: string;
   activityType: ActivityType;
   subject: string;
   description?: string;

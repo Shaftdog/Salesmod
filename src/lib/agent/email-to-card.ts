@@ -187,6 +187,7 @@ export async function createCardFromEmail(
       tenant_id: tenantId,
       client_id: clientId,
       contact_id: contactId,
+      gmail_message_id: email.id,
       activity_type: 'email',
       subject: `Received: ${email.subject}`,
       description: `Incoming email from ${email.from.name || email.from.email}\n\nCategory: ${classification.category}\nIntent: ${classification.intent}\n\n${email.snippet || email.bodyText?.substring(0, 500) || ''}`,

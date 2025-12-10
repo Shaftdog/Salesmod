@@ -166,6 +166,7 @@ export function transformActivity(dbActivity: any): Activity {
     contactId: dbActivity.contact_id,
     orderId: dbActivity.order_id,
     dealId: dbActivity.deal_id,
+    gmailMessageId: dbActivity.gmail_message_id,
     activityType: dbActivity.activity_type,
     subject: dbActivity.subject,
     description: dbActivity.description,
