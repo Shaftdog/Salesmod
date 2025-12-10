@@ -37,6 +37,34 @@ export function useActivities(clientId?: string) {
   })
 }
 
+export function useContactActivities(contactId?: string) {
+  const supabase = createClient()
+
+  return useQuery({
+    queryKey: ['activities', 'contact', contactId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('activities')
+        .select(`
+          *,
+          client:clients(*),
+          contact:contacts(*),
+          order:orders(*),
+          deal:deals(*),
+          creator:profiles!activities_created_by_fkey(*),
+          assignee:profiles!activities_assigned_to_fkey(*)
+        `)
+        .eq('contact_id', contactId)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      return (data || []).map(transformActivity)
+    },
+    enabled: !!contactId,
+    staleTime: 1000 * 60, // 1 minute
+  })
+}
+
 export function useDealActivities(dealId?: string) {
   const supabase = createClient()
 

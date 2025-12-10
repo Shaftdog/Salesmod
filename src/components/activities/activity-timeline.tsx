@@ -30,12 +30,13 @@ const activityColors = {
 };
 
 type ActivityTimelineProps = {
-  clientId: string;
+  clientId?: string;
+  contactId?: string;
   activities: Activity[];
   isLoading?: boolean;
 };
 
-export function ActivityTimeline({ clientId, activities, isLoading }: ActivityTimelineProps) {
+export function ActivityTimeline({ clientId, contactId, activities, isLoading }: ActivityTimelineProps) {
   const [showForm, setShowForm] = useState(false);
   const { mutateAsync: createActivity, isPending: isCreating } = useCreateActivity();
   const { data: currentUser } = useCurrentUser();
@@ -44,7 +45,8 @@ export function ActivityTimeline({ clientId, activities, isLoading }: ActivityTi
     if (!currentUser) return;
 
     await createActivity({
-      client_id: clientId,
+      client_id: clientId || null,
+      contact_id: contactId || null,
       activity_type: data.activityType,
       subject: data.subject,
       description: data.description,

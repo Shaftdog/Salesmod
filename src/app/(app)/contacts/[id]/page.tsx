@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useContactDetail, useContactHistory } from "@/hooks/use-contact-detail";
-import { useActivities } from "@/hooks/use-activities";
+import { useContactActivities } from "@/hooks/use-activities";
 import { useUpdateContact } from "@/hooks/use-contacts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,7 +45,7 @@ export default function ContactDetailPage() {
 
   const { data: contact, isLoading: contactLoading } = useContactDetail(contactId);
   const { data: companyHistory, isLoading: historyLoading } = useContactHistory(contactId);
-  const { data: activities, isLoading: activitiesLoading } = useActivities(contact?.client_id || undefined);
+  const { data: activities, isLoading: activitiesLoading } = useContactActivities(contactId);
 
   if (contactLoading) {
     return (
@@ -260,7 +260,8 @@ export default function ContactDetailPage() {
             </div>
           ) : (
             <ActivityTimeline
-              clientId={contact?.client_id || ''}
+              clientId={contact?.client_id || undefined}
+              contactId={contactId}
               activities={activities || []}
               isLoading={activitiesLoading}
             />
