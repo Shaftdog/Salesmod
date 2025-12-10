@@ -55,6 +55,18 @@ export async function createCardFromEmail(
 
   const supabase = await createClient();
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+  if (!tenantId) {
+    throw new Error('User has no tenant_id assigned');
+  }
+
   // Determine card type and state based on category
   console.log('[Email-to-Card] Determining card strategy...');
   const { cardType, state, priority, autoExecute } = determineCardStrategy(classification);
@@ -106,6 +118,7 @@ export async function createCardFromEmail(
   const { data: card, error } = await supabase
     .from('kanban_cards')
     .insert({
+      tenant_id: tenantId,
       org_id: orgId,
       client_id: clientId,
       contact_id: contactId,
@@ -171,6 +184,7 @@ export async function createCardFromEmail(
   const { error: activityError } = await supabase
     .from('activities')
     .insert({
+      tenant_id: tenantId,
       client_id: clientId,
       contact_id: contactId,
       activity_type: 'email',
