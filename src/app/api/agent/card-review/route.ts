@@ -44,6 +44,7 @@ export async function POST(request: Request) {
     const cardContext = context?.card;
     const contactContext = context?.contact;
     const clientContext = context?.client;
+    const emailContext = context?.email;
 
     // Fetch recent rejection patterns for proactive suggestions
     const { data: recentRejections } = await supabase
@@ -104,6 +105,18 @@ ${clientContext ? `## CLIENT
 ${cardContext?.action_payload?.subject ? `## EMAIL DETAILS
 - **Subject**: ${cardContext.action_payload.subject}
 - **To**: ${cardContext.action_payload.to}` : ''}
+
+${emailContext ? `## FULL EMAIL CONTENT
+This card was created from the following incoming email. You can reference this to discuss the email or help draft a response.
+
+- **From**: ${emailContext.from}
+- **Subject**: ${emailContext.subject}
+- **Received**: ${emailContext.receivedAt}
+- **Category**: ${emailContext.category || 'Uncategorized'}
+
+**Email Body:**
+${emailContext.body}
+` : ''}
 
 ## REJECTION HISTORY
 ${rejectionPatterns.length > 0 ? `

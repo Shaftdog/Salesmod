@@ -16,8 +16,19 @@ interface Message {
   toolInvocations?: any[];
 }
 
+interface EmailContent {
+  from_email: string;
+  from_name: string | null;
+  subject: string;
+  body_text: string | null;
+  body_html: string | null;
+  received_at: string;
+  category: string | null;
+}
+
 interface CardReviewChatProps {
   card: KanbanCard;
+  emailContent?: EmailContent | null;
   onCardRevised?: (newCard: any) => void;
   onFeedbackStored?: (feedback: any) => void;
   onClose?: () => void;
@@ -25,6 +36,7 @@ interface CardReviewChatProps {
 
 export function CardReviewChat({
   card,
+  emailContent,
   onCardRevised,
   onFeedbackStored,
   onClose
@@ -98,6 +110,16 @@ export function CardReviewChat({
             id: card.client.id,
             name: card.client.company_name || card.client.name || 'Unknown',
             email: card.client.email || '',
+          } : null,
+          // Include full email content for AI to reference when discussing/responding
+          email: emailContent ? {
+            from: emailContent.from_name
+              ? `${emailContent.from_name} <${emailContent.from_email}>`
+              : emailContent.from_email,
+            subject: emailContent.subject,
+            body: emailContent.body_text || '',
+            receivedAt: emailContent.received_at,
+            category: emailContent.category,
           } : null,
         },
       };

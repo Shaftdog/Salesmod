@@ -533,6 +533,7 @@ export function CardDetailSheet({ card, open, onOpenChange }: CardDetailSheetPro
                     </p>
                     <CardReviewChat
                       card={card}
+                      emailContent={emailData}
                       onCardRevised={() => {
                         toast({
                           title: 'Card Revised',
