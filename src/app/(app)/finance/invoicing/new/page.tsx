@@ -80,7 +80,9 @@ export default function CreateInvoicePage() {
     setIsSubmitting(true);
     try {
       const result = await createInvoice.mutateAsync(data);
-      router.push(`/finance/invoicing/${result.id}`);
+      // API returns { data: invoice, message: '...' }
+      const invoiceId = result.data?.id || result.id;
+      router.push(`/finance/invoicing/${invoiceId}`);
     } catch (error) {
       console.error('Failed to create invoice:', error);
       setIsSubmitting(false);
