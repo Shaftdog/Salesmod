@@ -74,26 +74,13 @@ export function useCreateCase() {
 
   return useMutation({
     mutationFn: async (caseData: any) => {
-      // Get current user and their tenant_id
+      // Get current user
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('tenant_id')
-        .eq('id', user.id)
-        .single()
-
-      if (!profile?.tenant_id) {
-        throw new Error('User has no tenant_id assigned - cannot create case')
-      }
-
       const { data, error } = await supabase
         .from('cases')
-        .insert({
-          ...caseData,
-          tenant_id: profile.tenant_id,
-        })
+        .insert(caseData)
         .select(`
           *,
           client:clients(*),
