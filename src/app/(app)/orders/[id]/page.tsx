@@ -215,13 +215,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
               </TabsContent>
               <TabsContent value="documents">
                 <div className="pt-6 space-y-4">
-                  <div className="flex justify-end">
-                    <Button onClick={() => setUploadDocumentOpen(true)}>
-                      <File className="mr-2 h-4 w-4" />
-                      Upload Document
-                    </Button>
-                  </div>
-                  <OrderDocumentsSection orderId={order.id} />
+                  <OrderDocumentsSection orderId={order.id} onUpload={() => setUploadDocumentOpen(true)} />
                 </div>
               </TabsContent>
                <TabsContent value="communication">

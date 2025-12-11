@@ -30,6 +30,7 @@ import { formatDistanceToNow } from "date-fns";
 
 interface OrderDocumentsSectionProps {
   orderId: string;
+  onUpload?: () => void;
 }
 
 const documentTypeLabels: Record<string, string> = {
@@ -90,7 +91,7 @@ function formatFileSize(bytes: number): string {
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
 }
 
-export function OrderDocumentsSection({ orderId }: OrderDocumentsSectionProps) {
+export function OrderDocumentsSection({ orderId, onUpload }: OrderDocumentsSectionProps) {
   const { data: documents, isLoading, error } = useOrderDocuments(orderId);
   const deleteDocument = useDeleteDocument(orderId);
   const { toast } = useToast();
@@ -148,12 +149,22 @@ export function OrderDocumentsSection({ orderId }: OrderDocumentsSectionProps) {
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Documents</CardTitle>
-          <CardDescription>
-            {documents && documents.length > 0
-              ? `${documents.length} document${documents.length === 1 ? "" : "s"} uploaded`
-              : "No documents uploaded yet"}
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Documents</CardTitle>
+              <CardDescription>
+                {documents && documents.length > 0
+                  ? `${documents.length} document${documents.length === 1 ? "" : "s"} uploaded`
+                  : "No documents uploaded yet"}
+              </CardDescription>
+            </div>
+            {onUpload && (
+              <Button onClick={onUpload}>
+                <File className="mr-2 h-4 w-4" />
+                Upload Document
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {documents && documents.length > 0 ? (
