@@ -50,14 +50,16 @@ export async function GET(
         document_type,
         file_name,
         file_path,
+        file_url,
         file_size,
         mime_type,
         created_at,
+        uploaded_at,
         uploaded_by
       `)
       .eq('order_id', orderId)
       .eq('tenant_id', tenantId)
-      .order('created_at', { ascending: false });
+      .order('uploaded_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching documents:', error);
@@ -66,14 +68,23 @@ export async function GET(
 
     // Generate signed URLs for each document
     const documentsWithUrls = await Promise.all(
-      (documents || []).map(async (doc) => {
-        const { data: signedUrl } = await supabase.storage
-          .from(BUCKET_NAME)
-          .createSignedUrl(doc.file_path, 3600); // 1 hour expiry
+      (documents || []).map(async (doc: any) => {
+        // Use file_path if available, otherwise fall back to file_url
+        const storagePath = doc.file_path || doc.file_url;
+        let url = null;
+
+        if (storagePath) {
+          const { data: signedUrl } = await supabase.storage
+            .from(BUCKET_NAME)
+            .createSignedUrl(storagePath, 3600); // 1 hour expiry
+          url = signedUrl?.signedUrl || null;
+        }
 
         return {
           ...doc,
-          url: signedUrl?.signedUrl || null,
+          url,
+          // Normalize timestamps
+          created_at: doc.created_at || doc.uploaded_at,
         };
       })
     );
