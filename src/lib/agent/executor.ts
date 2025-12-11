@@ -993,17 +993,81 @@ AI summarization unavailable. Error: ${summaryError.message}`;
       console.error('[Research] Memory save failed:', error);
     }
 
+    // Step 7: Extract actionable tasks and create follow-up cards
+    let actionsCreated = 0;
+    try {
+      const { extractActionsFromResearch, actionsToCardPayloads } = await import('../research/action-extractor');
+
+      // Get existing contacts for this client
+      const { data: clientContacts } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, email, title')
+        .eq('client_id', card.client_id);
+
+      const contactsForExtraction = (clientContacts || []).map(c => ({
+        name: `${c.first_name} ${c.last_name}`,
+        email: c.email || undefined,
+        title: c.title || undefined,
+      }));
+
+      const contactsForCards = (clientContacts || []).map(c => ({
+        id: c.id,
+        firstName: c.first_name,
+        lastName: c.last_name,
+        email: c.email || undefined,
+      }));
+
+      // Extract actions from research summary
+      const actions = await extractActionsFromResearch(summary, intel.client.company_name, contactsForExtraction);
+      console.log(`[Research] Extracted ${actions.length} actionable tasks`);
+
+      if (actions.length > 0) {
+        // Convert to card payloads
+        const cardPayloads = actionsToCardPayloads(actions, card.client_id, contactsForCards);
+
+        // Create kanban cards for each action
+        for (const payload of cardPayloads) {
+          const { error: cardError } = await supabase
+            .from('kanban_cards')
+            .insert({
+              tenant_id: tenantId,
+              org_id: user?.id,
+              client_id: payload.client_id,
+              contact_id: payload.contact_id || null,
+              type: payload.type,
+              title: payload.title,
+              description: payload.description,
+              rationale: payload.rationale,
+              priority: payload.priority,
+              state: 'suggested', // Start as suggested, user can approve
+              action_payload: payload.action_payload || {},
+              created_by: user?.id,
+            });
+
+          if (cardError) {
+            console.error(`[Research] Failed to create action card: ${cardError.message}`);
+          } else {
+            actionsCreated++;
+          }
+        }
+        console.log(`[Research] Created ${actionsCreated} follow-up action cards`);
+      }
+    } catch (actionError) {
+      console.error('[Research] Action extraction failed:', actionError);
+    }
+
     return {
       success: true,
       cardId: card.id,
-      message: contactsCreated > 0
-        ? `Research completed. Found and added ${contactsCreated} new contact(s).`
+      message: contactsCreated > 0 || actionsCreated > 0
+        ? `Research completed. ${contactsCreated > 0 ? `Found ${contactsCreated} contact(s). ` : ''}${actionsCreated > 0 ? `Created ${actionsCreated} action card(s).` : ''}`
         : 'Research completed and indexed',
       metadata: {
         summary: summary.substring(0, 200) + '...',
         sources: webResults.length > 0 ? 'internal + web' : 'internal only',
         web_results: webResults.length,
         contacts_found: contactsCreated,
+        actions_created: actionsCreated,
       },
     };
   } catch (error: any) {
