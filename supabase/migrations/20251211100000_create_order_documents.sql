@@ -35,34 +35,17 @@ CREATE INDEX IF NOT EXISTS idx_order_documents_document_type ON public.order_doc
 -- Enable RLS
 ALTER TABLE public.order_documents ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies for multi-tenant access
-CREATE POLICY "Users can view documents in their tenant"
-  ON public.order_documents FOR SELECT
-  TO authenticated
+-- RLS Policies for multi-tenant access (using profiles.tenant_id pattern)
+DROP POLICY IF EXISTS order_documents_tenant_isolation ON public.order_documents;
+
+CREATE POLICY order_documents_tenant_isolation
+  ON public.order_documents
+  FOR ALL
   USING (
     tenant_id IN (
-      SELECT tenant_id FROM public.user_tenants
-      WHERE user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Users can upload documents in their tenant"
-  ON public.order_documents FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    tenant_id IN (
-      SELECT tenant_id FROM public.user_tenants
-      WHERE user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Users can delete documents in their tenant"
-  ON public.order_documents FOR DELETE
-  TO authenticated
-  USING (
-    tenant_id IN (
-      SELECT tenant_id FROM public.user_tenants
-      WHERE user_id = auth.uid()
+      SELECT tenant_id
+      FROM public.profiles
+      WHERE id = auth.uid()
     )
   );
 
