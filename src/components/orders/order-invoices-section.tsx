@@ -12,9 +12,10 @@ import Link from 'next/link';
 
 interface OrderInvoicesSectionProps {
   orderId: string;
+  clientId?: string;
 }
 
-export function OrderInvoicesSection({ orderId }: OrderInvoicesSectionProps) {
+export function OrderInvoicesSection({ orderId, clientId }: OrderInvoicesSectionProps) {
   const { data: invoices, isLoading, error } = useOrderInvoices(orderId);
 
   if (isLoading) {
@@ -41,9 +42,11 @@ export function OrderInvoicesSection({ orderId }: OrderInvoicesSectionProps) {
         <p className="mb-4 mt-2 text-sm text-muted-foreground">
           No invoices have been created for this order yet.
         </p>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Invoice
+        <Button asChild>
+          <Link href={`/finance/invoicing/new?order_id=${orderId}${clientId ? `&client_id=${clientId}` : ''}`}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Invoice
+          </Link>
         </Button>
       </div>
     );

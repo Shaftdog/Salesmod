@@ -209,7 +209,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
               </TabsContent>
               <TabsContent value="invoice">
                 <div className="pt-6">
-                  <OrderInvoicesSection orderId={order.id} />
+                  <OrderInvoicesSection orderId={order.id} clientId={order.clientId} />
                 </div>
               </TabsContent>
               <TabsContent value="documents">

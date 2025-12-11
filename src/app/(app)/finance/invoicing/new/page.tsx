@@ -5,10 +5,10 @@
  * Form for creating new invoices with dynamic line items
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCreateInvoice } from '@/lib/hooks/use-invoices';
 import { CreateInvoiceSchema, type CreateInvoiceInput } from '@/lib/validations/invoicing';
 import { Button } from '@/components/ui/button';
@@ -24,16 +24,22 @@ import { InvoiceLineItemForm } from '@/components/invoicing/invoice-line-item-fo
 
 export default function CreateInvoicePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const createInvoice = useCreateInvoice();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Get pre-filled values from URL params
+  const orderIdParam = searchParams.get('order_id');
+  const clientIdParam = searchParams.get('client_id');
 
   const form = useForm<CreateInvoiceInput>({
     resolver: zodResolver(CreateInvoiceSchema),
     defaultValues: {
-      client_id: '',
+      client_id: clientIdParam || '',
       payment_method: 'stripe_link',
       line_items: [
         {
+          order_id: orderIdParam || undefined,
           product_id: undefined,
           square_footage: undefined,
           description: '',
@@ -46,6 +52,13 @@ export default function CreateInvoicePage() {
       terms_and_conditions: '',
     },
   });
+
+  // Update form when URL params change
+  useEffect(() => {
+    if (clientIdParam) {
+      form.setValue('client_id', clientIdParam);
+    }
+  }, [clientIdParam, form]);
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
