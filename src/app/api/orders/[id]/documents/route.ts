@@ -221,24 +221,30 @@ export async function DELETE(
     // Fetch the document to get its file path
     const { data: document, error: fetchError } = await supabase
       .from('order_documents')
-      .select('id, file_path')
+      .select('id, file_path, file_url')
       .eq('id', documentId)
       .eq('order_id', orderId)
       .eq('tenant_id', tenantId)
       .single();
 
     if (fetchError || !document) {
+      console.error('Document fetch error:', fetchError);
       throw new NotFoundError('Document');
     }
 
-    // Delete from storage
-    const { error: storageError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .remove([document.file_path]);
+    // Use file_path or fall back to file_url
+    const storagePath = document.file_path || document.file_url;
 
-    if (storageError) {
-      console.error('Storage delete error:', storageError);
-      // Continue with database deletion even if storage fails
+    // Delete from storage (if we have a path)
+    if (storagePath) {
+      const { error: storageError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .remove([storagePath]);
+
+      if (storageError) {
+        console.error('Storage delete error:', storageError);
+        // Continue with database deletion even if storage fails
+      }
     }
 
     // Delete from database
