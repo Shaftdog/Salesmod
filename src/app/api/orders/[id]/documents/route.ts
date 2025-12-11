@@ -159,9 +159,11 @@ export async function POST(
           document_type: documentType,
           file_name: file.name,
           file_path: filePath,
+          file_url: filePath, // Legacy column - same as file_path
           file_size: file.size,
           mime_type: file.type,
           uploaded_by: orgId,
+          uploaded_by_id: orgId, // Legacy column
         })
         .select()
         .single();
