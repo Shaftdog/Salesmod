@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import {
   handleApiError,
-  getAuthenticatedOrgId,
+  getAuthenticatedContext,
   successResponse,
   NotFoundError,
   BadRequestError,
@@ -39,19 +39,8 @@ export async function GET(
 ) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
     const { id: orderId } = await params;
-
-    // Get user's tenant_id
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('tenant_id')
-      .eq('user_id', orgId)
-      .single();
-
-    if (!userTenant) {
-      throw new NotFoundError('Tenant');
-    }
 
     // Fetch documents for this order
     const { data: documents, error } = await supabase
@@ -64,11 +53,10 @@ export async function GET(
         file_size,
         mime_type,
         created_at,
-        uploaded_by,
-        uploader:profiles!order_documents_uploaded_by_fkey(full_name)
+        uploaded_by
       `)
       .eq('order_id', orderId)
-      .eq('tenant_id', userTenant.tenant_id)
+      .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -106,26 +94,15 @@ export async function POST(
 ) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
     const { id: orderId } = await params;
-
-    // Get user's tenant_id
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('tenant_id')
-      .eq('user_id', orgId)
-      .single();
-
-    if (!userTenant) {
-      throw new NotFoundError('Tenant');
-    }
 
     // Verify order exists and belongs to tenant
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .select('id')
       .eq('id', orderId)
-      .eq('tenant_id', userTenant.tenant_id)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (orderError || !order) {
@@ -157,7 +134,7 @@ export async function POST(
       // Generate unique file path: tenant_id/order_id/timestamp_filename
       const timestamp = Date.now();
       const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const filePath = `${userTenant.tenant_id}/${orderId}/${timestamp}_${sanitizedFileName}`;
+      const filePath = `${tenantId}/${orderId}/${timestamp}_${sanitizedFileName}`;
 
       // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
@@ -176,7 +153,7 @@ export async function POST(
       const { data: document, error: insertError } = await supabase
         .from('order_documents')
         .insert({
-          tenant_id: userTenant.tenant_id,
+          tenant_id: tenantId,
           org_id: orgId,
           order_id: orderId,
           document_type: documentType,
@@ -218,7 +195,7 @@ export async function DELETE(
 ) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
     const { id: orderId } = await params;
 
     const { searchParams } = new URL(request.url);
@@ -228,24 +205,13 @@ export async function DELETE(
       throw new BadRequestError('documentId is required');
     }
 
-    // Get user's tenant_id
-    const { data: userTenant } = await supabase
-      .from('user_tenants')
-      .select('tenant_id')
-      .eq('user_id', orgId)
-      .single();
-
-    if (!userTenant) {
-      throw new NotFoundError('Tenant');
-    }
-
     // Fetch the document to get its file path
     const { data: document, error: fetchError } = await supabase
       .from('order_documents')
       .select('id, file_path')
       .eq('id', documentId)
       .eq('order_id', orderId)
-      .eq('tenant_id', userTenant.tenant_id)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (fetchError || !document) {
