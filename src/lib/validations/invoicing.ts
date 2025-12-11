@@ -113,14 +113,7 @@ export const CreateInvoiceSchema = z.object({
   // Line items (required)
   line_items: z.array(CreateLineItemSchema).min(1, 'At least one line item is required'),
 }).superRefine((data, ctx) => {
-  // Validate Stripe-specific fields
-  if (data.payment_method === 'stripe_link' && !data.stripe_customer_id) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'stripe_customer_id is required for Stripe payment method',
-      path: ['stripe_customer_id'],
-    });
-  }
+  // Note: stripe_customer_id is optional at creation - it will be created when generating payment link
 
   // Validate COD-specific fields
   if (data.payment_method === 'cod') {
