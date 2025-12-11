@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ActivityForm } from "./activity-form";
 import type { Activity } from "@/lib/types";
-import { Phone, Mail, Users, FileText, ClipboardList, PlusCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Phone, Mail, Users, FileText, ClipboardList, PlusCircle, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { format } from "date-fns";
 import { useCreateActivity } from "@/hooks/use-activities";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,20 +14,22 @@ import { useCurrentUser } from "@/hooks/use-appraisers";
 import ReactMarkdown from "react-markdown";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
-const activityIcons = {
+const activityIcons: Record<string, any> = {
   call: Phone,
   email: Mail,
   meeting: Users,
   note: FileText,
   task: ClipboardList,
+  research: Search,
 };
 
-const activityColors = {
+const activityColors: Record<string, string> = {
   call: "bg-blue-500",
   email: "bg-green-500",
   meeting: "bg-purple-500",
   note: "bg-yellow-500",
   task: "bg-orange-500",
+  research: "bg-cyan-500",
 };
 
 // Component to show email activity with expandable full content
@@ -188,8 +190,8 @@ export function ActivityTimeline({ clientId, contactId, activities, isLoading }:
       ) : (
         <div className="space-y-4">
           {activities.map((activity) => {
-            const Icon = activityIcons[activity.activityType];
-            const colorClass = activityColors[activity.activityType];
+            const Icon = activityIcons[activity.activityType] || FileText;
+            const colorClass = activityColors[activity.activityType] || "bg-gray-500";
             const hasEmail = activity.activityType === 'email' && activity.gmailMessageId;
 
             return (
