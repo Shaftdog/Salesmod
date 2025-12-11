@@ -23,6 +23,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { FileIcon, Loader2, Upload, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useUploadDocuments } from "@/lib/hooks/use-order-documents";
 
 interface UploadDocumentDialogProps {
   order: Order;
@@ -47,9 +48,9 @@ export function UploadDocumentDialog({
   const [documentType, setDocumentType] = useState("appraisal_report");
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const uploadDocuments = useUploadDocuments();
 
   const handleFiles = (newFiles: FileList | null) => {
     if (!newFiles) return;
@@ -89,20 +90,28 @@ export function UploadDocumentDialog({
       return;
     }
 
-    setIsUploading(true);
+    try {
+      await uploadDocuments.mutateAsync({
+        orderId: order.id,
+        files,
+        documentType,
+      });
 
-    // Simulate file upload (you can implement actual Supabase Storage later)
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+      toast({
+        title: "Documents Uploaded",
+        description: `Successfully uploaded ${files.length} document(s)`,
+      });
 
-    toast({
-      title: "Documents Uploaded",
-      description: `Successfully uploaded ${files.length} document(s)`,
-    });
-
-    setFiles([]);
-    setDocumentType("appraisal_report");
-    setIsUploading(false);
-    onOpenChange(false);
+      setFiles([]);
+      setDocumentType("appraisal_report");
+      onOpenChange(false);
+    } catch (error) {
+      toast({
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to upload documents",
+        variant: "destructive",
+      });
+    }
   };
 
   const formatFileSize = (bytes: number) => {
@@ -222,11 +231,11 @@ export function UploadDocumentDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isUploading || files.length === 0}>
-              {isUploading && (
+            <Button type="submit" disabled={uploadDocuments.isPending || files.length === 0}>
+              {uploadDocuments.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Upload {files.length > 0 && `(${files.length})`}
+              {uploadDocuments.isPending ? 'Uploading...' : `Upload${files.length > 0 ? ` (${files.length})` : ''}`}
             </Button>
           </DialogFooter>
         </form>

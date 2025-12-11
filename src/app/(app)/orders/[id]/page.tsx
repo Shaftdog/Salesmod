@@ -42,6 +42,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { PropertyChip } from "@/components/orders/property-chip";
 import { useRouter } from "next/navigation";
 import { OrderInvoicesSection } from "@/components/orders/order-invoices-section";
+import { OrderDocumentsSection } from "@/components/orders/order-documents-section";
 
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -213,15 +214,14 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 </div>
               </TabsContent>
               <TabsContent value="documents">
-                <div className="pt-6 text-center">
-                    <File className="mx-auto h-12 w-12 text-muted-foreground" />
-                    <h3 className="mt-4 text-lg font-semibold">No Documents Uploaded</h3>
-                    <p className="mb-4 mt-2 text-sm text-muted-foreground">
-                        Drag and drop files here to upload.
-                    </p>
+                <div className="pt-6 space-y-4">
+                  <div className="flex justify-end">
                     <Button onClick={() => setUploadDocumentOpen(true)}>
+                      <File className="mr-2 h-4 w-4" />
                       Upload Document
                     </Button>
+                  </div>
+                  <OrderDocumentsSection orderId={order.id} />
                 </div>
               </TabsContent>
                <TabsContent value="communication">
