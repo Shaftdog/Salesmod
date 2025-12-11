@@ -494,8 +494,16 @@ export function useExecuteCard() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to execute card');
+        // Try to parse as JSON, but handle non-JSON responses gracefully
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const error = await response.json();
+          throw new Error(error.error || error.message || 'Failed to execute card');
+        } else {
+          // Non-JSON response (e.g., plain text error from upstream API)
+          const text = await response.text();
+          throw new Error(text || `Execution failed with status ${response.status}`);
+        }
       }
 
       return response.json();

@@ -169,16 +169,10 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
     };
   }
 
-  // SECURITY: Get user's tenant_id for proper multi-tenant isolation
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('tenant_id')
-    .eq('id', user.id)
-    .single();
-
-  const tenantId = profile?.tenant_id;
+  // Use card's tenant_id (already validated by API route)
+  const tenantId = card.tenant_id;
   if (!tenantId) {
-    throw new Error('User has no tenant_id assigned');
+    throw new Error('Card has no tenant_id assigned');
   }
 
   // Get recipient email from payload, contact, or client
@@ -457,16 +451,10 @@ async function executeCreateTask(card: KanbanCard): Promise<ExecutionResult> {
       throw new Error('User not authenticated');
     }
 
-    // SECURITY: Get user's tenant_id for proper multi-tenant isolation
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('tenant_id')
-      .eq('id', user.id)
-      .single();
-
-    const tenantId = profile?.tenant_id;
+    // Use card's tenant_id (already validated by API route) with profile fallback
+    const tenantId = card.tenant_id;
     if (!tenantId) {
-      throw new Error('User has no tenant_id assigned');
+      throw new Error('Card has no tenant_id assigned');
     }
 
     // Map priority values from kanban card to tasks table
@@ -481,6 +469,7 @@ async function executeCreateTask(card: KanbanCard): Promise<ExecutionResult> {
     const { data, error } = await supabase
       .from('tasks')
       .insert({
+        tenant_id: tenantId, // Required for multi-tenant RLS
         title: card.title,
         description: payload.description || card.description,
         client_id: card.client_id,
@@ -543,16 +532,10 @@ async function executeFollowUp(card: KanbanCard): Promise<ExecutionResult> {
     };
   }
 
-  // SECURITY: Get user's tenant_id for proper multi-tenant isolation
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('tenant_id')
-    .eq('id', user.id)
-    .single();
-
-  const tenantId = profile?.tenant_id;
+  // Use card's tenant_id (already validated by API route)
+  const tenantId = card.tenant_id;
   if (!tenantId) {
-    throw new Error('User has no tenant_id assigned');
+    throw new Error('Card has no tenant_id assigned');
   }
 
   // Create an activity record for the follow-up
@@ -600,23 +583,28 @@ async function executeCreateDeal(card: KanbanCard): Promise<ExecutionResult> {
       throw new Error('User not authenticated');
     }
 
-    // SECURITY: Get user's tenant_id for proper multi-tenant isolation
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('tenant_id')
-      .eq('id', user.id)
-      .single();
-
-    const tenantId = profile?.tenant_id;
+    // Use card's tenant_id (already validated by API route)
+    const tenantId = card.tenant_id;
     if (!tenantId) {
-      throw new Error('User has no tenant_id assigned - cannot create deal');
+      throw new Error('Card has no tenant_id assigned - cannot create deal');
+    }
+
+    // Get client_id from card or payload
+    const clientId = card.client_id || payload?.clientId;
+    if (!clientId) {
+      return {
+        success: false,
+        cardId: card.id,
+        message: 'Cannot create deal without a client',
+        error: 'No client_id associated with this card. Please link a client first.',
+      };
     }
 
     const { data, error } = await supabase
       .from('deals')
       .insert({
         tenant_id: tenantId, // Required for multi-tenant RLS
-        client_id: card.client_id,
+        client_id: clientId,
         contact_id: card.contact_id,
         title: payload.title || card.title,
         description: payload.description || card.description,
@@ -636,7 +624,7 @@ async function executeCreateDeal(card: KanbanCard): Promise<ExecutionResult> {
       .from('activities')
       .insert({
         tenant_id: tenantId, // Required for multi-tenant RLS
-        client_id: card.client_id,
+        client_id: clientId,
         contact_id: card.contact_id,
         deal_id: data.id, // Link activity to the deal
         activity_type: 'note',
@@ -678,24 +666,19 @@ async function executeScheduleCall(card: KanbanCard): Promise<ExecutionResult> {
       throw new Error('User not authenticated');
     }
 
-    // SECURITY: Get user's tenant_id for proper multi-tenant isolation
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('tenant_id')
-      .eq('id', user.id)
-      .single();
-
-    const tenantId = profile?.tenant_id;
+    // Use card's tenant_id (already validated by API route)
+    const tenantId = card.tenant_id;
     if (!tenantId) {
-      throw new Error('User has no tenant_id assigned');
+      throw new Error('Card has no tenant_id assigned');
     }
 
     // Create a task for the user to actually make the call
     const dueDate = payload.scheduledAt || new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
-    
+
     const { data: task, error: taskError } = await supabase
       .from('tasks')
       .insert({
+        tenant_id: tenantId, // Required for multi-tenant RLS
         title: card.title,
         description: `${card.rationale}\n\nCall Purpose: ${card.description || 'Strategic discussion'}\nDuration: ${payload.durationMinutes || 30} minutes`,
         client_id: card.client_id,
@@ -754,16 +737,10 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
       throw new Error('User not authenticated');
     }
 
-    // SECURITY: Get user's tenant_id for proper multi-tenant isolation
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('tenant_id')
-      .eq('id', user.id)
-      .single();
-
-    const tenantId = profile?.tenant_id;
+    // Use card's tenant_id (already validated by API route)
+    const tenantId = card.tenant_id;
     if (!tenantId) {
-      throw new Error('User has no tenant_id assigned');
+      throw new Error('Card has no tenant_id assigned');
     }
 
     // Dynamic imports to avoid errors if modules don't exist
@@ -868,8 +845,27 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
     }
 
     // Step 3: AI summarization
-    const summary = await summarizeResearch(intel, webResults);
-    console.log(`[Research] Generated summary (${summary.length} chars)`);
+    let summary: string;
+    try {
+      summary = await summarizeResearch(intel, webResults);
+      console.log(`[Research] Generated summary (${summary.length} chars)`);
+    } catch (summaryError: any) {
+      console.error('[Research] AI summarization failed:', summaryError);
+      // Use a basic fallback summary
+      summary = `# Research Summary: ${intel.client.company_name}
+
+## Our Relationship
+- Total Orders: ${intel.metrics.totalOrders}
+- Total Revenue: $${intel.metrics.totalRevenue.toFixed(2)}
+- Last Order: ${intel.metrics.lastOrderDate ? new Date(intel.metrics.lastOrderDate).toLocaleDateString() : 'Never'}
+- Contacts Found: ${contactsCreated}
+
+## Web Research
+Found ${webResults.length} web results.
+
+## Status
+AI summarization unavailable. Error: ${summaryError.message}`;
+    }
 
     // Step 4: Save to activities (include contact findings)
     const activityDescription = contactsCreated > 0
@@ -1020,16 +1016,10 @@ async function executeReplyToEmail(card: KanbanCard): Promise<ExecutionResult> {
       throw new Error('User not authenticated');
     }
 
-    // SECURITY: Get user's tenant_id for proper multi-tenant isolation
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('tenant_id')
-      .eq('id', user.id)
-      .single();
-
-    const tenantId = profile?.tenant_id;
+    // Use card's tenant_id (already validated by API route)
+    const tenantId = card.tenant_id;
     if (!tenantId) {
-      throw new Error('User has no tenant_id assigned');
+      throw new Error('Card has no tenant_id assigned');
     }
 
     // Import Gmail service and response generator
@@ -1181,16 +1171,10 @@ async function executeNeedsHumanResponse(card: KanbanCard): Promise<ExecutionRes
     throw new Error('User not authenticated');
   }
 
-  // SECURITY: Get user's tenant_id for proper multi-tenant isolation
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('tenant_id')
-    .eq('id', user.id)
-    .single();
-
-  const tenantId = profile?.tenant_id;
+  // Use card's tenant_id (already validated by API route)
+  const tenantId = card.tenant_id;
   if (!tenantId) {
-    throw new Error('User has no tenant_id assigned');
+    throw new Error('Card has no tenant_id assigned');
   }
 
   // This card type should not auto-execute

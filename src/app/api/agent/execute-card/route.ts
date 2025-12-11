@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { executeCard } from '@/lib/agent/executor';
 
-export const maxDuration = 30;
+// Research tasks can take longer due to multiple AI calls and web searches
+export const maxDuration = 60;
 
 /**
  * POST /api/agent/execute-card
