@@ -754,6 +754,11 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
       validateContacts,
       checkExistingContact
     } = await import('../research/contact-extractor');
+    const {
+      enrichContactWithApollo,
+      getBestEmail,
+      getBestPhone
+    } = await import('../research/apollo-enrichment');
 
     console.log(`[Research] Starting research for client ${card.client_id}`);
 
@@ -788,16 +793,62 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
           const extraction = await extractContactsFromResults(intel.client.company_name, allResults);
           const validatedContacts = validateContacts(extraction.contacts);
 
-          console.log(`[Research] Extracted ${validatedContacts.length} valid contacts`);
+          console.log(`[Research] Extracted ${validatedContacts.length} valid contacts from web search`);
 
-          // Create contacts in database
+          // Enrich contacts with Apollo.io to get verified emails/phones
+          const hasApolloKey = !!process.env.APOLLO_API_KEY;
+
           for (const contact of validatedContacts) {
             try {
+              let finalEmail = contact.email || null;
+              let finalPhone = contact.phone || null;
+              let finalTitle = contact.title || null;
+              let finalLinkedIn = contact.linkedin_url || null;
+              let enrichmentSource = 'web-search';
+
+              // Try Apollo enrichment if we have the API key
+              if (hasApolloKey && contact.first_name && contact.last_name) {
+                const enrichResult = await enrichContactWithApollo({
+                  first_name: contact.first_name,
+                  last_name: contact.last_name,
+                  organization_name: intel.client.company_name,
+                  linkedin_url: contact.linkedin_url,
+                });
+
+                if (enrichResult.success && enrichResult.person) {
+                  const apolloEmail = getBestEmail(enrichResult.person);
+                  const apolloPhone = getBestPhone(enrichResult.person);
+
+                  if (apolloEmail) {
+                    finalEmail = apolloEmail;
+                    enrichmentSource = 'apollo-verified';
+                  }
+                  if (apolloPhone) {
+                    finalPhone = apolloPhone;
+                    enrichmentSource = 'apollo-verified';
+                  }
+                  if (enrichResult.person.title) {
+                    finalTitle = enrichResult.person.title;
+                  }
+                  if (enrichResult.person.linkedin_url) {
+                    finalLinkedIn = enrichResult.person.linkedin_url;
+                  }
+
+                  console.log(`[Research] Apollo enriched ${contact.first_name} ${contact.last_name}: email=${apolloEmail || 'none'}, phone=${apolloPhone || 'none'}`);
+                }
+              }
+
+              // ONLY save contacts that have email OR phone - otherwise useless
+              if (!finalEmail && !finalPhone) {
+                console.log(`[Research] Skipping ${contact.first_name} ${contact.last_name} - no email or phone found`);
+                continue;
+              }
+
               // Check if contact already exists
               const exists = await checkExistingContact(
                 supabase,
                 tenantId,
-                contact.email,
+                finalEmail || undefined,
                 contact.first_name,
                 contact.last_name
               );
@@ -807,7 +858,7 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
                 continue;
               }
 
-              // Create the contact
+              // Create the contact with verified info
               const { data: newContact, error: contactError } = await supabase
                 .from('contacts')
                 .insert({
@@ -815,21 +866,22 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
                   client_id: card.client_id,
                   first_name: contact.first_name,
                   last_name: contact.last_name,
-                  email: contact.email || null,
-                  phone: contact.phone || null,
-                  title: contact.title || null,
+                  email: finalEmail,
+                  phone: finalPhone,
+                  title: finalTitle,
                   department: contact.department || null,
-                  notes: `Found via research on ${new Date().toISOString().split('T')[0]}. Source: ${contact.source_url || 'web search'}. Confidence: ${contact.confidence}.`,
-                  tags: ['research-found', `confidence-${contact.confidence}`],
+                  linkedin: finalLinkedIn,
+                  notes: `Found via research on ${new Date().toISOString().split('T')[0]}. Source: ${enrichmentSource}. Original source: ${contact.source_url || 'web search'}.`,
+                  tags: ['research-found', enrichmentSource === 'apollo-verified' ? 'apollo-verified' : `confidence-${contact.confidence}`],
                   is_primary: false,
                 })
-                .select('id, first_name, last_name, email')
+                .select('id, first_name, last_name, email, phone')
                 .single();
 
               if (contactError) {
                 console.error(`[Research] Failed to create contact ${contact.first_name} ${contact.last_name}:`, contactError);
               } else {
-                console.log(`[Research] Created contact: ${newContact.first_name} ${newContact.last_name} (${newContact.email || 'no email'})`);
+                console.log(`[Research] Created contact: ${newContact.first_name} ${newContact.last_name} (${newContact.email || 'no email'}, ${newContact.phone || 'no phone'})`);
                 contactsCreated++;
               }
             } catch (contactErr) {
