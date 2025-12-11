@@ -86,6 +86,7 @@ export const UpdateLineItemSchema = z.object({
 
 export const CreateInvoiceSchema = z.object({
   client_id: z.string().uuid('Invalid client ID'),
+  order_id: z.string().uuid().optional(), // Optional link to order
   payment_method: PaymentMethodSchema,
 
   // Dates (YYYY-MM-DD format to match database DATE columns)

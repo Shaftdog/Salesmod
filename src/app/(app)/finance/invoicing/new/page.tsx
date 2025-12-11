@@ -10,6 +10,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCreateInvoice } from '@/lib/hooks/use-invoices';
+import { useClients } from '@/hooks/use-clients';
 import { CreateInvoiceSchema, type CreateInvoiceInput } from '@/lib/validations/invoicing';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +18,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, ArrowLeft } from 'lucide-react';
+import { Plus, ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils/currency';
 import { InvoiceLineItemForm } from '@/components/invoicing/invoice-line-item-form';
@@ -26,6 +27,7 @@ export default function CreateInvoicePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const createInvoice = useCreateInvoice();
+  const { clients, isLoading: clientsLoading } = useClients();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get pre-filled values from URL params
@@ -36,6 +38,7 @@ export default function CreateInvoicePage() {
     resolver: zodResolver(CreateInvoiceSchema),
     defaultValues: {
       client_id: clientIdParam || '',
+      order_id: orderIdParam || undefined,
       payment_method: 'stripe_link',
       line_items: [
         {
@@ -119,15 +122,31 @@ export default function CreateInvoicePage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Client</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select a client" />
+                          {clientsLoading ? (
+                            <div className="flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <span>Loading clients...</span>
+                            </div>
+                          ) : (
+                            <SelectValue placeholder="Select a client" />
+                          )}
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {/* TODO: Fetch and display actual clients */}
-                        <SelectItem value="placeholder">Select a client from your contacts</SelectItem>
+                        {clients && clients.length > 0 ? (
+                          clients.map((client) => (
+                            <SelectItem key={client.id} value={client.id}>
+                              {client.companyName}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="no-clients" disabled>
+                            No clients found
+                          </SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                     <FormDescription>

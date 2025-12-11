@@ -200,6 +200,7 @@ export async function POST(request: NextRequest) {
         org_id: orgId,
         tenant_id: tenantId,
         client_id: body.client_id,
+        order_id: body.order_id, // Link to order if provided
         payment_method: body.payment_method,
         invoice_date: body.invoice_date || new Date().toISOString(),
         due_date: dueDate,
