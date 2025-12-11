@@ -33,22 +33,36 @@ interface OrderDocumentsSectionProps {
 }
 
 const documentTypeLabels: Record<string, string> = {
-  appraisal_report: "Appraisal Report",
-  inspection_report: "Inspection Report",
-  photos: "Photos",
-  contract: "Contract",
-  invoice: "Invoice",
-  comparable: "Comparable",
+  engagement_letter: "Engagement Letter",
+  order_form: "Order Form",
+  client_instructions: "Client Instructions",
+  title_report: "Title Report",
+  prior_appraisal: "Prior Appraisal",
+  purchase_contract: "Purchase Contract",
+  contract_addenda: "Contract Addenda",
+  flood_certification: "Flood Certification",
+  plans: "Plans",
+  building_specs: "Building Specs",
+  construction_budget: "Construction Budget",
+  permits: "Permits",
+  rental_data: "Rental Data",
   other: "Other",
 };
 
 const documentTypeColors: Record<string, string> = {
-  appraisal_report: "bg-blue-500",
-  inspection_report: "bg-green-500",
-  photos: "bg-purple-500",
-  contract: "bg-orange-500",
-  invoice: "bg-yellow-500",
-  comparable: "bg-cyan-500",
+  engagement_letter: "bg-blue-500",
+  order_form: "bg-indigo-500",
+  client_instructions: "bg-purple-500",
+  title_report: "bg-green-500",
+  prior_appraisal: "bg-teal-500",
+  purchase_contract: "bg-orange-500",
+  contract_addenda: "bg-amber-500",
+  flood_certification: "bg-cyan-500",
+  plans: "bg-sky-500",
+  building_specs: "bg-violet-500",
+  construction_budget: "bg-emerald-500",
+  permits: "bg-rose-500",
+  rental_data: "bg-pink-500",
   other: "bg-gray-500",
 };
 

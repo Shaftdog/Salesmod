@@ -32,11 +32,19 @@ interface UploadDocumentDialogProps {
 }
 
 const documentTypes = [
-  { value: "appraisal_report", label: "Appraisal Report" },
-  { value: "inspection_report", label: "Inspection Report" },
-  { value: "photos", label: "Property Photos" },
-  { value: "contract", label: "Contract/Agreement" },
-  { value: "invoice", label: "Invoice" },
+  { value: "engagement_letter", label: "Engagement Letter" },
+  { value: "order_form", label: "Order Form" },
+  { value: "client_instructions", label: "Client Instructions" },
+  { value: "title_report", label: "Title Report" },
+  { value: "prior_appraisal", label: "Prior Appraisal(s) on the Subject" },
+  { value: "purchase_contract", label: "Purchase Contract" },
+  { value: "contract_addenda", label: "Contract Addenda" },
+  { value: "flood_certification", label: "Flood Certification" },
+  { value: "plans", label: "Plans" },
+  { value: "building_specs", label: "Building Specifications" },
+  { value: "construction_budget", label: "Construction Budget" },
+  { value: "permits", label: "Permits" },
+  { value: "rental_data", label: "Rental Data" },
   { value: "other", label: "Other" },
 ];
 
@@ -45,7 +53,7 @@ export function UploadDocumentDialog({
   open,
   onOpenChange,
 }: UploadDocumentDialogProps) {
-  const [documentType, setDocumentType] = useState("appraisal_report");
+  const [documentType, setDocumentType] = useState("engagement_letter");
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -103,7 +111,7 @@ export function UploadDocumentDialog({
       });
 
       setFiles([]);
-      setDocumentType("appraisal_report");
+      setDocumentType("engagement_letter");
       onOpenChange(false);
     } catch (error) {
       toast({
@@ -225,7 +233,7 @@ export function UploadDocumentDialog({
               variant="outline"
               onClick={() => {
                 setFiles([]);
-                setDocumentType("appraisal_report");
+                setDocumentType("engagement_letter");
                 onOpenChange(false);
               }}
             >
