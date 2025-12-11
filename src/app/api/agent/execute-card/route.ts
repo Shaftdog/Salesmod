@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { executeCard } from '@/lib/agent/executor';
 
-// Research tasks can take longer due to multiple AI calls and web searches
-export const maxDuration = 60;
+// Research tasks can take 2-5 minutes due to:
+// - Web search (Tavily/Brave)
+// - Apollo API enrichment for each contact
+// - AI summarization
+// - Action extraction with AI
+// - Creating follow-up cards
+export const maxDuration = 300;
 
 /**
  * POST /api/agent/execute-card
