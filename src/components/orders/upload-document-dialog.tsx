@@ -176,7 +176,7 @@ export function UploadDocumentDialog({
                   Drag and drop files here, or click to browse
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  PDF, Word, Excel, Images (max 10MB each)
+                  PDF, Word, Excel, Images (max 50MB each)
                 </p>
                 <Input
                   ref={fileInputRef}

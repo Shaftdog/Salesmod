@@ -15,8 +15,12 @@ import {
   BadRequestError,
 } from '@/lib/errors/api-errors';
 
+// App Router segment config for larger uploads
+export const maxDuration = 60; // Allow up to 60 seconds for large uploads
+export const dynamic = 'force-dynamic';
+
 const BUCKET_NAME = 'order-documents';
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const ALLOWED_MIME_TYPES = [
   'application/pdf',
   'image/jpeg',
@@ -134,7 +138,7 @@ export async function POST(
     for (const file of files) {
       // Validate file size
       if (file.size > MAX_FILE_SIZE) {
-        throw new BadRequestError(`File "${file.name}" exceeds maximum size of 10MB`);
+        throw new BadRequestError(`File "${file.name}" exceeds maximum size of 50MB`);
       }
 
       // Validate mime type

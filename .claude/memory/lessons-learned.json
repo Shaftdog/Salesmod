@@ -1,6 +1,24 @@
 {
   "decisions": [
     {
+      "date": "2025-12-10",
+      "context": "Research card execution timing out on Vercel with FUNCTION_INVOCATION_TIMEOUT",
+      "decision": "Export maxDuration=300 directly from route.ts file, not vercel.json",
+      "rationale": "vercel.json 'functions' config does NOT work for Next.js App Router. Must use route segment config (export const maxDuration)"
+    },
+    {
+      "date": "2025-12-10",
+      "context": "Need to handle future-dated tasks from research recommendations",
+      "decision": "Added 'scheduled' state to kanban cards with due_at field and auto-promotion scheduler",
+      "rationale": "Separates immediate actions from future follow-ups. Scheduler promotes to 'suggested' when due_at <= now"
+    },
+    {
+      "date": "2025-12-10",
+      "context": "Apollo.io phone reveal requiring webhook",
+      "decision": "Disabled reveal_phone_number in Apollo API calls",
+      "rationale": "Apollo requires webhook_url for phone number reveals on some plans. Focus on email enrichment instead"
+    },
+    {
       "date": "2025-12-09",
       "context": "Agent duplicate card spam - research on same client 5+ times per day",
       "decision": "Changed research activity_type from 'note' to 'research' and expanded calculateLastContactDays() to include all engagement types",
@@ -21,6 +39,24 @@
   ],
   "improvements": [
     {
+      "date": "2025-12-10",
+      "area": "Contact Enrichment",
+      "change": "Added Apollo.io integration for verified email addresses during research",
+      "impact": "Contacts found via research now have verified emails instead of scraped/guessed ones"
+    },
+    {
+      "date": "2025-12-10",
+      "area": "Task Scheduling",
+      "change": "Research actions now auto-schedule based on timeframe: immediate=suggested, short_term=+7d, ongoing=+21d",
+      "impact": "Future follow-ups don't clutter immediate action queue"
+    },
+    {
+      "date": "2025-12-10",
+      "area": "Contact Visibility",
+      "change": "Added 'Verified' (green) and 'Research' (cyan) badges to contact cards",
+      "impact": "Users can see which contacts have Apollo-verified emails vs web-scraped data"
+    },
+    {
       "date": "2025-12-09",
       "area": "Agent Planner Prompt",
       "change": "Added 'Recent Activities (AVOID DUPLICATING)' section per client with timestamps showing hours/days ago",
@@ -40,6 +76,26 @@
     }
   ],
   "patterns": [
+    {
+      "name": "Vercel Function Timeouts (App Router)",
+      "description": "For Next.js App Router, export maxDuration directly from route.ts. vercel.json 'functions' config is ignored. Research tasks need 300s due to: web search + Apollo enrichment + AI summarization + action extraction.",
+      "files": ["src/app/api/agent/execute-card/route.ts", "src/app/api/agent/run/route.ts"]
+    },
+    {
+      "name": "Database Tags Need UI Components",
+      "description": "Tags stored in DB arrays (like contact.tags) are invisible to users until you add UI components to display them. Always add badges/indicators when creating new tag types.",
+      "files": ["src/components/contacts/contact-card.tsx"]
+    },
+    {
+      "name": "Scheduled State Pattern",
+      "description": "For future-dated actions: 1) Add state to DB constraint, 2) Set due_at timestamp, 3) Create scheduler to promote when due, 4) Call scheduler at start of orchestrator run, 5) Add UI column with due date display.",
+      "files": ["src/lib/agent/scheduler.ts", "src/lib/agent/orchestrator.ts", "src/components/agent/kanban-board.tsx"]
+    },
+    {
+      "name": "Apollo API Limitations",
+      "description": "Apollo People Enrichment: reveal_phone_number requires webhook_url, linkedin column may not exist in your schema. Focus on email enrichment. Only save contacts that have email OR phone.",
+      "files": ["src/lib/research/apollo-enrichment.ts", "src/lib/agent/executor.ts"]
+    },
     {
       "name": "Activity Type Visibility",
       "description": "When creating new activity types, ensure they're included in ALL filtering logic that determines engagement - calculateLastContactDays(), getRecentActivities(), engagement scoring, etc.",
@@ -71,5 +127,5 @@
       "files": ["src/types/*.ts", "src/lib/agent/*.ts"]
     }
   ],
-  "last_updated": "2025-12-09"
+  "last_updated": "2025-12-10"
 }
