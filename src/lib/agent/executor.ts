@@ -803,7 +803,6 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
               let finalEmail = contact.email || null;
               let finalPhone = contact.phone || null;
               let finalTitle = contact.title || null;
-              let finalLinkedIn = contact.linkedin_url || null;
               let enrichmentSource = 'web-search';
 
               // Try Apollo enrichment if we have the API key
@@ -830,9 +829,7 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
                   if (enrichResult.person.title) {
                     finalTitle = enrichResult.person.title;
                   }
-                  if (enrichResult.person.linkedin_url) {
-                    finalLinkedIn = enrichResult.person.linkedin_url;
-                  }
+                  // Note: linkedin_url available but contacts table doesn't have linkedin column
 
                   console.log(`[Research] Apollo enriched ${contact.first_name} ${contact.last_name}: email=${apolloEmail || 'none'}, phone=${apolloPhone || 'none'}`);
                 }
@@ -870,7 +867,6 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
                   phone: finalPhone,
                   title: finalTitle,
                   department: contact.department || null,
-                  linkedin: finalLinkedIn,
                   notes: `Found via research on ${new Date().toISOString().split('T')[0]}. Source: ${enrichmentSource}. Original source: ${contact.source_url || 'web search'}.`,
                   tags: ['research-found', enrichmentSource === 'apollo-verified' ? 'apollo-verified' : `confidence-${contact.confidence}`],
                   is_primary: false,

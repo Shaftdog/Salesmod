@@ -82,7 +82,7 @@ export async function enrichContactWithApollo(
         domain: request.domain,
         linkedin_url: request.linkedin_url,
         reveal_personal_emails: true,
-        reveal_phone_number: true,
+        // Note: reveal_phone_number requires webhook_url on some Apollo plans
       }),
     });
 
@@ -156,7 +156,7 @@ export async function bulkEnrichContactsWithApollo(
       },
       body: JSON.stringify({
         reveal_personal_emails: true,
-        reveal_phone_number: true,
+        // Note: reveal_phone_number requires webhook_url on some Apollo plans
         details: requests.map(r => ({
           first_name: r.first_name,
           last_name: r.last_name,
