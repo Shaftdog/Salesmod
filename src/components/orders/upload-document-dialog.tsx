@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { FileIcon, Loader2, Upload, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUploadDocuments } from "@/lib/hooks/use-order-documents";
+import { Progress } from "@/components/ui/progress";
 
 interface UploadDocumentDialogProps {
   order: Order;
@@ -218,12 +219,27 @@ export function UploadDocumentDialog({
                           e.stopPropagation();
                           removeFile(index);
                         }}
+                        disabled={uploadDocuments.isPending}
                       >
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Upload Progress */}
+            {uploadDocuments.isPending && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Uploading...</span>
+                  <span className="font-medium">{uploadDocuments.uploadProgress}%</span>
+                </div>
+                <Progress value={uploadDocuments.uploadProgress} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  Uploading directly to storage. Large files may take a moment.
+                </p>
               </div>
             )}
           </div>
