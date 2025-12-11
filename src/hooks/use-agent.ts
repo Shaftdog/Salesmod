@@ -33,7 +33,7 @@ export interface KanbanCard {
   description?: string;
   rationale: string;
   priority: 'low' | 'medium' | 'high';
-  state: 'suggested' | 'in_review' | 'approved' | 'executing' | 'done' | 'blocked' | 'rejected';
+  state: 'scheduled' | 'suggested' | 'in_review' | 'approved' | 'executing' | 'done' | 'blocked' | 'rejected';
   action_payload: any;
   created_by?: string;
   approved_by?: string;

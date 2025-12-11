@@ -3,6 +3,7 @@ import { buildContext } from './context-builder';
 import { generatePlan, validatePlan, ProposedAction } from './planner';
 import { executeCard, ExecutionResult } from './executor';
 import { planNextBatch, expandTaskToCards } from './job-planner';
+import { promoteScheduledCards } from './scheduler';
 import { Job, JobTask } from '@/types/jobs';
 
 /**
@@ -229,18 +230,25 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
   let executedCount = 0;
 
   try {
-    // Step 0: Execute approved cards first
+    // Step 0: Promote scheduled cards that are now due
+    console.log(`[${run.id}] Promoting scheduled cards...`);
+    const promotedCount = await promoteScheduledCards(tenantId);
+    if (promotedCount > 0) {
+      console.log(`[${run.id}] Promoted ${promotedCount} scheduled cards to suggested`);
+    }
+
+    // Step 1: Execute approved cards first
     console.log(`[${run.id}] Checking for approved cards to execute...`);
     const approvedResults = await executeApprovedCards(orgId);
     executedCount = approvedResults.filter(r => r.success).length;
     console.log(`[${run.id}] Executed ${executedCount} of ${approvedResults.length} approved cards`);
 
-    // Step 0.5: Process active jobs (generate next batch of tasks/cards)
+    // Step 2: Process active jobs (generate next batch of tasks/cards)
     console.log(`[${run.id}] Processing active jobs...`);
     const jobCardsCreated = await processActiveJobs(orgId, run.id);
     console.log(`[${run.id}] Created ${jobCardsCreated} cards from jobs`);
 
-    // Step 1: Build context
+    // Step 3: Build context
     console.log(`[${run.id}] Building context for org ${orgId}...`);
     const context = await buildContext(orgId);
 
@@ -249,11 +257,11 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
       ? context.goals.reduce((sum, g) => sum + g.pressureScore, 0) / context.goals.length
       : 0;
 
-    // Step 2: Generate plan
+    // Step 4: Generate plan
     console.log(`[${run.id}] Generating plan...`);
     const plan = await generatePlan(context);
 
-    // Step 3: Validate plan
+    // Step 5: Validate plan
     console.log(`[${run.id}] Validating plan...`);
     const validation = validatePlan(plan, context);
 
@@ -269,11 +277,11 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
       console.warn(`[${run.id}] Plan warnings:`, validation.warnings);
     }
 
-    // Step 4: Create kanban cards
+    // Step 6: Create kanban cards
     console.log(`[${run.id}] Creating ${plan.actions.length} kanban cards...`);
     const cards = await createKanbanCards(orgId, tenantId, run.id, plan.actions);
 
-    // Step 5: Update run with results
+    // Step 7: Update run with results
     const emailsSent = approvedResults.filter(r => r.success && r.metadata?.simulated === false).length;
 
     await supabase
@@ -289,7 +297,7 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
       })
       .eq('id', run.id);
 
-    // Step 6: Create reflection (async, don't wait)
+    // Step 8: Create reflection (async, don't wait)
     createReflection(run.id, context, plan, validation).catch(err => {
       console.error(`[${run.id}] Failed to create reflection:`, err);
     });

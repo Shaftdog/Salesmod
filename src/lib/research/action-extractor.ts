@@ -77,7 +77,7 @@ Return actionable tasks that can be executed.`;
 }
 
 /**
- * Convert extracted actions to kanban card format
+ * Convert extracted actions to kanban card format with scheduling
  */
 export function actionsToCardPayloads(
   actions: ExtractedAction[],
@@ -92,6 +92,8 @@ export function actionsToCardPayloads(
   client_id: string;
   contact_id?: string;
   action_payload?: any;
+  state: 'scheduled' | 'suggested';
+  due_at: string | null;
 }> {
   return actions.map(action => {
     // Try to match target contact to existing contacts
@@ -113,6 +115,9 @@ export function actionsToCardPayloads(
       }
     }
 
+    // Calculate scheduling based on timeframe
+    const scheduling = calculateScheduling(action.timeframe);
+
     const baseCard = {
       type: action.type,
       title: action.title,
@@ -121,6 +126,8 @@ export function actionsToCardPayloads(
       priority: action.priority,
       client_id: clientId,
       contact_id: contactId,
+      state: scheduling.state,
+      due_at: scheduling.due_at,
     };
 
     // Add action_payload based on type
@@ -167,5 +174,37 @@ export function timeframeToPriority(timeframe: string): 'high' | 'medium' | 'low
     case 'ongoing':
     default:
       return 'low';
+  }
+}
+
+/**
+ * Calculate due_at and initial state based on timeframe
+ * - immediate: suggested now (no due date)
+ * - short_term: scheduled for +7 days
+ * - ongoing: scheduled for +21 days
+ */
+export function calculateScheduling(timeframe: string): {
+  state: 'scheduled' | 'suggested';
+  due_at: string | null;
+} {
+  const now = new Date();
+
+  switch (timeframe) {
+    case 'immediate':
+      // Execute now - go straight to suggested
+      return { state: 'suggested', due_at: null };
+
+    case 'short_term':
+      // Due in 7 days
+      const shortTermDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      return { state: 'scheduled', due_at: shortTermDate.toISOString() };
+
+    case 'ongoing':
+      // Due in 21 days
+      const ongoingDate = new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000);
+      return { state: 'scheduled', due_at: ongoingDate.toISOString() };
+
+    default:
+      return { state: 'suggested', due_at: null };
   }
 }

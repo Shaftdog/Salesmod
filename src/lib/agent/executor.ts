@@ -1039,7 +1039,8 @@ AI summarization unavailable. Error: ${summaryError.message}`;
               description: payload.description,
               rationale: payload.rationale,
               priority: payload.priority,
-              state: 'suggested', // Start as suggested, user can approve
+              state: payload.state, // 'scheduled' for future, 'suggested' for immediate
+              due_at: payload.due_at, // When scheduled cards become due
               action_payload: payload.action_payload || {},
               created_by: user?.id,
             });
