@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, CreditCard, DollarSign, ExternalLink, Ban } from 'lucide-react';
+import { ArrowLeft, CreditCard, DollarSign, ExternalLink, Ban, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils/currency';
 import { useForm } from 'react-hook-form';
@@ -331,6 +331,31 @@ export default function InvoiceDetailPage() {
                 <a href={stripeLink} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-4 w-4" />
                 </a>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Order Reference (if linked to an order) */}
+      {invoice.order_id && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <FileText className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Related Order</p>
+                  <p className="font-semibold">
+                    {invoice.order?.order_number || `Order ${invoice.order_id.slice(0, 8)}...`}
+                  </p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/orders/${invoice.order_id}`}>
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  View Order
+                </Link>
               </Button>
             </div>
           </CardContent>

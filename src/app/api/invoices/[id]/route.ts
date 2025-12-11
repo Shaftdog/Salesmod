@@ -43,6 +43,7 @@ export async function GET(
       .select(`
         *,
         client:clients(id, company_name, email, payment_terms, address, phone),
+        order:orders(id, order_number, property_address, status, completed_date),
         line_items:invoice_line_items(
           *,
           order:orders(id, order_number, property_address, status, completed_date)
@@ -141,6 +142,7 @@ export async function PATCH(
       .select(`
         *,
         client:clients(id, company_name, email, payment_terms),
+        order:orders(id, order_number, property_address, status),
         line_items:invoice_line_items(
           *,
           order:orders(id, order_number, property_address, status)

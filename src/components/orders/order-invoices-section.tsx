@@ -143,7 +143,7 @@ export function OrderInvoicesSection({ orderId, clientId }: OrderInvoicesSection
             {/* Actions */}
             <div className="flex gap-2 pt-2">
               <Button asChild variant="default" size="sm">
-                <Link href={`/invoices/${invoice.id}`}>
+                <Link href={`/finance/invoicing/${invoice.id}`}>
                   <ExternalLink className="mr-2 h-4 w-4" />
                   View Invoice
                 </Link>
