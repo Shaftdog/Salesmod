@@ -23,8 +23,17 @@ export const PRODUCTION_STAGES = [
 
 export type ProductionStage = typeof PRODUCTION_STAGES[number];
 
-// Production roles
-export const PRODUCTION_ROLES = ['appraiser', 'reviewer', 'admin', 'trainee'] as const;
+// Production roles (8 total)
+export const PRODUCTION_ROLES = [
+  'appraiser',
+  'reviewer',
+  'admin',
+  'trainee',
+  'researcher_level_1',
+  'researcher_level_2',
+  'researcher_level_3',
+  'inspector',
+] as const;
 export type ProductionRole = typeof PRODUCTION_ROLES[number];
 
 // ============================================================================
@@ -273,6 +282,10 @@ export const ROLE_DISPLAY_NAMES: Record<ProductionRole, string> = {
   reviewer: 'Reviewer',
   admin: 'Admin',
   trainee: 'Trainee',
+  researcher_level_1: 'Researcher L1',
+  researcher_level_2: 'Researcher L2',
+  researcher_level_3: 'Researcher L3',
+  inspector: 'Inspector',
 };
 
 /**
