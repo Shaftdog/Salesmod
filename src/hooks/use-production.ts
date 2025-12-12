@@ -218,16 +218,90 @@ export function useUpdateProductionTemplate() {
   const supabase = createClient()
 
   return useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<ProductionTemplate> & { id: string }) => {
-      const { data, error } = await supabase
+    mutationFn: async ({ id, tasks, ...updates }: Partial<ProductionTemplate> & { id: string; tasks?: CreateTemplateRequest['tasks'] }) => {
+      // Update template metadata
+      const { data: template, error: templateError } = await supabase
         .from('production_templates')
-        .update(updates)
+        .update({
+          name: updates.name,
+          description: updates.description,
+          is_active: updates.is_active,
+          is_default: updates.is_default,
+          applicable_order_types: updates.applicable_order_types,
+          applicable_property_types: updates.applicable_property_types,
+        })
         .eq('id', id)
         .select()
         .single()
 
-      if (error) throw error
-      return data as ProductionTemplate
+      if (templateError) throw templateError
+
+      // If tasks are provided, replace all existing tasks
+      if (tasks !== undefined) {
+        // Get existing tasks to find subtasks
+        const { data: existingTasks } = await supabase
+          .from('production_template_tasks')
+          .select('id')
+          .eq('template_id', id)
+
+        // Delete existing subtasks first (due to foreign key constraint)
+        if (existingTasks && existingTasks.length > 0) {
+          const taskIds = existingTasks.map(t => t.id)
+          await supabase
+            .from('production_template_subtasks')
+            .delete()
+            .in('parent_task_id', taskIds)
+        }
+
+        // Delete existing tasks
+        await supabase
+          .from('production_template_tasks')
+          .delete()
+          .eq('template_id', id)
+
+        // Create new tasks
+        if (tasks.length > 0) {
+          for (const task of tasks) {
+            const { data: createdTask, error: taskError } = await supabase
+              .from('production_template_tasks')
+              .insert({
+                template_id: id,
+                stage: task.stage,
+                title: task.title,
+                description: task.description,
+                default_role: task.default_role,
+                estimated_minutes: task.estimated_minutes,
+                is_required: task.is_required,
+                sort_order: task.sort_order,
+              })
+              .select()
+              .single()
+
+            if (taskError) throw taskError
+
+            // Create subtasks if provided
+            if (task.subtasks && task.subtasks.length > 0) {
+              const subtasksToInsert = task.subtasks.map((subtask, index) => ({
+                parent_task_id: createdTask.id,
+                title: subtask.title,
+                description: subtask.description,
+                default_role: subtask.default_role,
+                estimated_minutes: subtask.estimated_minutes,
+                is_required: subtask.is_required,
+                sort_order: subtask.sort_order ?? index,
+              }))
+
+              const { error: subtaskError } = await supabase
+                .from('production_template_subtasks')
+                .insert(subtasksToInsert)
+
+              if (subtaskError) throw subtaskError
+            }
+          }
+        }
+      }
+
+      return template as ProductionTemplate
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['production-templates'] })
