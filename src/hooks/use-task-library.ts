@@ -239,14 +239,17 @@ export function useUpdateLibraryTask() {
         .from('task_library')
         .update(updates)
         .eq('id', id)
-        .select()
-        .single();
+        .select();
 
       if (error) {
         throw error;
       }
 
-      return data as LibraryTask;
+      if (!data || data.length === 0) {
+        throw new Error('Task not found or you do not have permission to update it.');
+      }
+
+      return data[0] as LibraryTask;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: taskLibraryKeys.all });
@@ -361,21 +364,21 @@ export function useUpdateLibrarySubtask() {
         .from('task_library_subtasks')
         .update(updates)
         .eq('id', id)
-        .select()
-        .single();
+        .select();
 
       if (error) {
         throw error;
       }
 
-      return data as LibrarySubtask;
+      if (!data || data.length === 0) {
+        throw new Error('Subtask not found or you do not have permission to update it.');
+      }
+
+      return data[0] as LibrarySubtask;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskLibraryKeys.all });
-      toast({
-        title: 'Subtask Updated',
-        description: 'The subtask has been updated successfully.',
-      });
+      // Silently succeed - don't show toast for individual subtask updates
     },
     onError: (error: any) => {
       toast({
