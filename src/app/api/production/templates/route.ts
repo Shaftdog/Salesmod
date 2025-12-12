@@ -145,24 +145,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     // Parse and validate request body
     const body = await request.json();
     const validatedData = CreateTemplateRequestSchema.parse(body);
 
-    // If setting as default, first unset other defaults
+    // If setting as default, first unset other defaults (scoped by tenant_id)
     if (validatedData.is_default) {
       await supabase
         .from('production_templates')
         .update({ is_default: false })
-        .eq('org_id', user.id)
+        .eq('tenant_id', profile.tenant_id)
         .eq('is_default', true);
     }
 
-    // Create template
+    // Create template with tenant_id
     const { data: template, error: templateError } = await supabase
       .from('production_templates')
       .insert({
         org_id: user.id,
+        tenant_id: profile.tenant_id,
         name: validatedData.name,
         description: validatedData.description || null,
         is_default: validatedData.is_default || false,

@@ -66,11 +66,26 @@ async function seedDefaultTemplate() {
 
   console.log(`\nCreating default production template for user: ${userId}\n`);
 
-  // Create template
+  // Get user's tenant_id
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', userId)
+    .single();
+
+  if (profileError || !profile?.tenant_id) {
+    console.error('❌ User has no tenant_id assigned:', profileError?.message || 'tenant_id is null');
+    process.exit(1);
+  }
+
+  console.log(`Using tenant_id: ${profile.tenant_id}\n`);
+
+  // Create template with tenant_id
   const { data: template, error: templateError } = await supabase
     .from('production_templates')
     .insert({
       org_id: userId,
+      tenant_id: profile.tenant_id,
       name: 'Standard Residential Appraisal',
       description: 'Default workflow for standard residential appraisals',
       is_default: true,

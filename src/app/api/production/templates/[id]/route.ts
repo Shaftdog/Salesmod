@@ -36,12 +36,23 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get template
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
+    // Get template (filtered by tenant_id)
     const { data: template, error: templateError } = await supabase
       .from('production_templates')
       .select('*')
       .eq('id', id)
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .single();
 
     if (templateError) {
@@ -119,28 +130,39 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     // Parse request body
     const body = await request.json();
     const validatedData = ProductionTemplateSchema.partial().parse(body);
 
-    // Verify template exists and belongs to user
+    // Verify template exists and belongs to tenant
     const { data: existing, error: checkError } = await supabase
       .from('production_templates')
       .select('id')
       .eq('id', id)
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .single();
 
     if (checkError || !existing) {
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
 
-    // If setting as default, first unset other defaults
+    // If setting as default, first unset other defaults (scoped by tenant_id)
     if (validatedData.is_default) {
       await supabase
         .from('production_templates')
         .update({ is_default: false })
-        .eq('org_id', user.id)
+        .eq('tenant_id', profile.tenant_id)
         .eq('is_default', true)
         .neq('id', id);
     }
@@ -209,12 +231,23 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify template exists and belongs to user
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
+    // Verify template exists and belongs to tenant
     const { data: existing, error: checkError } = await supabase
       .from('production_templates')
       .select('id, is_default')
       .eq('id', id)
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .single();
 
     if (checkError || !existing) {
@@ -226,7 +259,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       const { count } = await supabase
         .from('production_templates')
         .select('*', { count: 'exact', head: true })
-        .eq('org_id', user.id);
+        .eq('tenant_id', profile.tenant_id);
 
       if (count === 1) {
         return NextResponse.json(
