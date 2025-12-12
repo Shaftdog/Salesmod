@@ -1164,10 +1164,22 @@ export function useCreateProductionResource() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      if (profileError || !profile?.tenant_id) {
+        throw new Error('User has no tenant_id assigned')
+      }
+
       const { data, error } = await supabase
         .from('production_resources')
         .insert({
           org_id: user.id,
+          tenant_id: profile.tenant_id,
           ...input,
         })
         .select()
