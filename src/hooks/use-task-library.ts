@@ -192,11 +192,23 @@ export function useCreateLibraryTask() {
         throw new Error('You must be logged in to create tasks');
       }
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError || !profile?.tenant_id) {
+        throw new Error('User has no tenant_id assigned');
+      }
+
       const { data, error } = await supabase
         .from('task_library')
         .insert({
           ...input,
           org_id: user.id,
+          tenant_id: profile.tenant_id,
           created_by: user.id,
         })
         .select()
