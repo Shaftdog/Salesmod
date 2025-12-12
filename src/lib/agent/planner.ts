@@ -192,14 +192,14 @@ ${highPriorityCases.length > 0 ? `\n⚠️ High Priority Cases:\n${highPriorityC
   // Format order history summary
   const recentOrders = allOrders.slice(0, 100); // Last 100 orders
   const ordersByStatus = {
-    completed: allOrders.filter(o => o.status === 'completed').length,
-    new: allOrders.filter(o => o.status === 'new').length,
-    in_progress: allOrders.filter(o => ['in_progress', 'assigned', 'scheduled'].includes(o.status || '')).length,
-    in_review: allOrders.filter(o => ['in_review', 'revisions'].includes(o.status || '')).length,
+    delivered: allOrders.filter(o => o.status === 'DELIVERED' || o.status === 'WORKFILE').length,
+    intake: allOrders.filter(o => o.status === 'INTAKE').length,
+    in_progress: allOrders.filter(o => ['INSPECTED', 'SCHEDULING', 'SCHEDULED', 'FINALIZATION', 'READY_FOR_DELIVERY'].includes(o.status || '')).length,
+    correction: allOrders.filter(o => ['CORRECTION', 'REVISION'].includes(o.status || '')).length,
   };
   const ordersSummary = `
 Total Orders (Recent 3000): ${allOrders.length}
-Status Breakdown: Completed: ${ordersByStatus.completed}, In Progress: ${ordersByStatus.in_progress}, In Review: ${ordersByStatus.in_review}, New: ${ordersByStatus.new}
+Status Breakdown: Delivered: ${ordersByStatus.delivered}, In Progress: ${ordersByStatus.in_progress}, Corrections: ${ordersByStatus.correction}, New Intake: ${ordersByStatus.intake}
 Recent Activity: ${recentOrders.length} orders in latest batch
 `;
 

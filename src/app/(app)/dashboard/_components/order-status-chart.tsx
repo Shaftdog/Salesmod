@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
-import { orderStatuses } from "@/lib/types"
+import { orderStatuses, orderStatusLabels, OrderStatus } from "@/lib/types"
 import { useOrders } from "@/hooks/use-orders"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { subDays, subMonths, startOfYear, parseISO, isAfter } from "date-fns"
@@ -43,7 +43,7 @@ export function OrderStatusChart() {
     }, [orders, dateFilter]);
 
     const data = orderStatuses.map(status => ({
-        name: status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        name: orderStatusLabels[status] || status,
         total: filteredOrders.filter(order => order.status === status).length
     }));
 

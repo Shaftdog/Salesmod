@@ -1,7 +1,37 @@
 import { PartyRoleCode } from './roles/mapPartyRole';
 
-export const orderStatuses = ['new', 'assigned', 'scheduled', 'in_progress', 'in_review', 'revisions', 'completed', 'delivered', 'cancelled'] as const;
+// Production Kanban stages - aligned with database constraint
+export const orderStatuses = [
+  'INTAKE',
+  'SCHEDULING',
+  'SCHEDULED',
+  'INSPECTED',
+  'FINALIZATION',
+  'READY_FOR_DELIVERY',
+  'DELIVERED',
+  'CORRECTION',
+  'REVISION',
+  'WORKFILE',
+  'cancelled',
+  'on_hold'
+] as const;
 export type OrderStatus = typeof orderStatuses[number];
+
+// Human-readable labels for order statuses
+export const orderStatusLabels: Record<OrderStatus, string> = {
+  INTAKE: "Intake",
+  SCHEDULING: "Scheduling",
+  SCHEDULED: "Scheduled",
+  INSPECTED: "Inspected",
+  FINALIZATION: "Finalization",
+  READY_FOR_DELIVERY: "Ready for Delivery",
+  DELIVERED: "Delivered",
+  CORRECTION: "Correction",
+  REVISION: "Revision",
+  WORKFILE: "Workfile",
+  cancelled: "Cancelled",
+  on_hold: "On Hold",
+};
 
 export const orderPriorities = ['rush', 'high', 'normal', 'low'] as const;
 export type OrderPriority = typeof orderPriorities[number];

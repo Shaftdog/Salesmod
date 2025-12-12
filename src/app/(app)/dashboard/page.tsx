@@ -23,18 +23,19 @@ export default function Dashboard() {
       isToday(parseISO(o.orderedDate))
     ).length;
 
-    const inProgressOrders = orders.filter(o => 
-      o.status === 'in_progress' || o.status === 'scheduled' || o.status === 'assigned'
+    const inProgressOrders = orders.filter(o =>
+      o.status === 'INSPECTED' || o.status === 'SCHEDULED' || o.status === 'SCHEDULING' ||
+      o.status === 'FINALIZATION' || o.status === 'READY_FOR_DELIVERY'
     ).length;
 
-    const dueToday = orders.filter(o => 
+    const dueToday = orders.filter(o =>
       isToday(parseISO(o.dueDate))
     ).length;
 
-    const overdue = orders.filter(o => 
-      isPast(parseISO(o.dueDate)) && 
-      o.status !== 'completed' && 
-      o.status !== 'delivered' && 
+    const overdue = orders.filter(o =>
+      isPast(parseISO(o.dueDate)) &&
+      o.status !== 'DELIVERED' &&
+      o.status !== 'WORKFILE' &&
       o.status !== 'cancelled'
     ).length;
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Order, orderStatuses } from "@/lib/types";
+import { Order, orderStatuses, orderStatusLabels, OrderStatus } from "@/lib/types";
 import {
   Dialog,
   DialogContent,
@@ -51,7 +51,7 @@ export function ChangeStatusDialog({
 
       toast({
         title: "Status Updated",
-        description: `Order status changed to ${newStatus}`,
+        description: `Order status changed to ${orderStatusLabels[newStatus] || newStatus}`,
       });
 
       onOpenChange(false);
@@ -77,14 +77,14 @@ export function ChangeStatusDialog({
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="status">New Status</Label>
-              <Select value={newStatus} onValueChange={(value) => setNewStatus(value as any)}>
+              <Select value={newStatus} onValueChange={(value) => setNewStatus(value as OrderStatus)}>
                 <SelectTrigger id="status">
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
                   {orderStatuses.map((status) => (
                     <SelectItem key={status} value={status}>
-                      {status}
+                      {orderStatusLabels[status] || status}
                     </SelectItem>
                   ))}
                 </SelectContent>

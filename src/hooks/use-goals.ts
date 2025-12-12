@@ -101,8 +101,8 @@ export function calculateGoalProgress(
       break;
       
     case 'completion_rate':
-      const completedOrders = periodOrders.filter(o => 
-        o.status === 'completed' || o.status === 'delivered'
+      const completedOrders = periodOrders.filter(o =>
+        o.status === 'DELIVERED' || o.status === 'WORKFILE'
       ).length;
       currentValue = periodOrders.length > 0 
         ? (completedOrders / periodOrders.length) * 100 
