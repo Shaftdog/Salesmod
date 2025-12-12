@@ -185,9 +185,20 @@ export function useCreateLibraryTask() {
 
   return useMutation({
     mutationFn: async (input: CreateLibraryTaskInput): Promise<LibraryTask> => {
+      // Get the current user's ID for org_id and created_by
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+      if (authError || !user) {
+        throw new Error('You must be logged in to create tasks');
+      }
+
       const { data, error } = await supabase
         .from('task_library')
-        .insert(input)
+        .insert({
+          ...input,
+          org_id: user.id,
+          created_by: user.id,
+        })
         .select()
         .single();
 
