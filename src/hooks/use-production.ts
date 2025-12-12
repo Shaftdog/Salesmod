@@ -122,11 +122,23 @@ export function useCreateProductionTemplate() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // Create template
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      if (profileError || !profile?.tenant_id) {
+        throw new Error('User has no tenant_id assigned')
+      }
+
+      // Create template with tenant_id
       const { data: template, error: templateError } = await supabase
         .from('production_templates')
         .insert({
           org_id: user.id,
+          tenant_id: profile.tenant_id,
           name: input.name,
           description: input.description,
           is_default: input.is_default,
@@ -273,6 +285,20 @@ export function useDuplicateProductionTemplate() {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      if (profileError || !profile?.tenant_id) {
+        throw new Error('User has no tenant_id assigned')
+      }
+
       // Get the original template with tasks
       const { data: original, error: fetchError } = await supabase
         .from('production_templates')
@@ -288,11 +314,12 @@ export function useDuplicateProductionTemplate() {
 
       if (fetchError) throw fetchError
 
-      // Create new template
+      // Create new template with tenant_id
       const { data: newTemplate, error: createError } = await supabase
         .from('production_templates')
         .insert({
           org_id: original.org_id,
+          tenant_id: profile.tenant_id,
           name: `${original.name} (Copy)`,
           description: original.description,
           is_active: false, // Start as inactive
