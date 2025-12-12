@@ -144,6 +144,71 @@ interface ProductionCardItemProps {
   isDragging: boolean;
 }
 
+// Role abbreviations for compact display
+const ROLE_ABBREV: Record<string, string> = {
+  appraiser: 'App',
+  reviewer: 'Rev',
+  admin: 'Adm',
+  trainee: 'Trn',
+  researcher_level_1: 'R1',
+  researcher_level_2: 'R2',
+  researcher_level_3: 'R3',
+  inspector: 'Ins',
+};
+
+const ROLE_COLORS: Record<string, string> = {
+  appraiser: 'bg-blue-100 text-blue-700',
+  reviewer: 'bg-purple-100 text-purple-700',
+  admin: 'bg-orange-100 text-orange-700',
+  trainee: 'bg-green-100 text-green-700',
+  researcher_level_1: 'bg-cyan-100 text-cyan-700',
+  researcher_level_2: 'bg-teal-100 text-teal-700',
+  researcher_level_3: 'bg-emerald-100 text-emerald-700',
+  inspector: 'bg-amber-100 text-amber-700',
+};
+
+function AssignedResourcesDisplay({ card }: { card: ProductionCardWithOrder }) {
+  const assignments = [
+    { role: 'appraiser', user: card.assigned_appraiser },
+    { role: 'reviewer', user: card.assigned_reviewer },
+    { role: 'admin', user: card.assigned_admin },
+    { role: 'trainee', user: card.assigned_trainee },
+    { role: 'researcher_level_1', user: card.assigned_researcher_level_1 },
+    { role: 'researcher_level_2', user: card.assigned_researcher_level_2 },
+    { role: 'researcher_level_3', user: card.assigned_researcher_level_3 },
+    { role: 'inspector', user: card.assigned_inspector },
+  ].filter(a => a.user);
+
+  if (assignments.length === 0) {
+    return (
+      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <User className="h-3 w-3" />
+        <span>No assignments</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {assignments.map(({ role, user }) => (
+        <div
+          key={role}
+          className={cn(
+            'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs',
+            ROLE_COLORS[role]
+          )}
+          title={`${ROLE_ABBREV[role]}: ${user?.name || user?.email}`}
+        >
+          <span className="font-medium">{ROLE_ABBREV[role]}</span>
+          <span className="max-w-[60px] truncate">
+            {user?.name?.split(' ')[0] || user?.email?.split('@')[0]}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ProductionCardItem({ card, onDragStart, onClick, isDragging }: ProductionCardItemProps) {
   const completionPercent = calculateCompletionPercent(card.completed_tasks, card.total_tasks);
   const isOverdue = card.due_date && isPast(new Date(card.due_date));
@@ -218,13 +283,8 @@ function ProductionCardItem({ card, onDragStart, onClick, isDragging }: Producti
           </div>
         )}
 
-        {/* Assigned Appraiser */}
-        {card.assigned_appraiser && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <User className="h-3 w-3" />
-            <span className="truncate">{card.assigned_appraiser.name || card.assigned_appraiser.email}</span>
-          </div>
-        )}
+        {/* Assigned Resources */}
+        <AssignedResourcesDisplay card={card} />
 
         {/* Status Indicators */}
         {completionPercent === 100 && (
