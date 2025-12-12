@@ -137,6 +137,7 @@ export function TemplateEditor({ template, onSuccess, onCancel }: TemplateEditor
   });
 
   const onSubmit = async (data: TemplateFormData) => {
+    console.log('[TemplateEditor] onSubmit called with data:', data);
     try {
       const payload = {
         name: data.name,
@@ -382,7 +383,16 @@ export function TemplateEditor({ template, onSuccess, onCancel }: TemplateEditor
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isPending}>
+        <Button
+          type="submit"
+          disabled={isPending}
+          onClick={() => {
+            console.log('[TemplateEditor] Save button clicked');
+            console.log('[TemplateEditor] Form errors:', form.formState.errors);
+            console.log('[TemplateEditor] Form isValid:', form.formState.isValid);
+            console.log('[TemplateEditor] Form isDirty:', form.formState.isDirty);
+          }}
+        >
           {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
           {isEditing ? 'Save Changes' : 'Create Template'}
         </Button>
