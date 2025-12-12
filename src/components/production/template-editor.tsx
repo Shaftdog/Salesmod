@@ -305,12 +305,12 @@ export function TemplateEditor({ template, onSuccess, onCancel }: TemplateEditor
 
               return (
                 <div key={stage} className="border rounded-lg">
-                  <button
-                    type="button"
-                    onClick={() => toggleStage(stage)}
-                    className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors">
+                    <button
+                      type="button"
+                      onClick={() => toggleStage(stage)}
+                      className="flex items-center gap-2 flex-1 text-left"
+                    >
                       {isExpanded ? (
                         <ChevronDown className="h-4 w-4" />
                       ) : (
@@ -322,16 +322,13 @@ export function TemplateEditor({ template, onSuccess, onCancel }: TemplateEditor
                       <Badge variant="secondary" className="text-xs">
                         {stageTasks.length} tasks
                       </Badge>
-                    </div>
+                    </button>
                     <div className="flex items-center gap-1">
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openLibraryPicker(stage);
-                        }}
+                        onClick={() => openLibraryPicker(stage)}
                       >
                         <Library className="h-4 w-4 mr-1" />
                         From Library
@@ -340,16 +337,13 @@ export function TemplateEditor({ template, onSuccess, onCancel }: TemplateEditor
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          addTask(stage);
-                        }}
+                        onClick={() => addTask(stage)}
                       >
                         <Plus className="h-4 w-4 mr-1" />
                         Add Task
                       </Button>
                     </div>
-                  </button>
+                  </div>
 
                   {isExpanded && (
                     <div className="p-3 pt-0 space-y-3">

@@ -53,6 +53,10 @@ export const PRODUCTION_ROLES = [
   'reviewer',
   'admin',
   'trainee',
+  'researcher_level_1',
+  'researcher_level_2',
+  'researcher_level_3',
+  'inspector',
 ] as const;
 
 export const PRODUCTION_ROLE_LABELS: Record<ProductionRole, string> = {
@@ -60,6 +64,10 @@ export const PRODUCTION_ROLE_LABELS: Record<ProductionRole, string> = {
   reviewer: 'Reviewer',
   admin: 'Admin',
   trainee: 'Trainee',
+  researcher_level_1: 'Researcher L1',
+  researcher_level_2: 'Researcher L2',
+  researcher_level_3: 'Researcher L3',
+  inspector: 'Inspector',
 };
 
 export const TASK_STATUSES = [
@@ -216,7 +224,15 @@ export const CreateProductionCardSchema = z.object({
   template_id: z.string().uuid(),
   due_date: z.string().optional().nullable(),
   priority: z.enum(CARD_PRIORITIES).default('normal'),
+  // Role assignments
   assigned_appraiser_id: z.string().uuid().optional().nullable(),
+  assigned_reviewer_id: z.string().uuid().optional().nullable(),
+  assigned_admin_id: z.string().uuid().optional().nullable(),
+  assigned_trainee_id: z.string().uuid().optional().nullable(),
+  assigned_researcher_level_1_id: z.string().uuid().optional().nullable(),
+  assigned_researcher_level_2_id: z.string().uuid().optional().nullable(),
+  assigned_researcher_level_3_id: z.string().uuid().optional().nullable(),
+  assigned_inspector_id: z.string().uuid().optional().nullable(),
 });
 
 export type CreateProductionCardInput = z.infer<typeof CreateProductionCardSchema>;
@@ -328,7 +344,16 @@ export interface ProductionCard {
   completed_tasks: number;
   due_date: string | null;
   priority: CardPriority;
+  // Role assignments
   assigned_appraiser_id: string | null;
+  assigned_reviewer_id: string | null;
+  assigned_admin_id: string | null;
+  assigned_trainee_id: string | null;
+  assigned_researcher_level_1_id: string | null;
+  assigned_researcher_level_2_id: string | null;
+  assigned_researcher_level_3_id: string | null;
+  assigned_inspector_id: string | null;
+  // Timestamps
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
@@ -430,6 +455,13 @@ export interface ProductionTemplateWithTasks extends ProductionTemplate {
   }>;
 }
 
+// Helper type for joined user profiles
+type JoinedUser = {
+  id: string;
+  name: string | null;
+  email: string;
+} | null;
+
 export interface ProductionCardWithOrder extends ProductionCard {
   order: {
     id: string;
@@ -442,11 +474,15 @@ export interface ProductionCardWithOrder extends ProductionCard {
     id: string;
     name: string;
   };
-  assigned_appraiser: {
-    id: string;
-    name: string | null;
-    email: string;
-  } | null;
+  // Joined user profiles for all role assignments
+  assigned_appraiser: JoinedUser;
+  assigned_reviewer: JoinedUser;
+  assigned_admin: JoinedUser;
+  assigned_trainee: JoinedUser;
+  assigned_researcher_level_1: JoinedUser;
+  assigned_researcher_level_2: JoinedUser;
+  assigned_researcher_level_3: JoinedUser;
+  assigned_inspector: JoinedUser;
 }
 
 export interface ProductionCardWithTasks extends ProductionCardWithOrder {

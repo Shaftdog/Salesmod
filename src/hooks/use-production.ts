@@ -18,6 +18,7 @@ import type {
   ProductionResourceWithUser,
   ProductionAlert,
   ProductionStage,
+  ProductionRole,
   CreateTemplateRequest,
   CreateProductionCardInput,
   UpdateTaskInput,
@@ -463,6 +464,21 @@ export function useDuplicateProductionTemplate() {
 // PRODUCTION CARDS
 // ============================================================================
 
+// Shared select for production cards with all role joins
+const PRODUCTION_CARD_SELECT = `
+  *,
+  order:orders(id, order_number, status, property_address),
+  template:production_templates(id, name),
+  assigned_appraiser:profiles!production_cards_assigned_appraiser_id_fkey(id, name, email),
+  assigned_reviewer:profiles!production_cards_assigned_reviewer_id_fkey(id, name, email),
+  assigned_admin:profiles!production_cards_assigned_admin_id_fkey(id, name, email),
+  assigned_trainee:profiles!production_cards_assigned_trainee_id_fkey(id, name, email),
+  assigned_researcher_level_1:profiles!production_cards_assigned_researcher_level_1_id_fkey(id, name, email),
+  assigned_researcher_level_2:profiles!production_cards_assigned_researcher_level_2_id_fkey(id, name, email),
+  assigned_researcher_level_3:profiles!production_cards_assigned_researcher_level_3_id_fkey(id, name, email),
+  assigned_inspector:profiles!production_cards_assigned_inspector_id_fkey(id, name, email)
+`
+
 export function useProductionCards(filters?: { stage?: ProductionStage; appraiser_id?: string }) {
   const supabase = createClient()
 
@@ -471,12 +487,7 @@ export function useProductionCards(filters?: { stage?: ProductionStage; appraise
     queryFn: async () => {
       let query = supabase
         .from('production_cards')
-        .select(`
-          *,
-          order:orders(id, order_number, status, property_address),
-          template:production_templates(id, name),
-          assigned_appraiser:profiles!production_cards_assigned_appraiser_id_fkey(id, name, email)
-        `)
+        .select(PRODUCTION_CARD_SELECT)
         .order('due_date', { ascending: true, nullsFirst: false })
 
       if (filters?.stage) {
@@ -496,6 +507,28 @@ export function useProductionCards(filters?: { stage?: ProductionStage; appraise
   })
 }
 
+export function useOrderProductionCard(orderId: string) {
+  const supabase = createClient()
+
+  return useQuery({
+    queryKey: ['production-card-by-order', orderId],
+    queryFn: async () => {
+      if (!orderId) return null
+
+      const { data, error } = await supabase
+        .from('production_cards')
+        .select(PRODUCTION_CARD_SELECT)
+        .eq('order_id', orderId)
+        .maybeSingle()
+
+      if (error) throw error
+      return data as ProductionCardWithOrder | null
+    },
+    enabled: !!orderId,
+    staleTime: 1000 * 30,
+  })
+}
+
 export function useProductionBoardData() {
   const supabase = createClient()
 
@@ -504,12 +537,7 @@ export function useProductionBoardData() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('production_cards')
-        .select(`
-          *,
-          order:orders(id, order_number, status, property_address),
-          template:production_templates(id, name),
-          assigned_appraiser:profiles!production_cards_assigned_appraiser_id_fkey(id, name, email)
-        `)
+        .select(PRODUCTION_CARD_SELECT)
         .is('completed_at', null) // Only active cards
         .order('due_date', { ascending: true, nullsFirst: false })
 
@@ -547,12 +575,7 @@ export function useProductionCard(id: string) {
       // Get card with order and template
       const { data: card, error: cardError } = await supabase
         .from('production_cards')
-        .select(`
-          *,
-          order:orders(id, order_number, status, property_address),
-          template:production_templates(id, name),
-          assigned_appraiser:profiles!production_cards_assigned_appraiser_id_fkey(id, name, email)
-        `)
+        .select(PRODUCTION_CARD_SELECT)
         .eq('id', id)
         .single()
 
@@ -617,16 +640,32 @@ export function useCreateProductionCard() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // Create the production card
+      // Get user's tenant_id from profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      // Create the production card with all role assignments
       const { data: card, error: cardError } = await supabase
         .from('production_cards')
         .insert({
           org_id: user.id,
+          tenant_id: profile?.tenant_id,
           order_id: input.order_id,
           template_id: input.template_id,
           due_date: input.due_date,
           priority: input.priority,
+          // Role assignments
           assigned_appraiser_id: input.assigned_appraiser_id,
+          assigned_reviewer_id: input.assigned_reviewer_id,
+          assigned_admin_id: input.assigned_admin_id,
+          assigned_trainee_id: input.assigned_trainee_id,
+          assigned_researcher_level_1_id: input.assigned_researcher_level_1_id,
+          assigned_researcher_level_2_id: input.assigned_researcher_level_2_id,
+          assigned_researcher_level_3_id: input.assigned_researcher_level_3_id,
+          assigned_inspector_id: input.assigned_inspector_id,
           current_stage: 'INTAKE',
           processed_stages: [],
           started_at: new Date().toISOString(),
@@ -1083,13 +1122,30 @@ export function useProductionResources() {
   return useQuery({
     queryKey: ['production-resources'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      let query = supabase
         .from('production_resources')
         .select(`
           *,
           user:profiles!production_resources_user_id_fkey(id, name, email)
         `)
         .order('user_id')
+
+      // Filter by tenant_id if available
+      if (profile?.tenant_id) {
+        query = query.eq('tenant_id', profile.tenant_id)
+      }
+
+      const { data, error } = await query
 
       if (error) throw error
       return data as ProductionResourceWithUser[]
@@ -1168,6 +1224,60 @@ export function useUpdateProductionResource() {
         description: error.message || 'Failed to update resource.',
       })
     },
+  })
+}
+
+export function useDeleteProductionResource() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const supabase = createClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('production_resources')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['production-resources'] })
+      toast({
+        title: 'Resource Removed',
+        description: 'Production resource has been removed.',
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to remove resource.',
+      })
+    },
+  })
+}
+
+export function useResourcesByRole(role: ProductionRole) {
+  const supabase = createClient()
+
+  return useQuery({
+    queryKey: ['production-resources', 'by-role', role],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('production_resources')
+        .select(`
+          *,
+          user:profiles!production_resources_user_id_fkey(id, name, email)
+        `)
+        .eq('is_available', true)
+        .contains('roles', [role])
+        .order('user_id')
+
+      if (error) throw error
+      return data as ProductionResourceWithUser[]
+    },
+    staleTime: 1000 * 60 * 5,
   })
 }
 
