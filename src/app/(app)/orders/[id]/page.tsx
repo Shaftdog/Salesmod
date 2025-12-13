@@ -11,6 +11,7 @@ import { AddNoteDialog } from "@/components/orders/add-note-dialog";
 import { UploadDocumentDialog } from "@/components/orders/upload-document-dialog";
 import { EditWorkflowDialog } from "@/components/orders/edit-workflow-dialog";
 import { StartProductionDialog } from "@/components/orders/start-production-dialog";
+import { CreateCaseButton } from "@/components/orders/create-case-button";
 import { useOrderProductionCard } from "@/hooks/use-production";
 import { PRODUCTION_STAGE_LABELS } from "@/types/production";
 import {
@@ -412,6 +413,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                         </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>
+                <CreateCaseButton order={order} variant="outline" />
             </CardContent>
         </Card>
       </div>

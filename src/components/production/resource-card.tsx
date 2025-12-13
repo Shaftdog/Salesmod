@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { User, Pencil, Trash2, Clock, CheckCircle } from "lucide-react";
 import { PRODUCTION_ROLE_LABELS, type ProductionRole } from "@/types/production";
 import type { ProductionResourceWithUser } from "@/types/production";
+import { ResourceWorkHistory, ResourceWorkHistoryBadge } from "./resource-work-history";
 
 interface ResourceCardProps {
   resource: ProductionResourceWithUser;
@@ -106,11 +107,16 @@ export function ResourceCard({
             <div className="text-sm text-muted-foreground">
               {resource.tasks_completed_count} completed
             </div>
+            <ResourceWorkHistoryBadge userId={resource.user_id} />
           </div>
         )}
 
         {/* Actions */}
         <div className="mt-4 flex justify-end gap-2 border-t pt-4">
+          <ResourceWorkHistory
+            userId={resource.user_id}
+            userName={resource.user.name || resource.user.email}
+          />
           <Button variant="outline" size="sm" onClick={() => onEdit(resource)}>
             <Pencil className="mr-1.5 h-3.5 w-3.5" />
             Edit

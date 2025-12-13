@@ -8,6 +8,7 @@ import { CaseStatusBadge, CasePriorityBadge } from "./case-status-badge";
 import type { Case } from "@/lib/types";
 import { Building2, FileText, User, Calendar, ExternalLink, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { CreateRevisionButton } from "./create-revision-button";
 
 type CaseCardProps = {
   case: Case;
@@ -122,14 +123,17 @@ export function CaseCard({ case: caseItem, onEdit, onDelete }: CaseCardProps) {
             </div>
           )}
 
-          {/* View Details Link */}
-          <div className="pt-2">
-            <Link href={`/cases/${caseItem.id}`}>
+          {/* Action Buttons */}
+          <div className="pt-2 flex gap-2">
+            <Link href={`/cases/${caseItem.id}`} className="flex-1">
               <Button variant="outline" size="sm" className="w-full">
                 View Details
                 <ExternalLink className="ml-2 h-4 w-4" />
               </Button>
             </Link>
+            {caseItem.orderId && (
+              <CreateRevisionButton caseItem={caseItem} variant="outline" />
+            )}
           </div>
         </div>
       </CardContent>

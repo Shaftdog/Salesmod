@@ -252,6 +252,7 @@ export const UpdateTaskSchema = z.object({
   status: z.enum(TASK_STATUSES).optional(),
   due_date: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  completed_at: z.string().optional().nullable(),
 });
 
 export type UpdateTaskInput = z.infer<typeof UpdateTaskSchema>;

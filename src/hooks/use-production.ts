@@ -897,6 +897,11 @@ export function useUpdateProductionTask() {
 
   return useMutation({
     mutationFn: async ({ id, ...updates }: UpdateTaskInput & { id: string }) => {
+      // If setting status to completed, add completed_at timestamp
+      if (updates.status === 'completed' && !updates.completed_at) {
+        updates.completed_at = new Date().toISOString()
+      }
+
       const { data, error } = await supabase
         .from('production_tasks')
         .update(updates)

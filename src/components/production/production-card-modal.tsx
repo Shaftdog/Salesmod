@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   Clock,
   AlertTriangle,
+  AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -45,6 +46,7 @@ import {
   isTaskOverdue,
 } from '@/types/production';
 import { format, formatDistanceToNow } from 'date-fns';
+import { CorrectionDialog } from './correction-dialog';
 
 interface ProductionCardModalProps {
   cardId: string;
@@ -59,6 +61,8 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
   const startTimer = useStartTimer();
   const stopTimer = useStopTimer();
   const [expandedStages, setExpandedStages] = useState<Set<ProductionStage>>(new Set());
+  const [correctionDialogOpen, setCorrectionDialogOpen] = useState(false);
+  const [selectedTaskForCorrection, setSelectedTaskForCorrection] = useState<any>(null);
 
   const card = data?.card;
   const canMoveToNextStage = data?.can_move_to_next_stage;
@@ -107,6 +111,11 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
     } catch (error) {
       // Error handled by hook
     }
+  };
+
+  const handleRequestCorrection = (task: any) => {
+    setSelectedTaskForCorrection(task);
+    setCorrectionDialogOpen(true);
   };
 
   // Group tasks by stage
@@ -261,6 +270,7 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
                               onComplete={() => handleCompleteTask(task.id)}
                               onStartTimer={() => handleStartTimer(task.id)}
                               onStopTimer={() => task.active_timer && handleStopTimer(task.active_timer.id)}
+                              onRequestCorrection={() => handleRequestCorrection(task)}
                               isCompletingTask={completeTask.isPending}
                               isStartingTimer={startTimer.isPending}
                               isStoppingTimer={stopTimer.isPending}
@@ -276,6 +286,29 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
           </>
         )}
       </SheetContent>
+
+      {/* Correction Dialog */}
+      {selectedTaskForCorrection && card && (
+        <CorrectionDialog
+          open={correctionDialogOpen}
+          onOpenChange={(open) => {
+            setCorrectionDialogOpen(open);
+            if (!open) setSelectedTaskForCorrection(null);
+          }}
+          task={{
+            id: selectedTaskForCorrection.id,
+            title: selectedTaskForCorrection.title,
+            description: selectedTaskForCorrection.description,
+            stage: selectedTaskForCorrection.stage,
+            assigned_to: selectedTaskForCorrection.assigned_to,
+          }}
+          productionCard={{
+            id: card.id,
+            order: card.order,
+          }}
+          assignedProfile={selectedTaskForCorrection.assigned_user}
+        />
+      )}
     </Sheet>
   );
 }
@@ -285,6 +318,7 @@ interface TaskItemProps {
   onComplete: () => void;
   onStartTimer: () => void;
   onStopTimer: () => void;
+  onRequestCorrection: () => void;
   isCompletingTask: boolean;
   isStartingTimer: boolean;
   isStoppingTimer: boolean;
@@ -295,6 +329,7 @@ function TaskItem({
   onComplete,
   onStartTimer,
   onStopTimer,
+  onRequestCorrection,
   isCompletingTask,
   isStartingTimer,
   isStoppingTimer,
@@ -359,9 +394,9 @@ function TaskItem({
             )}
           </div>
 
-          {/* Timer Controls */}
+          {/* Timer Controls & Correction Button */}
           {!isCompleted && (
-            <div className="mt-2">
+            <div className="mt-2 flex items-center gap-2">
               {hasActiveTimer ? (
                 <Button
                   size="sm"
@@ -393,6 +428,15 @@ function TaskItem({
                   Start Timer
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onRequestCorrection}
+                className="h-7 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+              >
+                <AlertCircle className="h-3 w-3 mr-1" />
+                Correction
+              </Button>
             </div>
           )}
 
