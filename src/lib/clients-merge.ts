@@ -18,6 +18,7 @@ export interface ClientMergeResult {
     deals: number;
     tasks: number;
     cases: number;
+    invoices: number;
   };
   deletedClientId: string;
 }
@@ -85,6 +86,7 @@ export async function mergeClients(
         deals: data.counts.deals || 0,
         tasks: data.counts.tasks || 0,
         cases: data.counts.cases || 0,
+        invoices: data.counts.invoices || 0,
       },
       deletedClientId: loserId,
     };
