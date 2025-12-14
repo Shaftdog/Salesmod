@@ -833,57 +833,15 @@ export function useProductionTasks(filters?: { card_id?: string; assigned_to?: s
 }
 
 export function useMyProductionTasksToday() {
-  const supabase = createClient()
-
   return useQuery({
     queryKey: ['production-tasks', 'my-tasks-today'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return { tasks: [], total: 0, overdue_count: 0, due_today_count: 0, upcoming_count: 0 }
-
-      const today = new Date()
-      today.setHours(23, 59, 59, 999)
-
-      const { data: tasks, error } = await supabase
-        .from('production_tasks')
-        .select(`
-          *,
-          production_card:production_cards(
-            id, order_id, current_stage,
-            order:orders(id, order_number)
-          ),
-          assigned_user:profiles!production_tasks_assigned_to_fkey(id, name, email)
-        `)
-        .eq('assigned_to', user.id)
-        .is('parent_task_id', null)
-        .in('status', ['pending', 'in_progress'])
-        .order('due_date', { ascending: true, nullsFirst: false })
-
-      if (error) throw error
-
-      const taskList = tasks as ProductionTaskWithRelations[]
-      const now = new Date()
-
-      // Calculate counts
-      const overdue = taskList.filter(t => t.due_date && new Date(t.due_date) < now)
-      const dueToday = taskList.filter(t => {
-        if (!t.due_date) return false
-        const dueDate = new Date(t.due_date)
-        return dueDate.toDateString() === now.toDateString()
-      })
-      const upcoming = taskList.filter(t => {
-        if (!t.due_date) return false
-        const dueDate = new Date(t.due_date)
-        return dueDate > now && dueDate.toDateString() !== now.toDateString()
-      })
-
-      return {
-        tasks: taskList,
-        total: taskList.length,
-        overdue_count: overdue.length,
-        due_today_count: dueToday.length,
-        upcoming_count: upcoming.length,
+      // Use the API endpoint which fetches subtasks and active timers
+      const response = await fetch('/api/production/my-tasks')
+      if (!response.ok) {
+        throw new Error('Failed to fetch tasks')
       }
+      return response.json()
     },
     staleTime: 1000 * 30,
     refetchInterval: 1000 * 60,
@@ -928,6 +886,24 @@ export function useUpdateProductionTask() {
         description: error.message || 'Failed to update task.',
       })
     },
+  })
+}
+
+// Fetch single task with all relations (subtasks, time entries, etc.)
+export function useProductionTask(taskId: string) {
+  return useQuery({
+    queryKey: ['production-task', taskId],
+    queryFn: async () => {
+      const response = await fetch(`/api/production/tasks/${taskId}`)
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to fetch task')
+      }
+      const data = await response.json()
+      return data.task as ProductionTaskWithRelations
+    },
+    enabled: !!taskId,
+    staleTime: 1000 * 30, // 30 seconds
   })
 }
 

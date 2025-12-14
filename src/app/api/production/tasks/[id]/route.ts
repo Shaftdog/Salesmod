@@ -36,6 +36,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
     // Get task with relations
     const { data: task, error: taskError } = await supabase
       .from('production_tasks')
@@ -63,8 +70,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Verify user has access
-    if ((task as any).production_card.org_id !== user.id) {
+    // Verify user has access: either assigned to this task OR in the same tenant
+    const isAssignee = task.assigned_to === user.id;
+    const isSameTenant = profile?.tenant_id && (task as any).production_card.org_id === profile.tenant_id;
+    if (!isAssignee && !isSameTenant) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -123,6 +132,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
     // Parse and validate request body
     const body = await request.json();
     const validatedData = UpdateTaskSchema.parse(body);
@@ -132,7 +148,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       .from('production_tasks')
       .select(
         `
-        id,
+        id, assigned_to,
         production_card:production_cards!inner(org_id)
       `
       )
@@ -143,7 +159,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
-    if ((existing as any).production_card.org_id !== user.id) {
+    // Verify user has access: either assigned to this task OR in the same tenant
+    const isAssignee = existing.assigned_to === user.id;
+    const isSameTenant = profile?.tenant_id && (existing as any).production_card.org_id === profile.tenant_id;
+    if (!isAssignee && !isSameTenant) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -215,6 +234,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
     // Parse action
     const body = await request.json();
     const action = body.action;
@@ -224,7 +250,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .from('production_tasks')
       .select(
         `
-        id, status, due_date,
+        id, status, due_date, assigned_to,
         production_card:production_cards!inner(org_id)
       `
       )
@@ -235,7 +261,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
-    if ((existing as any).production_card.org_id !== user.id) {
+    // Verify user has access: either assigned to this task OR in the same tenant
+    const isAssignee = existing.assigned_to === user.id;
+    const isSameTenant = profile?.tenant_id && (existing as any).production_card.org_id === profile.tenant_id;
+    if (!isAssignee && !isSameTenant) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

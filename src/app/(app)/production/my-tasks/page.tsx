@@ -5,6 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import {
   Loader2,
   Calendar,
@@ -16,6 +22,10 @@ import {
   User,
   FileText,
   RefreshCw,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  ListTodo,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -25,6 +35,7 @@ import {
   useStopTimer,
 } from '@/hooks/use-production';
 import {
+  ProductionTask,
   ProductionTaskWithRelations,
   PRODUCTION_STAGE_LABELS,
   PRODUCTION_ROLE_LABELS,
@@ -201,6 +212,7 @@ export default function MyTasksPage() {
                   key={task.id}
                   task={task}
                   onComplete={() => handleCompleteTask(task.id)}
+                  onCompleteSubtask={(subtaskId) => handleCompleteTask(subtaskId)}
                   onStartTimer={() => handleStartTimer(task.id)}
                   onStopTimer={() => task.active_timer && handleStopTimer(task.active_timer.id)}
                   isCompletingTask={completeTask.isPending}
@@ -219,6 +231,7 @@ export default function MyTasksPage() {
 interface TaskCardProps {
   task: ProductionTaskWithRelations;
   onComplete: () => void;
+  onCompleteSubtask: (subtaskId: string) => void;
   onStartTimer: () => void;
   onStopTimer: () => void;
   isCompletingTask: boolean;
@@ -229,16 +242,22 @@ interface TaskCardProps {
 function TaskCard({
   task,
   onComplete,
+  onCompleteSubtask,
   onStartTimer,
   onStopTimer,
   isCompletingTask,
   isStartingTimer,
   isStoppingTimer,
 }: TaskCardProps) {
+  const [isSubtasksOpen, setIsSubtasksOpen] = useState(false);
   const isCompleted = task.status === 'completed';
   const hasActiveTimer = !!(task as any).active_timer;
   const overdue = isTaskOverdue(task);
   const dueToday = isTaskDueToday(task);
+  const subtasks: ProductionTask[] = (task as any).subtasks || [];
+  const completedSubtasks = subtasks.filter(s => s.status === 'completed').length;
+  const hasSubtasks = subtasks.length > 0;
+  const subtaskProgress = hasSubtasks ? (completedSubtasks / subtasks.length) * 100 : 0;
 
   return (
     <Card className={cn(
@@ -317,9 +336,9 @@ function TaskCard({
               )}
             </div>
 
-            {/* Timer Controls */}
+            {/* Timer Controls & Actions */}
             {!isCompleted && (
-              <div className="pt-2">
+              <div className="pt-2 flex flex-wrap items-center gap-2">
                 {hasActiveTimer ? (
                   <Button
                     size="sm"
@@ -336,7 +355,7 @@ function TaskCard({
                     Stop Timer
                   </Button>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <>
                     <Button
                       size="sm"
                       variant="outline"
@@ -363,9 +382,102 @@ function TaskCard({
                       )}
                       Complete
                     </Button>
-                  </div>
+                  </>
                 )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  asChild
+                >
+                  <Link href={`/production/my-tasks/${task.id}`}>
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    View Details
+                  </Link>
+                </Button>
               </div>
+            )}
+
+            {/* Completed task - still show View Details */}
+            {isCompleted && (
+              <div className="pt-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  asChild
+                >
+                  <Link href={`/production/my-tasks/${task.id}`}>
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    View Details
+                  </Link>
+                </Button>
+              </div>
+            )}
+
+            {/* Collapsible Subtasks */}
+            {hasSubtasks && (
+              <Collapsible open={isSubtasksOpen} onOpenChange={setIsSubtasksOpen} className="mt-3">
+                <CollapsibleTrigger asChild>
+                  <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full py-2 border-t">
+                    {isSubtasksOpen ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                    <ListTodo className="h-4 w-4" />
+                    <span>Subtasks ({completedSubtasks}/{subtasks.length})</span>
+                    <div className="flex-1 ml-2">
+                      <Progress value={subtaskProgress} className="h-1.5" />
+                    </div>
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-2 space-y-2">
+                  {subtasks.map((subtask) => {
+                    const subtaskCompleted = subtask.status === 'completed';
+                    return (
+                      <div
+                        key={subtask.id}
+                        className={cn(
+                          'flex items-start gap-3 p-2 rounded-md border bg-background',
+                          subtaskCompleted && 'opacity-60'
+                        )}
+                      >
+                        <button
+                          onClick={() => onCompleteSubtask(subtask.id)}
+                          disabled={subtaskCompleted || isCompletingTask}
+                          className={cn(
+                            'mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors shrink-0',
+                            subtaskCompleted ? 'bg-green-500 border-green-500' : 'border-gray-300 hover:border-green-500'
+                          )}
+                        >
+                          {subtaskCompleted && <CheckCircle2 className="h-3 w-3 text-white" />}
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn(
+                            'text-sm font-medium',
+                            subtaskCompleted && 'line-through text-muted-foreground'
+                          )}>
+                            {subtask.title}
+                          </p>
+                          {subtask.description && (
+                            <p className="text-xs text-muted-foreground mt-0.5">{subtask.description}</p>
+                          )}
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className="text-xs">
+                              {PRODUCTION_ROLE_LABELS[subtask.role as keyof typeof PRODUCTION_ROLE_LABELS]}
+                            </Badge>
+                            {subtask.estimated_minutes && (
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                Est. {subtask.estimated_minutes}m
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CollapsibleContent>
+              </Collapsible>
             )}
           </div>
         </div>

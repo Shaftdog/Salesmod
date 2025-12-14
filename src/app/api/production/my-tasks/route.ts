@@ -113,8 +113,10 @@ export async function GET(request: NextRequest) {
     // Get active timers for these tasks
     const taskIds = (tasks || []).map(t => t.id);
     let activeTimers: Record<string, any> = {};
+    let subtasksByParent: Record<string, any[]> = {};
 
     if (taskIds.length > 0) {
+      // Fetch active timers
       const { data: timers } = await supabase
         .from('production_time_entries')
         .select('*')
@@ -127,12 +129,29 @@ export async function GET(request: NextRequest) {
           activeTimers[timer.task_id] = timer;
         });
       }
+
+      // Fetch subtasks for these parent tasks
+      const { data: subtasks } = await supabase
+        .from('production_tasks')
+        .select('*')
+        .in('parent_task_id', taskIds)
+        .order('sort_order', { ascending: true });
+
+      if (subtasks) {
+        subtasks.forEach(subtask => {
+          if (!subtasksByParent[subtask.parent_task_id]) {
+            subtasksByParent[subtask.parent_task_id] = [];
+          }
+          subtasksByParent[subtask.parent_task_id].push(subtask);
+        });
+      }
     }
 
-    // Add active timer info to tasks
+    // Add active timer and subtasks info to tasks
     const tasksWithTimers = (tasks || []).map(task => ({
       ...task,
       active_timer: activeTimers[task.id] || null,
+      subtasks: subtasksByParent[task.id] || [],
     }));
 
     return NextResponse.json({
