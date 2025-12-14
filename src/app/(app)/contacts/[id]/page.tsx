@@ -4,6 +4,8 @@ import { useParams } from "next/navigation";
 import { useContactDetail, useContactHistory } from "@/hooks/use-contact-detail";
 import { useContactActivities } from "@/hooks/use-activities";
 import { useUpdateContact } from "@/hooks/use-contacts";
+import { useContactTags, useAddTagToContact, useRemoveTagFromContact } from "@/hooks/use-contact-tags";
+import { useTags } from "@/hooks/use-tags";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +15,7 @@ import { ActivityTimeline } from "@/components/activities/activity-timeline";
 import { CompanyHistoryTimeline } from "@/components/contacts/company-history-timeline";
 import { TransferCompanyDialog } from "@/components/contacts/transfer-company-dialog";
 import { ContactForm } from "@/components/contacts/contact-form";
+import { TagSelector } from "@/components/tags/tag-selector";
 import { RoleBadge } from "@/components/shared/role-badge";
 import {
   ArrowLeft,
@@ -46,6 +49,28 @@ export default function ContactDetailPage() {
   const { data: contact, isLoading: contactLoading } = useContactDetail(contactId);
   const { data: companyHistory, isLoading: historyLoading } = useContactHistory(contactId);
   const { data: activities, isLoading: activitiesLoading } = useContactActivities(contactId);
+
+  // Tags
+  const { data: allTags = [] } = useTags();
+  const { data: contactTags = [] } = useContactTags(contactId);
+  const { mutateAsync: addTag } = useAddTagToContact();
+  const { mutateAsync: removeTag } = useRemoveTagFromContact();
+
+  const handleAddTag = async (tagId: string) => {
+    try {
+      await addTag({ contactId, tagId });
+    } catch (error) {
+      // Error handled in hook
+    }
+  };
+
+  const handleRemoveTag = async (tagId: string) => {
+    try {
+      await removeTag({ contactId, tagId });
+    } catch (error) {
+      // Error handled in hook
+    }
+  };
 
   if (contactLoading) {
     return (
@@ -235,6 +260,18 @@ export default function ContactDetailPage() {
               </div>
             </div>
           )}
+
+          <div className="md:col-span-2">
+            <p className="text-sm text-muted-foreground mb-2">Tags</p>
+            <TagSelector
+              entityId={contactId}
+              entityType="contact"
+              allTags={allTags}
+              assignedTags={contactTags}
+              onAddTag={handleAddTag}
+              onRemoveTag={handleRemoveTag}
+            />
+          </div>
         </CardContent>
       </Card>
 

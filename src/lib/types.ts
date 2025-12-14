@@ -288,6 +288,15 @@ export interface ClientTag {
   tag?: Tag;
 }
 
+export interface ContactTag {
+  contactId: string;
+  tagId: string;
+  createdAt: string;
+
+  // Relations
+  tag?: Tag;
+}
+
 // =============================================
 // PHASE 2: DEALS & TASKS
 // =============================================
