@@ -53,7 +53,7 @@ export default function MyTasksPage() {
   const stopTimer = useStopTimer();
   const [activeTab, setActiveTab] = useState('all');
 
-  const tasks = data?.tasks || [];
+  const tasks: ProductionTaskWithRelations[] = data?.tasks || [];
 
   // Filter tasks based on tab
   const filteredTasks = tasks.filter((task: ProductionTaskWithRelations) => {

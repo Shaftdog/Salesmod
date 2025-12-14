@@ -62,11 +62,24 @@ const formSchema = z.object({
   loanAmount: z.string().optional(),
   orderType: z.enum(orderTypes, { required_error: "Please select an order type" }),
 
-  // Step 3
+  // Step 3 - Contact Info
   clientId: z.string().min(1, "Client is required"),
-  loanOfficer: z.string().optional(),
-  processorName: z.string().optional(),
+  // Borrower (required name, optional contact info)
   borrowerName: z.string().min(1, "Borrower name is required"),
+  borrowerEmail: z.string().email("Invalid email").optional().or(z.literal("")),
+  borrowerPhone: z.string().optional(),
+  // Loan Officer (optional)
+  loanOfficer: z.string().optional(),
+  loanOfficerEmail: z.string().email("Invalid email").optional().or(z.literal("")),
+  loanOfficerPhone: z.string().optional(),
+  // Processor (optional)
+  processorName: z.string().optional(),
+  processorEmail: z.string().email("Invalid email").optional().or(z.literal("")),
+  processorPhone: z.string().optional(),
+  // Property Contact (optional)
+  propertyContactName: z.string().optional(),
+  propertyContactEmail: z.string().email("Invalid email").optional().or(z.literal("")),
+  propertyContactPhone: z.string().optional(),
 
   // Step 4
   priority: z.enum(orderPriorities, { required_error: "Please select a priority" }),
@@ -81,7 +94,7 @@ type FormData = z.infer<typeof formSchema>;
 const steps = [
   { id: "Step 1", name: "Property Info", fields: ["propertyAddress", "propertyCity", "propertyState", "propertyZip", "propertyType", "unitId", "accessInstructions", "specialInstructions"] },
   { id: "Step 2", name: "Loan Info", fields: ["loanType", "loanNumber", "loanAmount", "orderType"] },
-  { id: "Step 3", name: "Contact Info", fields: ["clientId", "loanOfficer", "processorName", "borrowerName"] },
+  { id: "Step 3", name: "Contact Info", fields: ["clientId", "borrowerName", "borrowerEmail", "borrowerPhone", "loanOfficer", "loanOfficerEmail", "loanOfficerPhone", "processorName", "processorEmail", "processorPhone", "propertyContactName", "propertyContactEmail", "propertyContactPhone"] },
   { id: "Step 4", name: "Order Details", fields: ["priority", "dueDate", "feeAmount", "assignedTo", "productionTemplateId"] },
   { id: "Step 5", name: "Review & Submit" },
 ];
@@ -124,9 +137,18 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
       loanAmount: "",
       orderType: "purchase",
       clientId: "",
-      loanOfficer: "",
-      processorName: "",
       borrowerName: "",
+      borrowerEmail: "",
+      borrowerPhone: "",
+      loanOfficer: "",
+      loanOfficerEmail: "",
+      loanOfficerPhone: "",
+      processorName: "",
+      processorEmail: "",
+      processorPhone: "",
+      propertyContactName: "",
+      propertyContactEmail: "",
+      propertyContactPhone: "",
       priority: "normal",
       feeAmount: "",
       assignedTo: "unassigned",
@@ -278,6 +300,8 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
         property_id: propertyIdFromUrl || undefined,
         property_unit_id: data.unitId || undefined,
         borrower_name: data.borrowerName,
+        borrower_email: data.borrowerEmail || undefined,
+        borrower_phone: data.borrowerPhone || undefined,
         client_id: data.clientId,
         fee_amount: parseFloat(data.feeAmount),
         total_amount: parseFloat(data.feeAmount),
@@ -289,10 +313,48 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
         loan_number: data.loanNumber,
         loan_amount: data.loanAmount ? parseFloat(data.loanAmount) : undefined,
         loan_officer: data.loanOfficer,
+        loan_officer_email: data.loanOfficerEmail || undefined,
+        loan_officer_phone: data.loanOfficerPhone || undefined,
         processor_name: data.processorName,
+        processor_email: data.processorEmail || undefined,
+        processor_phone: data.processorPhone || undefined,
+        property_contact_name: data.propertyContactName || undefined,
+        property_contact_email: data.propertyContactEmail || undefined,
+        property_contact_phone: data.propertyContactPhone || undefined,
         access_instructions: data.accessInstructions,
         special_instructions: data.specialInstructions,
       } as any);
+
+      // Create contacts from order data (runs in background, non-blocking)
+      if (newOrder?.id) {
+        const hasContactInfo = data.borrowerName || data.loanOfficer || data.processorName || data.propertyContactName;
+        if (hasContactInfo) {
+          try {
+            await fetch(`/api/orders/${newOrder.id}/contacts`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                borrowerName: data.borrowerName,
+                borrowerEmail: data.borrowerEmail,
+                borrowerPhone: data.borrowerPhone,
+                loanOfficer: data.loanOfficer,
+                loanOfficerEmail: data.loanOfficerEmail,
+                loanOfficerPhone: data.loanOfficerPhone,
+                processorName: data.processorName,
+                processorEmail: data.processorEmail,
+                processorPhone: data.processorPhone,
+                propertyContactName: data.propertyContactName,
+                propertyContactEmail: data.propertyContactEmail,
+                propertyContactPhone: data.propertyContactPhone,
+              }),
+            });
+            console.log('Order contacts created successfully');
+          } catch (contactError) {
+            console.error('Failed to create order contacts:', contactError);
+            // Don't fail the order creation if contacts fail
+          }
+        }
+      }
 
       // Create production card if a template is selected
       if (data.productionTemplateId && data.productionTemplateId !== 'none' && newOrder?.id) {
@@ -629,7 +691,8 @@ const Step2 = () => {
 const Step3 = ({ clients, onQuickAdd }: { clients: Client[], onQuickAdd: (data: any) => void }) => {
   const { control } = useFormContext();
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Client Selection */}
       <FormField control={control} name="clientId" render={({ field }) => (
         <FormItem className="flex flex-col">
           <FormLabel>Client <span className="text-destructive">*</span></FormLabel>
@@ -637,27 +700,119 @@ const Step3 = ({ clients, onQuickAdd }: { clients: Client[], onQuickAdd: (data: 
           <FormMessage />
         </FormItem>
       )} />
-      <FormField name="borrowerName" control={control} render={({ field }) => (
-        <FormItem>
-          <FormLabel>Borrower Name <span className="text-destructive">*</span></FormLabel>
-          <FormControl><Input placeholder="John Borrower" {...field} /></FormControl>
-          <FormMessage />
-        </FormItem>
-      )} />
-      <FormField name="loanOfficer" control={control} render={({ field }) => (
-        <FormItem>
-          <FormLabel>Loan Officer <span className="text-muted-foreground">(optional)</span></FormLabel>
-          <FormControl><Input placeholder="Jane Officer" {...field} /></FormControl>
-          <FormMessage />
-        </FormItem>
-      )} />
-      <FormField name="processorName" control={control} render={({ field }) => (
-        <FormItem>
-          <FormLabel>Processor Name <span className="text-muted-foreground">(optional)</span></FormLabel>
-          <FormControl><Input placeholder="Peter Processor" {...field} /></FormControl>
-          <FormMessage />
-        </FormItem>
-      )} />
+
+      {/* Borrower Information */}
+      <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+        <h4 className="font-medium text-sm">Borrower Information</h4>
+        <FormField name="borrowerName" control={control} render={({ field }) => (
+          <FormItem>
+            <FormLabel>Full Name <span className="text-destructive">*</span></FormLabel>
+            <FormControl><Input placeholder="John Borrower" {...field} /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <FormField name="borrowerEmail" control={control} render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email <span className="text-muted-foreground">(for contact record)</span></FormLabel>
+              <FormControl><Input type="email" placeholder="borrower@email.com" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )} />
+          <FormField name="borrowerPhone" control={control} render={({ field }) => (
+            <FormItem>
+              <FormLabel>Phone <span className="text-muted-foreground">(for contact record)</span></FormLabel>
+              <FormControl><Input type="tel" placeholder="(555) 123-4567" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )} />
+        </div>
+        <FormDescription className="text-xs">Provide email or phone to add borrower to your contacts database.</FormDescription>
+      </div>
+
+      {/* Loan Officer Information */}
+      <div className="space-y-3 p-4 border rounded-lg">
+        <h4 className="font-medium text-sm">Loan Officer <span className="text-muted-foreground">(optional)</span></h4>
+        <FormField name="loanOfficer" control={control} render={({ field }) => (
+          <FormItem>
+            <FormLabel>Full Name</FormLabel>
+            <FormControl><Input placeholder="Jane Officer" {...field} /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <FormField name="loanOfficerEmail" control={control} render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email</FormLabel>
+              <FormControl><Input type="email" placeholder="lo@lender.com" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )} />
+          <FormField name="loanOfficerPhone" control={control} render={({ field }) => (
+            <FormItem>
+              <FormLabel>Phone</FormLabel>
+              <FormControl><Input type="tel" placeholder="(555) 123-4567" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )} />
+        </div>
+      </div>
+
+      {/* Processor Information */}
+      <div className="space-y-3 p-4 border rounded-lg">
+        <h4 className="font-medium text-sm">Processor <span className="text-muted-foreground">(optional)</span></h4>
+        <FormField name="processorName" control={control} render={({ field }) => (
+          <FormItem>
+            <FormLabel>Full Name</FormLabel>
+            <FormControl><Input placeholder="Peter Processor" {...field} /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <FormField name="processorEmail" control={control} render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email</FormLabel>
+              <FormControl><Input type="email" placeholder="processor@lender.com" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )} />
+          <FormField name="processorPhone" control={control} render={({ field }) => (
+            <FormItem>
+              <FormLabel>Phone</FormLabel>
+              <FormControl><Input type="tel" placeholder="(555) 123-4567" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )} />
+        </div>
+      </div>
+
+      {/* Property Contact Information */}
+      <div className="space-y-3 p-4 border rounded-lg">
+        <h4 className="font-medium text-sm">Property Contact <span className="text-muted-foreground">(optional - for inspection access)</span></h4>
+        <FormField name="propertyContactName" control={control} render={({ field }) => (
+          <FormItem>
+            <FormLabel>Full Name</FormLabel>
+            <FormControl><Input placeholder="Property owner or agent" {...field} /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <FormField name="propertyContactEmail" control={control} render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email</FormLabel>
+              <FormControl><Input type="email" placeholder="contact@example.com" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )} />
+          <FormField name="propertyContactPhone" control={control} render={({ field }) => (
+            <FormItem>
+              <FormLabel>Phone</FormLabel>
+              <FormControl><Input type="tel" placeholder="(555) 123-4567" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )} />
+        </div>
+      </div>
     </div>
   )
 }
