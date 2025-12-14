@@ -53,10 +53,10 @@ export default function MyTasksPage() {
   const stopTimer = useStopTimer();
   const [activeTab, setActiveTab] = useState('all');
 
-  const tasks = data?.tasks || [];
+  const tasks: ProductionTaskWithRelations[] = data?.tasks || [];
 
   // Filter tasks based on tab
-  const filteredTasks = tasks.filter(task => {
+  const filteredTasks = tasks.filter((task: ProductionTaskWithRelations) => {
     if (activeTab === 'all') return true;
     if (activeTab === 'overdue') return isTaskOverdue(task);
     if (activeTab === 'today') return isTaskDueToday(task);
