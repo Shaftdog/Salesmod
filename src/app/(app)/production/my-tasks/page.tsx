@@ -56,7 +56,7 @@ export default function MyTasksPage() {
   const tasks = data?.tasks || [];
 
   // Filter tasks based on tab
-  const filteredTasks = tasks.filter(task => {
+  const filteredTasks = tasks.filter((task: ProductionTaskWithRelations) => {
     if (activeTab === 'all') return true;
     if (activeTab === 'overdue') return isTaskOverdue(task);
     if (activeTab === 'today') return isTaskDueToday(task);
@@ -207,7 +207,7 @@ export default function MyTasksPage() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {filteredTasks.map(task => (
+              {filteredTasks.map((task: ProductionTaskWithRelations) => (
                 <TaskCard
                   key={task.id}
                   task={task}
