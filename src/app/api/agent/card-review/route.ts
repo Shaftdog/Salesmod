@@ -26,16 +26,31 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return Response.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Build system prompt with card context
     const cardContext = context?.card;
     const contactContext = context?.contact;
     const clientContext = context?.client;
+    const emailContext = context?.email;
 
     // Fetch recent rejection patterns for proactive suggestions
     const { data: recentRejections } = await supabase
       .from('agent_memories')
       .select('*')
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .or('key.ilike.%rejection_%,key.ilike.%deletion_%')
       .gte('importance', 0.7)
       .order('created_at', { ascending: false })
@@ -90,6 +105,18 @@ ${clientContext ? `## CLIENT
 ${cardContext?.action_payload?.subject ? `## EMAIL DETAILS
 - **Subject**: ${cardContext.action_payload.subject}
 - **To**: ${cardContext.action_payload.to}` : ''}
+
+${emailContext ? `## FULL EMAIL CONTENT
+This card was created from the following incoming email. You can reference this to discuss the email or help draft a response.
+
+- **From**: ${emailContext.from}
+- **Subject**: ${emailContext.subject}
+- **Received**: ${emailContext.receivedAt}
+- **Category**: ${emailContext.category || 'Uncategorized'}
+
+**Email Body:**
+${emailContext.body}
+` : ''}
 
 ## REJECTION HISTORY
 ${rejectionPatterns.length > 0 ? `

@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskForm } from "@/components/tasks/task-form";
+import { TaskDetailSheet } from "@/components/tasks/task-detail-sheet";
 import { useTasks, useCreateTask, useUpdateTask, useCompleteTask, useDeleteTask } from "@/hooks/use-tasks";
 import { useAppraisers, useCurrentUser } from "@/hooks/use-appraisers";
 import { useClients } from "@/hooks/use-clients";
@@ -12,10 +13,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PlusCircle, CheckCircle } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { Task } from "@/lib/types";
 
 export default function TasksPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState<any>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [showDetailSheet, setShowDetailSheet] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("active");
   
   const { data: allTasks = [], isLoading } = useTasks();
@@ -43,6 +47,11 @@ export default function TasksPage() {
   const handleAdd = () => {
     setEditingTask(null);
     setShowForm(true);
+  };
+
+  const handleView = (task: any) => {
+    setSelectedTask(task);
+    setShowDetailSheet(true);
   };
 
   const handleEdit = (task: any) => {
@@ -136,7 +145,7 @@ export default function TasksPage() {
                     key={task.id}
                     task={task}
                     onComplete={handleComplete}
-                    onEdit={handleEdit}
+                    onEdit={handleView}
                     onDelete={handleDelete}
                   />
                 ))
@@ -154,6 +163,15 @@ export default function TasksPage() {
         clients={clients}
         task={editingTask}
         isLoading={isCreating || isUpdating}
+      />
+
+      <TaskDetailSheet
+        task={selectedTask}
+        open={showDetailSheet}
+        onOpenChange={setShowDetailSheet}
+        onEdit={handleEdit}
+        onComplete={handleComplete}
+        onDelete={handleDelete}
       />
     </div>
   );

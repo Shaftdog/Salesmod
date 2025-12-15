@@ -49,6 +49,18 @@ export async function buildContext(orgId: string): Promise<AgentContext> {
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+  if (!tenantId) {
+    throw new Error(`User ${orgId} has no tenant_id assigned`);
+  }
+
   // Fetch active goals
   const { data: goalsData, error: goalsError } = await supabase
     .from('goals')
@@ -58,7 +70,7 @@ export async function buildContext(orgId: string): Promise<AgentContext> {
 
   if (goalsError) throw goalsError;
 
-  // Fetch clients with relationships
+  // Fetch clients with relationships - MUST filter by tenant_id for multi-tenant isolation
   const { data: clientsData, error: clientsError } = await supabase
     .from('clients')
     .select(`
@@ -66,9 +78,12 @@ export async function buildContext(orgId: string): Promise<AgentContext> {
       contacts:contacts!contacts_client_id_fkey(*),
       orders:orders(*)
     `)
+    .eq('tenant_id', tenantId)
     .eq('is_active', true);
 
   if (clientsError) throw clientsError;
+
+  console.log(`[Context] Found ${clientsData?.length || 0} clients for tenant ${tenantId}`);
 
   // Fetch orders for goal calculations (up to 3000 most recent)
   const { data: ordersData, error: ordersError } = await supabase
@@ -127,16 +142,33 @@ export async function buildContext(orgId: string): Promise<AgentContext> {
 
   if (casesError) throw casesError;
 
-  // Fetch agent memories
-  const { data: memoriesData, error: memoriesError } = await supabase
+  // Fetch agent memories - using tenant_id for multi-tenant isolation
+  // First, fetch ALL card_feedback memories (learning rules) - these are critical
+  const { data: feedbackMemories, error: feedbackError } = await supabase
     .from('agent_memories')
     .select('*')
-    .eq('org_id', orgId)
+    .eq('tenant_id', tenantId)
+    .eq('scope', 'card_feedback')
+    .or(`expires_at.is.null,expires_at.gt.${now.toISOString()}`)
+    .order('importance', { ascending: false })
+    .limit(100); // Allow up to 100 learning rules
+
+  if (feedbackError) throw feedbackError;
+
+  // Then fetch other memories (client_context, chat, etc.)
+  const { data: otherMemories, error: otherError } = await supabase
+    .from('agent_memories')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .neq('scope', 'card_feedback')
     .or(`expires_at.is.null,expires_at.gt.${now.toISOString()}`)
     .order('importance', { ascending: false })
     .limit(50);
 
-  if (memoriesError) throw memoriesError;
+  if (otherError) throw otherError;
+
+  // Combine: all feedback rules + top 50 other memories
+  const memoriesData = [...(feedbackMemories || []), ...(otherMemories || [])];
 
   // Process goals with progress
   const goals = (goalsData || []).map((goal: any) => {
@@ -300,6 +332,12 @@ function calculateEngagementScore(activities: any[]): number {
       case 'meeting':
         score += 1.0;
         break;
+      case 'research':
+        score += 0.3; // Research counts as engagement
+        break;
+      case 'task':
+        score += 0.2;
+        break;
       default:
         score += 0.1;
     }
@@ -309,18 +347,21 @@ function calculateEngagementScore(activities: any[]): number {
 }
 
 /**
- * Calculate days since last contact
+ * Calculate days since last contact/engagement
+ * Includes all meaningful agent interactions, not just direct contact
  */
 function calculateLastContactDays(activities: any[], now: Date): number {
   if (activities.length === 0) return 999;
 
-  const contactActivities = activities.filter(a =>
-    ['email', 'call', 'meeting'].includes(a.activity_type)
+  // Include ALL agent activities that represent engagement with the client
+  // This prevents the agent from spamming the same client with repeated actions
+  const engagementActivities = activities.filter(a =>
+    ['email', 'call', 'meeting', 'research', 'task', 'note'].includes(a.activity_type)
   );
 
-  if (contactActivities.length === 0) return 999;
+  if (engagementActivities.length === 0) return 999;
 
-  const lastActivity = contactActivities[0]; // Already sorted by created_at DESC
+  const lastActivity = engagementActivities[0]; // Already sorted by created_at DESC
   const lastDate = new Date(lastActivity.created_at);
   return Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
 }
@@ -348,11 +389,17 @@ function rankClients(
 ): Array<any> {
   // Calculate composite score for each client
   const scoredClients = clients.map(c => {
-    // Base score from RFM
+    // Base score from RFM (clients with orders)
     let score = c.rfmScore * 40;
 
     // Boost for engagement
     score += c.engagementScore * 20;
+
+    // NEW: Boost for clients with no contacts (need research to find contacts)
+    const hasContactsWithEmail = c.contacts.some((ct: any) => ct.email);
+    if (!hasContactsWithEmail) {
+      score += 15; // Boost to prioritize finding contacts
+    }
 
     // Penalty for recent contact (avoid spam)
     if (c.lastContactDays < 3) {
@@ -366,15 +413,27 @@ function rankClients(
       score *= 1.3;
     }
 
+    // NEW: Boost for clients never contacted (completely untouched)
+    if (c.lastContactDays >= 999) {
+      score += 10; // These are opportunities
+    }
+
     // Boost based on goal pressure
     const avgPressure = goals.reduce((sum, g) => sum + g.pressureScore, 0) / Math.max(1, goals.length);
     score *= (1 + avgPressure * 0.5); // Up to 50% boost
 
-    return { ...c, priorityScore: score };
+    // NEW: Add small random factor to break ties and add variety (0-5 points)
+    score += Math.random() * 5;
+
+    return { ...c, priorityScore: score, hasContactsWithEmail };
   });
 
   // Sort by priority score descending
-  return scoredClients.sort((a, b) => b.priorityScore - a.priorityScore);
+  const sorted = scoredClients.sort((a, b) => b.priorityScore - a.priorityScore);
+
+  // NEW: Return more clients (up to 50) to give planner more options
+  // The planner will still only show top 15 in prompt but has more to choose from
+  return sorted.slice(0, 50);
 }
 
 /**

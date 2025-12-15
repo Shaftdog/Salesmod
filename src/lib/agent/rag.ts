@@ -224,11 +224,24 @@ Status: ${activity.status}
 export async function indexChatConversations(orgId: string, minMessages: number = 4): Promise<number> {
   const supabase = await createClient();
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+  if (!tenantId) {
+    console.error('[RAG] User has no tenant_id assigned');
+    return 0;
+  }
+
   // Get recent chat sessions (group by date)
   const { data: messages, error } = await supabase
     .from('chat_messages')
     .select('*')
-    .eq('org_id', orgId)
+    .eq('tenant_id', tenantId)
     .order('created_at', { ascending: true })
     .limit(100);
 

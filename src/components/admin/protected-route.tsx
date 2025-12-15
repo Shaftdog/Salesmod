@@ -17,7 +17,8 @@
 
 'use client'
 
-import { ReactNode } from 'react'
+import * as React from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAdmin } from '@/hooks/use-admin'
 import { usePermission } from '@/hooks/use-permission'
@@ -25,7 +26,7 @@ import type { UserRole } from '@/lib/admin/permissions'
 
 interface ProtectedRouteProps {
   children: ReactNode
-  requiredRole?: UserRole
+  requiredRole?: UserRole | UserRole[]
   fallback?: ReactNode
   redirectTo?: string
 }
@@ -42,6 +43,27 @@ export function ProtectedRoute({
 }: ProtectedRouteProps) {
   const { role, isLoading } = useAdmin()
   const router = useRouter()
+  const [shouldRedirect, setShouldRedirect] = useState(false)
+
+  // Check if user has required role (supports single role or array of roles)
+  const hasRequiredRole = () => {
+    if (!role) return false
+    // Super admin always has access
+    if (role === 'super_admin') return true
+    // Check against required roles
+    if (Array.isArray(requiredRole)) {
+      return requiredRole.includes(role as UserRole)
+    }
+    return role === requiredRole
+  }
+
+  // Handle redirect in useEffect to avoid setState during render
+  useEffect(() => {
+    if (!isLoading && !hasRequiredRole() && redirectTo) {
+      setShouldRedirect(true)
+      router.push(redirectTo)
+    }
+  }, [isLoading, role, redirectTo, router])
 
   // Show loading state while checking role
   if (isLoading) {
@@ -53,10 +75,9 @@ export function ProtectedRoute({
   }
 
   // User doesn't have required role
-  if (role !== requiredRole) {
-    if (redirectTo) {
-      router.push(redirectTo)
-      return null
+  if (!hasRequiredRole()) {
+    if (shouldRedirect) {
+      return null // Redirecting...
     }
     return <>{fallback}</>
   }
@@ -73,14 +94,15 @@ interface AdminOnlyProps {
 
 /**
  * Shorthand for ProtectedRoute with admin role requirement
+ * Allows both admin and super_admin roles
  */
 export function AdminOnly({
   children,
   fallback = null,
-  redirectTo = '/dashboard?error=unauthorized',
+  redirectTo = '/unauthorized',
 }: AdminOnlyProps) {
   return (
-    <ProtectedRoute requiredRole="admin" fallback={fallback} redirectTo={redirectTo}>
+    <ProtectedRoute requiredRole={['admin', 'super_admin']} fallback={fallback} redirectTo={redirectTo}>
       {children}
     </ProtectedRoute>
   )
@@ -195,9 +217,6 @@ export function RequireAnyPermission({
 
   return <>{children}</>
 }
-
-// Import React for hooks
-import * as React from 'react'
 
 interface UnauthorizedMessageProps {
   message?: string

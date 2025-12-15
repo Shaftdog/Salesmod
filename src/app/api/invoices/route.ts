@@ -17,6 +17,7 @@ import {
   validateRequestBody,
   validateQueryParams,
   getAuthenticatedOrgId,
+  getAuthenticatedContext,
   successResponse,
   createdResponse,
 } from '@/lib/errors/api-errors';
@@ -114,19 +115,37 @@ export async function GET(request: NextRequest) {
       throw error;
     }
 
+    // Calculate stats
+    const invoices = data || [];
+    const stats = {
+      total_invoices: count || 0,
+      total_amount: invoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0),
+      total_outstanding: invoices.reduce((sum, inv) => sum + (inv.amount_due || 0), 0),
+      total_overdue: invoices
+        .filter(inv =>
+          ['sent', 'viewed', 'partially_paid', 'overdue'].includes(inv.status) &&
+          inv.due_date &&
+          new Date(inv.due_date) < new Date()
+        )
+        .reduce((sum, inv) => sum + (inv.amount_due || 0), 0),
+    };
+
     // Calculate pagination metadata
     const totalPages = count ? Math.ceil(count / limit) : 0;
 
-    return successResponse<InvoiceWithDetails[]>(
-      data || [],
-      undefined,
-      {
+    return NextResponse.json({
+      success: true,
+      data: {
+        invoices,
+        stats,
+      },
+      meta: {
         page,
         limit,
         total: count || 0,
         totalPages,
       }
-    );
+    });
   } catch (error) {
     return handleApiError(error);
   }
@@ -139,7 +158,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
 
     // Validate request body
     const body = await validateRequestBody<CreateInvoiceInput>(
@@ -179,7 +198,9 @@ export async function POST(request: NextRequest) {
       .from('invoices')
       .insert({
         org_id: orgId,
+        tenant_id: tenantId,
         client_id: body.client_id,
+        order_id: body.order_id, // Link to order if provided
         payment_method: body.payment_method,
         invoice_date: body.invoice_date || new Date().toISOString(),
         due_date: dueDate,
@@ -205,6 +226,7 @@ export async function POST(request: NextRequest) {
 
     // Create line items
     const lineItemsToInsert = body.line_items.map((item, index) => ({
+      tenant_id: tenantId,
       invoice_id: invoice.id,
       order_id: item.order_id,
       description: item.description,

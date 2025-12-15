@@ -3,6 +3,7 @@ import { buildContext } from './context-builder';
 import { generatePlan, validatePlan, ProposedAction } from './planner';
 import { executeCard, ExecutionResult } from './executor';
 import { planNextBatch, expandTaskToCards } from './job-planner';
+import { promoteScheduledCards } from './scheduler';
 import { Job, JobTask } from '@/types/jobs';
 
 /**
@@ -11,37 +12,37 @@ import { Job, JobTask } from '@/types/jobs';
  */
 function formatEmailBody(body: string): string {
   if (!body) return body;
-  
+
   // If already has substantial HTML tags, return as-is
   if (body.includes('<p>') && body.includes('</p>')) {
     return body;
   }
-  
+
   // Step 1: Detect and format bullet/numbered lists with various patterns
   // Pattern 1: "1. Item" or "• Item" style
   const hasNumberedList = /\d+\.\s+[A-Z]/.test(body);
   const hasBulletList = /[•\-\*]\s+[A-Z]/.test(body);
-  
+
   // Pattern 2: "First bullet point", "Second bullet point" style
   const hasWordedList = /(First|Second|Third|Fourth|Fifth)[\s\w]*:/gi.test(body);
-  
+
   let formatted = body;
-  
+
   // Convert "First bullet point:", "Second bullet point:" to proper list
   if (hasWordedList) {
     // Split on sentence patterns that indicate list items
     const listPattern = /((?:First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:[\s\S]*?)(?=(?:First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:|$)/gi;
     const listItems = body.match(listPattern);
-    
+
     if (listItems && listItems.length > 1) {
       // Find intro text before the list
       const introMatch = body.match(/^([\s\S]*?)(?=First|Second|Third|Fourth|Fifth)/i);
       let result = '';
-      
+
       if (introMatch && introMatch[1].trim()) {
         result += `<p>${introMatch[1].trim()}</p>`;
       }
-      
+
       result += '<ol>';
       listItems.forEach(item => {
         const cleanItem = item.replace(/^(First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:\s*/i, '').trim();
@@ -50,24 +51,24 @@ function formatEmailBody(body: string): string {
         }
       });
       result += '</ol>';
-      
+
       // Find closing text after the list
       const lastItem = listItems[listItems.length - 1];
       const closingMatch = body.split(lastItem)[1];
       if (closingMatch && closingMatch.trim()) {
         result += `<p>${closingMatch.trim()}</p>`;
       }
-      
+
       return result;
     }
   }
-  
+
   // Convert numbered lists (1. 2. 3. etc.)
   if (hasNumberedList) {
     const lines = body.split(/\.\s+(?=\d+\.|\w)/);
     let result = '';
     let inList = false;
-    
+
     lines.forEach(line => {
       const trimmed = line.trim();
       if (/^\d+\./.test(trimmed)) {
@@ -85,18 +86,18 @@ function formatEmailBody(body: string): string {
         result += `<p>${trimmed}</p>`;
       }
     });
-    
+
     if (inList) result += '</ol>';
     return result;
   }
-  
+
   // Convert bullet lists (• or - or *)
   if (hasBulletList) {
     const lines = body.split(/\n/);
     let result = '';
     let inList = false;
     let currentParagraph = '';
-    
+
     lines.forEach(line => {
       const trimmed = line.trim();
       if (/^[•\-\*]\s+/.test(trimmed)) {
@@ -118,14 +119,14 @@ function formatEmailBody(body: string): string {
         currentParagraph += (currentParagraph ? ' ' : '') + trimmed;
       }
     });
-    
+
     if (currentParagraph) {
       result += `<p>${currentParagraph.trim()}</p>`;
     }
     if (inList) result += '</ul>';
     return result;
   }
-  
+
   // No lists detected - format as paragraphs
   // Split by double line breaks first
   const paragraphs = body.split(/\n\n+/);
@@ -136,7 +137,7 @@ function formatEmailBody(body: string): string {
       .map(p => `<p>${p.replace(/\n/g, ' ')}</p>`)
       .join('');
   }
-  
+
   // Split by single line breaks and group as sentences
   const sentences = body.split(/\.\s+/);
   if (sentences.length > 3) {
@@ -145,7 +146,7 @@ function formatEmailBody(body: string): string {
     sentences.forEach((sentence, idx) => {
       result += sentence.trim();
       if (!sentence.trim().endsWith('.')) result += '.';
-      
+
       // Start new paragraph every 2-3 sentences
       if ((idx + 1) % 2 === 0 && idx < sentences.length - 1) {
         result += '</p><p>';
@@ -156,7 +157,7 @@ function formatEmailBody(body: string): string {
     result += '</p>';
     return result;
   }
-  
+
   // Single paragraph - just wrap it
   return `<p>${body}</p>`;
 }
@@ -182,16 +183,29 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
   const supabase = await createClient();
   const startTime = new Date().toISOString();
 
-  // Check for idempotency: only one running work block per org
+  // SECURITY: Get user's tenant_id first
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+
+  if (!tenantId) {
+    throw new Error(`User ${orgId} has no tenant_id assigned`);
+  }
+
+  // Check for idempotency: only one running work block per tenant
   const { data: existingRun } = await supabase
     .from('agent_runs')
     .select('*')
-    .eq('org_id', orgId)
+    .eq('tenant_id', tenantId)
     .eq('status', 'running')
     .single();
 
   if (existingRun) {
-    console.log(`Work block already running for org ${orgId}`);
+    console.log(`Work block already running for tenant ${tenantId}`);
     return existingRun as AgentRun;
   }
 
@@ -200,6 +214,7 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
     .from('agent_runs')
     .insert({
       org_id: orgId,
+      tenant_id: tenantId,
       started_at: startTime,
       status: 'running',
       mode,
@@ -215,18 +230,25 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
   let executedCount = 0;
 
   try {
-    // Step 0: Execute approved cards first
+    // Step 0: Promote scheduled cards that are now due
+    console.log(`[${run.id}] Promoting scheduled cards...`);
+    const promotedCount = await promoteScheduledCards(tenantId);
+    if (promotedCount > 0) {
+      console.log(`[${run.id}] Promoted ${promotedCount} scheduled cards to suggested`);
+    }
+
+    // Step 1: Execute approved cards first
     console.log(`[${run.id}] Checking for approved cards to execute...`);
     const approvedResults = await executeApprovedCards(orgId);
     executedCount = approvedResults.filter(r => r.success).length;
     console.log(`[${run.id}] Executed ${executedCount} of ${approvedResults.length} approved cards`);
 
-    // Step 0.5: Process active jobs (generate next batch of tasks/cards)
+    // Step 2: Process active jobs (generate next batch of tasks/cards)
     console.log(`[${run.id}] Processing active jobs...`);
     const jobCardsCreated = await processActiveJobs(orgId, run.id);
     console.log(`[${run.id}] Created ${jobCardsCreated} cards from jobs`);
 
-    // Step 1: Build context
+    // Step 3: Build context
     console.log(`[${run.id}] Building context for org ${orgId}...`);
     const context = await buildContext(orgId);
 
@@ -235,11 +257,11 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
       ? context.goals.reduce((sum, g) => sum + g.pressureScore, 0) / context.goals.length
       : 0;
 
-    // Step 2: Generate plan
+    // Step 4: Generate plan
     console.log(`[${run.id}] Generating plan...`);
     const plan = await generatePlan(context);
 
-    // Step 3: Validate plan
+    // Step 5: Validate plan
     console.log(`[${run.id}] Validating plan...`);
     const validation = validatePlan(plan, context);
 
@@ -255,13 +277,13 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
       console.warn(`[${run.id}] Plan warnings:`, validation.warnings);
     }
 
-    // Step 4: Create kanban cards
+    // Step 6: Create kanban cards
     console.log(`[${run.id}] Creating ${plan.actions.length} kanban cards...`);
-    const cards = await createKanbanCards(orgId, run.id, plan.actions);
+    const cards = await createKanbanCards(orgId, tenantId, run.id, plan.actions);
 
-    // Step 5: Update run with results
+    // Step 7: Update run with results
     const emailsSent = approvedResults.filter(r => r.success && r.metadata?.simulated === false).length;
-    
+
     await supabase
       .from('agent_runs')
       .update({
@@ -275,7 +297,7 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
       })
       .eq('id', run.id);
 
-    // Step 6: Create reflection (async, don't wait)
+    // Step 8: Create reflection (async, don't wait)
     createReflection(run.id, context, plan, validation).catch(err => {
       console.error(`[${run.id}] Failed to create reflection:`, err);
     });
@@ -314,11 +336,28 @@ export async function runWorkBlock(orgId: string, mode: 'auto' | 'review' = 'rev
  */
 async function createKanbanCards(
   orgId: string,
+  tenantId: string,
   runId: string,
   actions: ProposedAction[]
 ): Promise<any[]> {
   const supabase = await createClient();
   const cards = [];
+
+  // Fetch existing pending cards to prevent duplicates
+  const { data: existingPendingCards } = await supabase
+    .from('kanban_cards')
+    .select('client_id, contact_id, type')
+    .eq('tenant_id', tenantId)
+    .in('state', ['suggested', 'in_review', 'approved']);
+
+  // Create a Set of existing card keys for O(1) lookup
+  const existingCardKeys = new Set(
+    (existingPendingCards || []).map((card: any) =>
+      `${card.client_id || ''}-${card.contact_id || ''}-${card.type}`
+    )
+  );
+
+  console.log(`[createKanbanCards] Found ${existingPendingCards?.length || 0} existing pending cards`);
 
   for (const action of actions) {
     // Build action payload based on type
@@ -334,7 +373,7 @@ async function createKanbanCards(
         // Skip this card - don't create invalid email cards
         continue;
       }
-      
+
       actionPayload = {
         to: action.emailDraft.to,
         subject: action.emailDraft.subject,
@@ -375,13 +414,24 @@ async function createKanbanCards(
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       return uuidRegex.test(str);
     };
-    
+
     const contactId = action.contactId && isValidUUID(action.contactId) ? action.contactId : null;
+
+    // Check for duplicate before creating
+    const cardKey = `${action.clientId || ''}-${contactId || ''}-${action.type}`;
+    if (existingCardKeys.has(cardKey)) {
+      console.log(`[createKanbanCards] Skipping duplicate card: "${action.title}" (client: ${action.clientId}, contact: ${contactId}, type: ${action.type})`);
+      continue;
+    }
+
+    // Add to existing keys to prevent duplicates within this batch
+    existingCardKeys.add(cardKey);
 
     const { data: card, error } = await supabase
       .from('kanban_cards')
       .insert({
         org_id: orgId,
+        tenant_id: tenantId,
         run_id: runId,
         client_id: action.clientId,
         contact_id: contactId,
@@ -412,11 +462,23 @@ async function createKanbanCards(
 async function executeApprovedCards(orgId: string): Promise<ExecutionResult[]> {
   const supabase = await createClient();
 
-  // Get all approved cards
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  if (!profile?.tenant_id) {
+    console.error('[Execute] User has no tenant_id assigned');
+    return [];
+  }
+
+  // Get all approved cards for this tenant
   const { data: approvedCards, error } = await supabase
     .from('kanban_cards')
     .select('*')
-    .eq('org_id', orgId)
+    .eq('tenant_id', profile.tenant_id)
     .eq('state', 'approved')
     .order('priority', { ascending: false }); // High priority first
 
@@ -440,13 +502,13 @@ async function executeApprovedCards(orgId: string): Promise<ExecutionResult[]> {
       console.log(`[Execute] Executing card: ${card.title} (${card.type})`);
       const result = await executeCard(card.id);
       results.push(result);
-      
+
       if (result.success) {
         console.log(`[Execute] ✓ ${card.title}: Success`);
       } else {
         console.error(`[Execute] ✗ ${card.title}: ${result.error}`);
       }
-      
+
       // Small delay to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 1000));
     } catch (error: any) {
@@ -516,10 +578,21 @@ Validation: ${validation.valid ? 'Passed' : 'Failed'} (${validation.errors.lengt
 export async function getLatestRun(orgId: string): Promise<AgentRun | null> {
   const supabase = await createClient();
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  if (!profile?.tenant_id) {
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('agent_runs')
     .select('*')
-    .eq('org_id', orgId)
+    .eq('tenant_id', profile.tenant_id)
     .order('started_at', { ascending: false })
     .limit(1)
     .single();
@@ -537,10 +610,21 @@ export async function getLatestRun(orgId: string): Promise<AgentRun | null> {
 export async function getRunHistory(orgId: string, limit: number = 20): Promise<AgentRun[]> {
   const supabase = await createClient();
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  if (!profile?.tenant_id) {
+    return [];
+  }
+
   const { data, error } = await supabase
     .from('agent_runs')
     .select('*')
-    .eq('org_id', orgId)
+    .eq('tenant_id', profile.tenant_id)
     .order('started_at', { ascending: false })
     .limit(limit);
 
@@ -574,11 +658,26 @@ async function processActiveJobs(orgId: string, runId: string): Promise<number> 
   const supabase = createServiceRoleClient();
   let totalCardsCreated = 0;
 
-  // Get all running jobs for this org
+  // SECURITY: Get user's tenant_id for proper tenant scoping
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+
+  if (!tenantId) {
+    const errorMsg = `User ${orgId} has no tenant_id assigned - cannot process jobs securely`;
+    console.error(`[Jobs] ${errorMsg}`);
+    throw new Error(errorMsg);
+  }
+
+  // Get all running jobs for this tenant
   const { data: activeJobs, error: jobsError } = await supabase
     .from('jobs')
     .select('*')
-    .eq('org_id', orgId)
+    .eq('tenant_id', tenantId)
     .eq('status', 'running')
     .order('created_at', { ascending: true });
 
@@ -610,20 +709,120 @@ async function processActiveJobs(orgId: string, runId: string): Promise<number> 
 
       const currentBatch = latestTask?.batch || 0;
 
-      // Check if current batch is complete (all tasks done or skipped)
-      const { data: pendingTasks } = await supabase
+      // Get pending tasks in current batch
+      const { data: pendingTasksData } = await supabase
         .from('job_tasks')
-        .select('id')
+        .select('*')
         .eq('job_id', job.id)
         .eq('batch', currentBatch)
         .in('status', ['pending', 'running']);
 
-      if (pendingTasks && pendingTasks.length > 0) {
-        console.log(`[Jobs] Job ${job.name} still has ${pendingTasks.length} pending tasks in batch ${currentBatch}, skipping`);
-        continue;
+      // Process pending tasks in current batch
+      if (pendingTasksData && pendingTasksData.length > 0) {
+        console.log(`[Jobs] Job ${job.name} has ${pendingTasksData.length} pending tasks in batch ${currentBatch}, processing them...`);
+
+        // Expand each pending task to cards
+        for (const task of (pendingTasksData as JobTask[])) {
+          try {
+            // Handle send_email tasks separately (they don't create cards)
+            if (task.kind === 'send_email') {
+              console.log(`[Jobs] Marking send_email task ${task.id} as done (no cards to create)`);
+
+              // Mark task as done immediately since send_email tasks don't create cards
+              await supabase
+                .from('job_tasks')
+                .update({
+                  status: 'done',
+                  output: {
+                    cards_created: 0,
+                    note: 'send_email tasks execute existing cards, no new cards created',
+                  },
+                  finished_at: new Date().toISOString(),
+                })
+                .eq('id', task.id);
+
+              continue;
+            }
+
+            console.log(`[Jobs] Expanding task ${task.id} (${task.kind})...`);
+            const { cards } = await expandTaskToCards(task, job);
+            console.log(`[Jobs] Task ${task.id} expanded to ${cards.length} cards`);
+
+            if (cards.length === 0) {
+              console.error(`[Jobs] Task ${task.id} (${task.kind}) expanded to 0 cards - marking as error`);
+
+              // Mark task as error instead of leaving it pending
+              await supabase
+                .from('job_tasks')
+                .update({
+                  status: 'error',
+                  error_message: 'Expansion returned 0 cards - check target filter and contact query',
+                  finished_at: new Date().toISOString(),
+                })
+                .eq('id', task.id);
+
+              continue;
+            }
+
+            // Insert cards with job_id, task_id, and tenant_id for multi-tenant isolation
+            const { data: insertedCards, error: cardsError } = await supabase
+              .from('kanban_cards')
+              .insert(cards.map(card => ({ ...card, org_id: orgId, tenant_id: tenantId, run_id: runId })))
+              .select('id');
+
+            if (cardsError) {
+              console.error(`[Jobs] Failed to create cards for task ${task.id}:`, cardsError);
+
+              // Mark task as error
+              await supabase
+                .from('job_tasks')
+                .update({
+                  status: 'error',
+                  error_message: cardsError.message,
+                  finished_at: new Date().toISOString(),
+                })
+                .eq('id', task.id);
+            } else {
+              totalCardsCreated += cards.length;
+
+              // Mark task as done
+              await supabase
+                .from('job_tasks')
+                .update({
+                  status: 'done',
+                  output: {
+                    cards_created: cards.length,
+                    card_ids: (insertedCards || []).map((c: any) => c.id),
+                  },
+                  finished_at: new Date().toISOString(),
+                })
+                .eq('id', task.id);
+            }
+          } catch (taskError: any) {
+            console.error(`[Jobs] Error expanding task ${task.id}:`, taskError);
+
+            // Mark task as error
+            await supabase
+              .from('job_tasks')
+              .update({
+                status: 'error',
+                error_message: taskError.message,
+                finished_at: new Date().toISOString(),
+              })
+              .eq('id', task.id);
+          }
+        }
+
+        // Update job's last_run_at
+        await supabase
+          .from('jobs')
+          .update({ last_run_at: new Date().toISOString() })
+          .eq('id', job.id);
+
+        continue; // Move to next job after processing pending tasks
       }
 
-      // Plan next batch
+      // Current batch is complete - plan next batch
       const { tasks: newTasks, batch_number } = await planNextBatch(job, currentBatch);
 
       if (newTasks.length === 0) {
@@ -681,7 +880,7 @@ async function processActiveJobs(orgId: string, runId: string): Promise<number> 
 
           if (cards.length === 0) {
             console.error(`[Jobs] Task ${task.id} (${task.kind}) expanded to 0 cards - marking as error`);
-            
+
             // Mark task as error instead of leaving it pending
             await supabase
               .from('job_tasks')
@@ -691,16 +890,16 @@ async function processActiveJobs(orgId: string, runId: string): Promise<number> 
                 finished_at: new Date().toISOString(),
               })
               .eq('id', task.id);
-            
+
             continue;
           }
 
           console.log(`[Jobs] Expanding task ${task.id} to ${cards.length} cards`);
 
-          // Insert cards with job_id and task_id
+          // Insert cards with job_id, task_id, and tenant_id for multi-tenant isolation
           const { data: insertedCards, error: cardsError } = await supabase
             .from('kanban_cards')
-            .insert(cards.map(card => ({ ...card, org_id: orgId, run_id: runId })))
+            .insert(cards.map(card => ({ ...card, org_id: orgId, tenant_id: tenantId, run_id: runId })))
             .select('id');
 
           if (cardsError) {

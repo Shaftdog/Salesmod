@@ -31,7 +31,10 @@ export function useInvoices(params?: {
 
       const response = await fetch(`/api/invoices?${searchParams}`);
       if (!response.ok) throw new Error('Failed to fetch invoices');
-      return response.json();
+      const result = await response.json();
+
+      // Return the data object which contains invoices and stats
+      return result.data || { invoices: [], stats: {} };
     },
   });
 }
@@ -44,9 +47,28 @@ export function useInvoice(id: string | null) {
       if (!id) return null;
       const response = await fetch(`/api/invoices/${id}`);
       if (!response.ok) throw new Error('Failed to fetch invoice');
-      return response.json();
+      const result = await response.json();
+      return result.data;
     },
     enabled: !!id,
+  });
+}
+
+// Fetch invoices for a specific order
+export function useOrderInvoices(orderId: string | null) {
+  return useQuery({
+    queryKey: ['order-invoices', orderId],
+    queryFn: async () => {
+      if (!orderId) return [];
+      const response = await fetch(`/api/orders/${orderId}/invoices`);
+      if (!response.ok) {
+        if (response.status === 404) return [];
+        throw new Error('Failed to fetch order invoices');
+      }
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: !!orderId,
   });
 }
 

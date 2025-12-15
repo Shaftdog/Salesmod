@@ -61,6 +61,8 @@ export const CodCollectionMethodSchema = z.enum([
 
 export const CreateLineItemSchema = z.object({
   order_id: z.string().uuid().optional(),
+  product_id: z.string().uuid().optional(), // Optional - for product catalog items
+  square_footage: z.number().int().positive().optional(), // Optional - for SF-based pricing
   description: z.string().min(1, 'Description is required').max(500).transform(sanitizeText),
   quantity: z.number().positive('Quantity must be positive').default(1),
   unit_price: z.number().nonnegative('Unit price must be non-negative'),
@@ -69,6 +71,8 @@ export const CreateLineItemSchema = z.object({
 });
 
 export const UpdateLineItemSchema = z.object({
+  product_id: z.string().uuid().optional(),
+  square_footage: z.number().int().positive().optional(),
   description: z.string().min(1).max(500).transform(sanitizeText).optional(),
   quantity: z.number().positive().optional(),
   unit_price: z.number().nonnegative().optional(),
@@ -82,6 +86,7 @@ export const UpdateLineItemSchema = z.object({
 
 export const CreateInvoiceSchema = z.object({
   client_id: z.string().uuid('Invalid client ID'),
+  order_id: z.string().uuid().optional(), // Optional link to order
   payment_method: PaymentMethodSchema,
 
   // Dates (YYYY-MM-DD format to match database DATE columns)
@@ -108,14 +113,7 @@ export const CreateInvoiceSchema = z.object({
   // Line items (required)
   line_items: z.array(CreateLineItemSchema).min(1, 'At least one line item is required'),
 }).superRefine((data, ctx) => {
-  // Validate Stripe-specific fields
-  if (data.payment_method === 'stripe_link' && !data.stripe_customer_id) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'stripe_customer_id is required for Stripe payment method',
-      path: ['stripe_customer_id'],
-    });
-  }
+  // Note: stripe_customer_id is optional at creation - it will be created when generating payment link
 
   // Validate COD-specific fields
   if (data.payment_method === 'cod') {

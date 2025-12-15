@@ -19,42 +19,77 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 
 /**
+ * Sanitize input for Supabase ilike queries to prevent SQL injection
+ * Escapes special characters that have meaning in LIKE patterns
+ */
+function sanitizeForIlike(input: string): string {
+  return input.replace(/[%_\\]/g, '\\$&');
+}
+
+/**
+ * Escape HTML special characters to prevent XSS
+ */
+function escapeHtml(text: string): string {
+  const htmlEscapes: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+  return text.replace(/[&<>"']/g, char => htmlEscapes[char]);
+}
+
+/**
+ * Redact email address for logging (show first 2 chars and domain)
+ * e.g., "john.doe@example.com" -> "jo***@example.com"
+ */
+function redactEmail(email: string): string {
+  if (!email || !email.includes('@')) return '[invalid]';
+  const [local, domain] = email.split('@');
+  const redactedLocal = local.length > 2 ? local.substring(0, 2) + '***' : '***';
+  return `${redactedLocal}@${domain}`;
+}
+
+/**
  * Format email body with proper HTML
  * Converts plain text or poorly formatted text into proper HTML
+ * Escapes user content to prevent XSS attacks
  */
 function formatEmailBody(body: string): string {
   if (!body) return body;
-  
-  // If already has substantial HTML tags, return as-is
+
+  // If already has substantial HTML tags, return as-is (assume pre-sanitized)
   if (body.includes('<p>') && body.includes('</p>')) {
     return body;
   }
-  
+
+  // Escape the body to prevent XSS before processing
+  const escapedBody = escapeHtml(body);
+
   // Step 1: Detect and format bullet/numbered lists with various patterns
-  // Pattern 1: "1. Item" or "• Item" style
+  // Pattern 1: "1. Item" or "• Item" style (check original body for patterns)
   const hasNumberedList = /\d+\.\s+[A-Z]/.test(body);
   const hasBulletList = /[•\-\*]\s+[A-Z]/.test(body);
-  
+
   // Pattern 2: "First bullet point", "Second bullet point" style
   const hasWordedList = /(First|Second|Third|Fourth|Fifth)[\s\w]*:/gi.test(body);
-  
-  let formatted = body;
-  
+
   // Convert "First bullet point:", "Second bullet point:" to proper list
   if (hasWordedList) {
     // Split on sentence patterns that indicate list items
     const listPattern = /((?:First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:[\s\S]*?)(?=(?:First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:|$)/gi;
-    const listItems = body.match(listPattern);
-    
+    const listItems = escapedBody.match(listPattern);
+
     if (listItems && listItems.length > 1) {
       // Find intro text before the list
-      const introMatch = body.match(/^([\s\S]*?)(?=First|Second|Third|Fourth|Fifth)/i);
+      const introMatch = escapedBody.match(/^([\s\S]*?)(?=First|Second|Third|Fourth|Fifth)/i);
       let result = '';
-      
+
       if (introMatch && introMatch[1].trim()) {
         result += `<p>${introMatch[1].trim()}</p>`;
       }
-      
+
       result += '<ol>';
       listItems.forEach(item => {
         const cleanItem = item.replace(/^(First|Second|Third|Fourth|Fifth|Next|Finally)[\s\w]*:\s*/i, '').trim();
@@ -63,24 +98,24 @@ function formatEmailBody(body: string): string {
         }
       });
       result += '</ol>';
-      
+
       // Find closing text after the list
       const lastItem = listItems[listItems.length - 1];
-      const closingMatch = body.split(lastItem)[1];
+      const closingMatch = escapedBody.split(lastItem)[1];
       if (closingMatch && closingMatch.trim()) {
         result += `<p>${closingMatch.trim()}</p>`;
       }
-      
+
       return result;
     }
   }
   
   // Convert numbered lists (1. 2. 3. etc.)
   if (hasNumberedList) {
-    const lines = body.split(/\.\s+(?=\d+\.|\w)/);
+    const lines = escapedBody.split(/\.\s+(?=\d+\.|\w)/);
     let result = '';
     let inList = false;
-    
+
     lines.forEach(line => {
       const trimmed = line.trim();
       if (/^\d+\./.test(trimmed)) {
@@ -98,18 +133,18 @@ function formatEmailBody(body: string): string {
         result += `<p>${trimmed}</p>`;
       }
     });
-    
+
     if (inList) result += '</ol>';
     return result;
   }
-  
+
   // Convert bullet lists (• or - or *)
   if (hasBulletList) {
-    const lines = body.split(/\n/);
+    const lines = escapedBody.split(/\n/);
     let result = '';
     let inList = false;
     let currentParagraph = '';
-    
+
     lines.forEach(line => {
       const trimmed = line.trim();
       if (/^[•\-\*]\s+/.test(trimmed)) {
@@ -131,17 +166,17 @@ function formatEmailBody(body: string): string {
         currentParagraph += (currentParagraph ? ' ' : '') + trimmed;
       }
     });
-    
+
     if (currentParagraph) {
       result += `<p>${currentParagraph.trim()}</p>`;
     }
     if (inList) result += '</ul>';
     return result;
   }
-  
+
   // No lists detected - format as paragraphs
   // Split by double line breaks first
-  const paragraphs = body.split(/\n\n+/);
+  const paragraphs = escapedBody.split(/\n\n+/);
   if (paragraphs.length > 1) {
     return paragraphs
       .map(p => p.trim())
@@ -149,16 +184,16 @@ function formatEmailBody(body: string): string {
       .map(p => `<p>${p.replace(/\n/g, ' ')}</p>`)
       .join('');
   }
-  
+
   // Split by single line breaks and group as sentences
-  const sentences = body.split(/\.\s+/);
+  const sentences = escapedBody.split(/\.\s+/);
   if (sentences.length > 3) {
     // Group every 2-3 sentences into a paragraph
     let result = '<p>';
     sentences.forEach((sentence, idx) => {
       result += sentence.trim();
       if (!sentence.trim().endsWith('.')) result += '.';
-      
+
       // Start new paragraph every 2-3 sentences
       if ((idx + 1) % 2 === 0 && idx < sentences.length - 1) {
         result += '</p><p>';
@@ -169,9 +204,9 @@ function formatEmailBody(body: string): string {
     result += '</p>';
     return result;
   }
-  
+
   // Single paragraph - just wrap it
-  return `<p>${body}</p>`;
+  return `<p>${escapedBody}</p>`;
 }
 
 /**
@@ -190,7 +225,10 @@ export const agentTools = {
     // @ts-ignore - AI SDK type mismatch
     execute: async ({ query }: { query: string }) => {
       const supabase = await createClient();
-      
+
+      // Sanitize query to prevent SQL injection
+      const sanitizedQuery = sanitizeForIlike(query);
+
       const { data, error } = await supabase
         .from('clients')
         .select(`
@@ -202,7 +240,7 @@ export const agentTools = {
           is_active,
           created_at
         `)
-        .or(`company_name.ilike.%${query}%,primary_contact.ilike.%${query}%,email.ilike.%${query}%`)
+        .or(`company_name.ilike.%${sanitizedQuery}%,primary_contact.ilike.%${sanitizedQuery}%,email.ilike.%${sanitizedQuery}%`)
         .eq('is_active', true)
         .limit(10);
 
@@ -231,6 +269,9 @@ export const agentTools = {
     execute: async ({ query, clientId }: { query: string; clientId?: string }) => {
       const supabase = await createClient();
 
+      // Sanitize query to prevent SQL injection
+      const sanitizedQuery = sanitizeForIlike(query);
+
       let queryBuilder = supabase
         .from('contacts')
         .select(`
@@ -248,7 +289,7 @@ export const agentTools = {
           ),
           created_at
         `)
-        .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%,title.ilike.%${query}%`)
+        .or(`first_name.ilike.%${sanitizedQuery}%,last_name.ilike.%${sanitizedQuery}%,email.ilike.%${sanitizedQuery}%,title.ilike.%${sanitizedQuery}%`)
         .limit(10);
 
       if (clientId) {
@@ -308,6 +349,18 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create contact' };
+      }
+
       // Verify client exists and user has access to it
       const { data: client, error: clientError } = await supabase
         .from('clients')
@@ -323,6 +376,8 @@ export const agentTools = {
       const { data, error } = await supabase
         .from('contacts')
         .insert({
+          tenant_id: tenantId,
+          org_id: user.id,
           client_id: params.clientId,
           first_name: params.firstName,
           last_name: params.lastName,
@@ -474,8 +529,20 @@ export const agentTools = {
     execute: async (params: any) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return { error: 'Not authenticated' };
+
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create card' };
+      }
 
       // Validate send_email actions have emailDraft
       if (params.type === 'send_email') {
@@ -484,17 +551,33 @@ export const agentTools = {
             title: params.title,
             rationale: params.rationale,
           });
-          return { error: 'send_email actions must include emailDraft with subject, body, and to fields' };
+          return {
+            success: false,
+            error: 'send_email actions must include emailDraft with subject, body, and to fields',
+            card: null
+          };
         }
         if (!params.emailDraft.to || !params.emailDraft.to.includes('@')) {
-          console.error('ERROR: emailDraft missing or invalid to field!', params.emailDraft);
-          return { error: 'Email must include a valid to address' };
+          console.error('ERROR: emailDraft missing or invalid to field');
+          return {
+            success: false,
+            error: 'Email must include a valid to address',
+            card: null
+          };
         }
         if (!params.emailDraft.subject || params.emailDraft.subject.length < 5) {
-          return { error: 'Email subject must be at least 5 characters' };
+          return {
+            success: false,
+            error: 'Email subject must be at least 5 characters',
+            card: null
+          };
         }
         if (!params.emailDraft.body || params.emailDraft.body.length < 20) {
-          return { error: 'Email body must be at least 20 characters' };
+          return {
+            success: false,
+            error: 'Email body must be at least 20 characters',
+            card: null
+          };
         }
       }
 
@@ -507,7 +590,7 @@ export const agentTools = {
         };
         console.log('Creating card via chat with emailDraft:', {
           title: params.title,
-          to: params.emailDraft.to,
+          to: redactEmail(params.emailDraft.to),
           hasSubject: !!params.emailDraft.subject,
           hasBody: !!params.emailDraft.body,
         });
@@ -518,6 +601,7 @@ export const agentTools = {
       const { data, error } = await supabase
         .from('kanban_cards')
         .insert({
+          tenant_id: tenantId,
           org_id: user.id,
           client_id: params.clientId || null, // Allow null for general strategic cards
           type: params.type,
@@ -532,17 +616,54 @@ export const agentTools = {
         .single();
 
       if (error) {
-        return { error: error.message };
+        console.error('ERROR: Failed to create card in database:', error);
+        return {
+          success: false,
+          error: error.message,
+          card: null
+        };
       }
+
+      if (!data || !data.id) {
+        console.error('ERROR: Card insert succeeded but no data returned');
+        return {
+          success: false,
+          error: 'Card creation returned no data',
+          card: null
+        };
+      }
+
+      // Verify card was actually created by reading it back
+      const { data: verifyCard, error: verifyError } = await supabase
+        .from('kanban_cards')
+        .select('id, title, type, state, created_at')
+        .eq('id', data.id)
+        .single();
+
+      if (verifyError || !verifyCard) {
+        console.error('ERROR: Card was not found after creation. Possible database issue.', verifyError);
+        return {
+          success: false,
+          error: 'Card creation verification failed - card was not found in database',
+          card: null
+        };
+      }
+
+      console.log('✓ Card successfully created and verified:', {
+        id: verifyCard.id,
+        title: verifyCard.title,
+        type: verifyCard.type,
+      });
 
       return {
         success: true,
         card: {
-          id: data.id,
-          title: data.title,
-          type: data.type,
-          state: data.state,
+          id: verifyCard.id,
+          title: verifyCard.title,
+          type: verifyCard.type,
+          state: verifyCard.state,
         },
+        error: null,
       };
     },
   }),
@@ -563,14 +684,26 @@ export const agentTools = {
     execute: async (params: any) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return { error: 'Not authenticated' };
+
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
 
       // Get all cards first to match
       const { data: allCards, error: fetchError } = await supabase
         .from('kanban_cards')
         .select('id, title, type, priority, state, client_id, client:clients(company_name)')
-        .eq('org_id', user.id);
+        .eq('tenant_id', tenantId);
 
       if (fetchError) {
         return { error: fetchError.message };
@@ -624,7 +757,7 @@ export const agentTools = {
         .from('kanban_cards')
         .delete()
         .in('id', cardIds)
-        .eq('org_id', user.id);
+        .eq('tenant_id', tenantId);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -660,8 +793,20 @@ export const agentTools = {
     execute: async (params: any) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return { error: 'Not authenticated' };
+
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
 
       const updates: any = {};
       if (params.state) updates.state = params.state;
@@ -673,7 +818,7 @@ export const agentTools = {
         .from('kanban_cards')
         .update(updates)
         .eq('id', params.cardId)
-        .eq('org_id', user.id)
+        .eq('tenant_id', tenantId)
         .select('id, title, type, state, priority')
         .single();
 
@@ -887,12 +1032,25 @@ export const agentTools = {
     execute: async (params: any) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return { error: 'Not authenticated' };
+
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create activity' };
+      }
 
       const { data, error } = await supabase
         .from('activities')
         .insert({
+          tenant_id: tenantId,
           activity_type: params.activityType,
           subject: params.subject,
           description: params.description || '',
@@ -938,22 +1096,36 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
-      // Get contact info first
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
+      // Get contact info first and verify ownership
       const { data: contact, error: fetchError } = await supabase
         .from('contacts')
         .select('id, first_name, last_name, email')
         .eq('id', params.contactId)
+        .eq('tenant_id', tenantId)
         .single();
 
       if (fetchError || !contact) {
-        return { error: 'Contact not found' };
+        return { error: 'Contact not found or access denied' };
       }
 
-      // Delete the contact
+      // Delete the contact (with tenant_id verification for security)
       const { error: deleteError } = await supabase
         .from('contacts')
         .delete()
-        .eq('id', params.contactId);
+        .eq('id', params.contactId)
+        .eq('tenant_id', tenantId);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -985,15 +1157,28 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
-      // Get client info first
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
+      // Get client info first and verify ownership
       const { data: client, error: fetchError } = await supabase
         .from('clients')
         .select('id, company_name, email, primary_contact')
         .eq('id', params.clientId)
+        .eq('tenant_id', tenantId)
         .single();
 
       if (fetchError || !client) {
-        return { error: 'Client not found' };
+        return { error: 'Client not found or access denied' };
       }
 
       // Count related records
@@ -1007,11 +1192,12 @@ export const agentTools = {
         .select('*', { count: 'exact', head: true })
         .eq('client_id', params.clientId);
 
-      // Delete the client (cascade should handle related records)
+      // Delete the client (cascade should handle related records, tenant_id for security)
       const { error: deleteError } = await supabase
         .from('clients')
         .delete()
-        .eq('id', params.clientId);
+        .eq('id', params.clientId)
+        .eq('tenant_id', tenantId);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -1048,22 +1234,24 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
-      // Get task info first
+      // Get task info first and verify ownership
       const { data: task, error: fetchError } = await supabase
         .from('activities')
-        .select('id, activity_type, subject, status')
+        .select('id, activity_type, subject, status, created_by')
         .eq('id', params.taskId)
+        .eq('created_by', user.id)
         .single();
 
       if (fetchError || !task) {
-        return { error: 'Task not found' };
+        return { error: 'Task not found or access denied' };
       }
 
-      // Delete the task
+      // Delete the task (with ownership verification)
       const { error: deleteError } = await supabase
         .from('activities')
         .delete()
-        .eq('id', params.taskId);
+        .eq('id', params.taskId)
+        .eq('created_by', user.id);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -1076,6 +1264,116 @@ export const agentTools = {
           type: task.activity_type,
           subject: task.subject,
           status: task.status,
+        },
+      };
+    },
+  }),
+
+  /**
+   * Create a new opportunity/deal
+   */
+  createOpportunity: tool({
+    description: 'Create a new sales opportunity or deal. Use this when a potential business opportunity is identified that should be tracked in the pipeline.',
+    inputSchema: z.object({
+      clientId: z.string().uuid().describe('Client UUID this opportunity is associated with'),
+      title: z.string().min(1).describe('Title of the opportunity (e.g., "FHA Appraisal - 1010 Dawes Rd")'),
+      description: z.string().optional().describe('Detailed description of the opportunity'),
+      value: z.number().optional().describe('Estimated value/fee for this opportunity'),
+      probability: z.number().min(0).max(100).optional().describe('Probability of winning (0-100%)'),
+      stage: z.enum(['lead', 'qualified', 'proposal', 'negotiation', 'won', 'lost']).optional().describe('Current pipeline stage'),
+      expectedCloseDate: z.string().optional().describe('Expected close date (ISO format)'),
+      contactId: z.string().uuid().optional().describe('Associated contact UUID'),
+    }),
+    // @ts-ignore
+    execute: async (params: any) => {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return { error: 'Not authenticated' };
+
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create opportunity' };
+      }
+
+      // Verify client exists and user has access
+      const { data: client, error: clientError } = await supabase
+        .from('clients')
+        .select('id, company_name')
+        .eq('id', params.clientId)
+        .single();
+
+      if (clientError || !client) {
+        return { error: 'Client not found or access denied' };
+      }
+
+      // Build the deal object
+      const dealData: any = {
+        tenant_id: tenantId,
+        client_id: params.clientId,
+        title: params.title,
+        description: params.description || null,
+        value: params.value || null,
+        probability: params.probability || 50,
+        stage: params.stage || 'lead',
+        expected_close_date: params.expectedCloseDate || null,
+        contact_id: params.contactId || null,
+        assigned_to: user.id,
+        created_by: user.id,
+      };
+
+      // Create the deal
+      const { data, error } = await supabase
+        .from('deals')
+        .insert(dealData)
+        .select(`
+          id,
+          title,
+          value,
+          probability,
+          stage,
+          expected_close_date,
+          client:clients(company_name)
+        `)
+        .single();
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      // Log activity
+      await supabase
+        .from('activities')
+        .insert({
+          tenant_id: tenantId,
+          client_id: params.clientId,
+          contact_id: params.contactId || null,
+          deal_id: data.id,
+          activity_type: 'note',
+          subject: `Opportunity Created: ${params.title}`,
+          description: `New opportunity created via agent.\n\nValue: ${params.value ? `$${params.value}` : 'Not specified'}\nStage: ${params.stage || 'lead'}\n\n${params.description || ''}`,
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          created_by: user.id,
+        });
+
+      return {
+        success: true,
+        opportunity: {
+          id: data.id,
+          title: data.title,
+          value: data.value,
+          probability: data.probability,
+          stage: data.stage,
+          expectedCloseDate: data.expected_close_date,
+          client: (data.client as any)?.company_name || null,
         },
       };
     },
@@ -1096,18 +1394,18 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
-      // Get opportunity info first
+      // RLS will handle tenant isolation, just verify the deal exists and user can access it
       const { data: opportunity, error: fetchError } = await supabase
         .from('deals')
-        .select('id, name, amount, stage, client_id, client:clients(company_name)')
+        .select('id, title, value, stage, client_id, client:clients(company_name)')
         .eq('id', params.opportunityId)
         .single();
 
       if (fetchError || !opportunity) {
-        return { error: 'Opportunity not found' };
+        return { error: 'Opportunity not found or access denied' };
       }
 
-      // Delete the opportunity
+      // Delete the opportunity (RLS will verify tenant ownership)
       const { error: deleteError } = await supabase
         .from('deals')
         .delete()
@@ -1121,8 +1419,8 @@ export const agentTools = {
         success: true,
         deleted: {
           id: opportunity.id,
-          name: opportunity.name,
-          amount: opportunity.amount,
+          title: opportunity.title,
+          value: opportunity.value,
           stage: opportunity.stage,
           client: (opportunity.client as any)?.company_name || null,
         },
@@ -1145,15 +1443,28 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
-      // Get order info first
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
+      // Get order info first and verify ownership
       const { data: order, error: fetchError } = await supabase
         .from('orders')
         .select('id, order_number, status, order_type, client_id, client:clients(company_name)')
         .eq('id', params.orderId)
+        .eq('tenant_id', tenantId)
         .single();
 
       if (fetchError || !order) {
-        return { error: 'Order not found' };
+        return { error: 'Order not found or access denied' };
       }
 
       // Count related properties
@@ -1162,11 +1473,12 @@ export const agentTools = {
         .select('*', { count: 'exact', head: true })
         .eq('order_id', params.orderId);
 
-      // Delete the order
+      // Delete the order (with ownership verification)
       const { error: deleteError } = await supabase
         .from('orders')
         .delete()
-        .eq('id', params.orderId);
+        .eq('id', params.orderId)
+        .eq('tenant_id', tenantId);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -1203,22 +1515,36 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
-      // Get property info first
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
+      // Get property info first and verify ownership
       const { data: property, error: fetchError } = await supabase
         .from('properties')
         .select('id, address, city, state, zip_code, property_type')
         .eq('id', params.propertyId)
+        .eq('tenant_id', tenantId)
         .single();
 
       if (fetchError || !property) {
-        return { error: 'Property not found' };
+        return { error: 'Property not found or access denied' };
       }
 
-      // Delete the property
+      // Delete the property (with ownership verification)
       const { error: deleteError } = await supabase
         .from('properties')
         .delete()
-        .eq('id', params.propertyId);
+        .eq('id', params.propertyId)
+        .eq('tenant_id', tenantId);
 
       if (deleteError) {
         return { error: deleteError.message };
@@ -1283,7 +1609,8 @@ export const agentTools = {
     execute: async ({ clientId, limit = 10 }: { clientId: string; limit?: number }) => {
       const supabase = await createClient();
 
-      const { data: activities, error } = await supabase
+      // First, get activities directly linked to the client
+      const { data: clientActivities, error: clientError } = await supabase
         .from('activities')
         .select(`
           id,
@@ -1293,19 +1620,58 @@ export const agentTools = {
           status,
           outcome,
           created_at,
-          scheduled_at
+          scheduled_at,
+          contact_id
         `)
         .eq('client_id', clientId)
         .order('created_at', { ascending: false })
         .limit(limit);
 
-      if (error) {
-        return { error: error.message };
+      if (clientError) {
+        return { error: clientError.message };
       }
 
+      // Also get activities for contacts belonging to this client
+      // This catches activities that have contact_id but not client_id
+      const { data: contacts } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('client_id', clientId);
+
+      let contactActivities: any[] = [];
+      if (contacts && contacts.length > 0) {
+        const contactIds = contacts.map(c => c.id);
+        const { data: contactActivityData, error: contactError } = await supabase
+          .from('activities')
+          .select(`
+            id,
+            activity_type,
+            subject,
+            description,
+            status,
+            outcome,
+            created_at,
+            scheduled_at,
+            contact_id
+          `)
+          .in('contact_id', contactIds)
+          .is('client_id', null) // Only get activities not already linked to client
+          .order('created_at', { ascending: false })
+          .limit(limit);
+
+        if (!contactError && contactActivityData) {
+          contactActivities = contactActivityData;
+        }
+      }
+
+      // Merge and sort all activities
+      const allActivities = [...(clientActivities || []), ...contactActivities]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, limit);
+
       return {
-        activities: activities || [],
-        count: activities?.length || 0,
+        activities: allActivities,
+        count: allActivities.length,
       };
     },
   }),
@@ -1323,8 +1689,20 @@ export const agentTools = {
     execute: async ({ state }: { state?: 'suggested' | 'in_review' | 'approved' }) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return { error: 'Not authenticated' };
+
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
 
       let query = supabase
         .from('kanban_cards')
@@ -1338,7 +1716,7 @@ export const agentTools = {
           created_at,
           client:clients(company_name)
         `)
-        .eq('org_id', user.id)
+        .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -1375,8 +1753,20 @@ export const agentTools = {
     execute: async ({ includeCompleted = false, limit = 50 }: { includeCompleted?: boolean; limit?: number }) => {
       const supabase = await createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) return { error: 'Not authenticated' };
+
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
 
       let query = supabase
         .from('kanban_cards')
@@ -1390,7 +1780,7 @@ export const agentTools = {
           created_at,
           client:clients(id, company_name)
         `)
-        .eq('org_id', user.id)
+        .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false })
         .limit(limit);
 
@@ -1442,10 +1832,22 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned' };
+      }
+
       const { data, error } = await supabase
         .from('agent_runs')
         .select('*')
-        .eq('org_id', user.id)
+        .eq('tenant_id', tenantId)
         .order('started_at', { ascending: false })
         .limit(limit);
 
@@ -1665,9 +2067,23 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create client' };
+      }
+
       const { data, error } = await supabase
         .from('clients')
         .insert({
+          tenant_id: tenantId,
+          org_id: user.id,
           company_name: params.companyName,
           primary_contact: params.primaryContact,
           email: params.email,
@@ -1720,12 +2136,25 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create property' };
+      }
+
       // Create addr_hash for deduplication
       const addrHash = `${params.addressLine1.toUpperCase()}|${params.city.toUpperCase()}|${params.state.toUpperCase()}|${params.postalCode.substring(0, 5)}`;
 
       const { data, error} = await supabase
         .from('properties')
         .insert({
+          tenant_id: tenantId,
           org_id: user.id,
           address_line1: params.addressLine1,
           address_line2: params.addressLine2,
@@ -1782,9 +2211,22 @@ export const agentTools = {
 
       if (!user) return { error: 'Not authenticated' };
 
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) {
+        return { error: 'User has no tenant_id assigned - cannot create order' };
+      }
+
       const { data, error } = await supabase
         .from('orders')
         .insert({
+          tenant_id: tenantId,
           org_id: user.id,
           client_id: params.clientId,
           order_number: params.orderNumber,
@@ -1946,15 +2388,21 @@ export const agentTools = {
 
   /**
    * List files matching a pattern
+   * WARNING: Disabled in production for security reasons
    */
   listFiles: tool({
-    description: 'List files in the codebase matching a glob pattern. Use this to explore the project structure or find specific files.',
+    description: 'List files in the codebase matching a glob pattern. Use this to explore the project structure or find specific files. (Development only)',
     inputSchema: z.object({
       pattern: z.string().min(1).describe('Glob pattern (e.g., "src/**/*.tsx", "*.json")'),
       maxResults: z.number().optional().describe('Maximum number of results to return (default: 50)'),
     }),
     // @ts-ignore
     execute: async (params: any) => {
+      // Security: Disable shell command execution in production
+      if (process.env.NODE_ENV === 'production') {
+        return { error: 'This tool is disabled in production for security reasons' };
+      }
+
       try {
         const { stdout } = await execAsync(
           `find . -type f -path "./${params.pattern}" | head -n ${params.maxResults || 50}`,
@@ -1981,9 +2429,10 @@ export const agentTools = {
 
   /**
    * Search for code patterns
+   * WARNING: Disabled in production for security reasons
    */
   searchCode: tool({
-    description: 'Search for text or code patterns across the codebase using grep. Use this to find where specific functions, classes, or patterns are used.',
+    description: 'Search for text or code patterns across the codebase using grep. Use this to find where specific functions, classes, or patterns are used. (Development only)',
     inputSchema: z.object({
       searchTerm: z.string().min(1).describe('Text or regex pattern to search for'),
       filePattern: z.string().optional().describe('Limit search to files matching pattern (e.g., "*.ts", "src/**/*.tsx")'),
@@ -1992,6 +2441,11 @@ export const agentTools = {
     }),
     // @ts-ignore
     execute: async (params: any) => {
+      // Security: Disable shell command execution in production
+      if (process.env.NODE_ENV === 'production') {
+        return { error: 'This tool is disabled in production for security reasons' };
+      }
+
       try {
         const caseFlag = params.caseSensitive ? '' : '-i';
         const filePattern = params.filePattern || '*';
@@ -2042,15 +2496,21 @@ export const agentTools = {
 
   /**
    * Run a shell command
+   * WARNING: Disabled in production for security reasons
    */
   runCommand: tool({
-    description: 'Execute a shell command in the project directory. Use this to run tests, build commands, npm scripts, git operations, etc. Be careful with destructive commands.',
+    description: 'Execute a shell command in the project directory. Use this to run tests, build commands, npm scripts, git operations, etc. Be careful with destructive commands. (Development only)',
     inputSchema: z.object({
       command: z.string().min(1).describe('Shell command to execute (e.g., "npm test", "git status")'),
       timeout: z.number().optional().describe('Timeout in milliseconds (default: 30000)'),
     }),
     // @ts-ignore
     execute: async (params: any) => {
+      // Security: Disable shell command execution in production
+      if (process.env.NODE_ENV === 'production') {
+        return { error: 'This tool is disabled in production for security reasons' };
+      }
+
       try {
         const { stdout, stderr } = await execAsync(params.command, {
           cwd: process.cwd(),

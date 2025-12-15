@@ -48,7 +48,7 @@ type CaseFormProps = {
   clients?: Client[];
   contacts?: Contact[];
   orders?: Order[];
-  case?: Case;
+  case?: Partial<Case>;
   isLoading?: boolean;
 };
 

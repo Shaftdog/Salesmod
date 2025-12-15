@@ -28,7 +28,7 @@ export function ClientsList({ clients, isLoading = false }: ClientsListProps) {
                 client.primaryContact,
                 client.email,
                 client.phone,
-            ].filter(Boolean).map(v => v.toLowerCase());
+            ].filter((v): v is string => Boolean(v)).map(v => v.toLowerCase());
 
             return values.some(v => v.includes(lowercasedTerm));
         });

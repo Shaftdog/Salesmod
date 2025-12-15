@@ -55,6 +55,18 @@ export async function createCardFromEmail(
 
   const supabase = await createClient();
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+  if (!tenantId) {
+    throw new Error('User has no tenant_id assigned');
+  }
+
   // Determine card type and state based on category
   console.log('[Email-to-Card] Determining card strategy...');
   const { cardType, state, priority, autoExecute } = determineCardStrategy(classification);
@@ -106,6 +118,7 @@ export async function createCardFromEmail(
   const { data: card, error } = await supabase
     .from('kanban_cards')
     .insert({
+      tenant_id: tenantId,
       org_id: orgId,
       client_id: clientId,
       contact_id: contactId,
@@ -163,6 +176,32 @@ export async function createCardFromEmail(
   if (updateError) {
     console.error('[Email-to-Card] WARNING: Failed to update gmail_message with card_id:', updateError);
     // Non-fatal - card was created successfully
+  }
+
+  // Create activity record for the incoming email
+  // This ensures the AI agent can see the email in activity history
+  console.log('[Email-to-Card] Creating activity record for incoming email...');
+  const { error: activityError } = await supabase
+    .from('activities')
+    .insert({
+      tenant_id: tenantId,
+      client_id: clientId,
+      contact_id: contactId,
+      gmail_message_id: email.id,
+      activity_type: 'email',
+      subject: `Received: ${email.subject}`,
+      description: `Incoming email from ${email.from.name || email.from.email}\n\nCategory: ${classification.category}\nIntent: ${classification.intent}\n\n${email.snippet || email.bodyText?.substring(0, 500) || ''}`,
+      status: 'completed',
+      outcome: classification.category,
+      created_by: orgId,
+      created_at: email.receivedAt.toISOString(),
+    });
+
+  if (activityError) {
+    console.error('[Email-to-Card] WARNING: Failed to create activity record:', activityError);
+    // Non-fatal - card was created successfully
+  } else {
+    console.log('[Email-to-Card] Activity record created successfully');
   }
 
   console.log('[Email-to-Card] Card creation complete:', {
@@ -448,6 +487,30 @@ function getSuggestedActions(
 }
 
 /**
+ * Parses a full name into first and last name components
+ */
+function parseFullName(fullName: string | null, fallbackEmail: string): { firstName: string; lastName: string } {
+  if (!fullName || !fullName.trim()) {
+    // Use email username as first name, empty last name
+    const emailUsername = fallbackEmail.split('@')[0];
+    return { firstName: emailUsername, lastName: '' };
+  }
+
+  const trimmed = fullName.trim();
+  const parts = trimmed.split(/\s+/);
+
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: '' };
+  }
+
+  // First word is first name, rest is last name
+  const firstName = parts[0];
+  const lastName = parts.slice(1).join(' ');
+
+  return { firstName, lastName };
+}
+
+/**
  * Finds or creates a contact from email
  */
 async function findOrCreateContact(
@@ -456,11 +519,23 @@ async function findOrCreateContact(
 ): Promise<string> {
   const supabase = await createClient();
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+  if (!tenantId) {
+    throw new Error('User has no tenant_id assigned');
+  }
+
   // Try to find existing contact by email
   const { data: existingContact } = await supabase
     .from('contacts')
     .select('id')
-    .eq('org_id', orgId)
+    .eq('tenant_id', tenantId)
     .eq('email', email.from.email)
     .single();
 
@@ -468,13 +543,18 @@ async function findOrCreateContact(
     return existingContact.id;
   }
 
+  // Parse name into first_name and last_name
+  const { firstName, lastName } = parseFullName(email.from.name ?? null, email.from.email);
+
   // Create new contact
   const { data: newContact, error } = await supabase
     .from('contacts')
     .insert({
-      org_id: orgId,
+      tenant_id: tenantId,
+      org_id: orgId, // Keep for backwards compatibility
       email: email.from.email,
-      name: email.from.name || email.from.email,
+      first_name: firstName,
+      last_name: lastName,
       created_at: new Date().toISOString(),
     })
     .select('id')

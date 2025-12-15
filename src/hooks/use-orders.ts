@@ -47,20 +47,41 @@ export function useOrders() {
 
   const createOrderMutation = useMutation({
     mutationFn: async (order: any) => {
+      // Get current user and their tenant_id
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.tenant_id) {
+        throw new Error('User has no tenant_id assigned - cannot create order')
+      }
+
       const { data, error } = await supabase
         .from('orders')
-        .insert(order)
+        .insert({
+          ...order,
+          org_id: order.org_id || user.id,
+          tenant_id: profile.tenant_id,
+        })
         .select(`
           *,
           client:clients(*),
           assignee:profiles!orders_assigned_to_fkey(*)
         `)
         .single()
-      
-      if (error) throw error
-      
+
+      if (error) {
+        console.error('Supabase order insert error:', error.message, error.code, error.details, error.hint)
+        throw new Error(error.message || 'Failed to create order')
+      }
+
       const newOrder = transformOrder(data)
-      
+
       // Auto-log activity for new order
       try {
         await supabase.from('activities').insert({
@@ -72,12 +93,13 @@ export function useOrders() {
           status: 'completed',
           completed_at: new Date().toISOString(),
           created_by: order.created_by,
+          tenant_id: profile.tenant_id,
         });
       } catch (activityError) {
         console.error('Failed to auto-log activity:', activityError);
         // Don't fail the order creation if activity logging fails
       }
-      
+
       return newOrder
     },
     onSuccess: () => {
@@ -88,12 +110,12 @@ export function useOrders() {
         description: "The new order has been successfully created.",
       })
     },
-    onError: (error) => {
-      console.error('Create order error:', error)
+    onError: (error: any) => {
+      console.error('Create order error:', error?.message || error?.code || JSON.stringify(error))
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to create order. Please try again.",
+        description: error?.message || "Failed to create order. Please try again.",
       })
     },
   })

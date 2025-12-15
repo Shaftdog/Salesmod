@@ -7,13 +7,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { CalculatePriceSchema } from '@/lib/validations/products';
 import type { CalculatePriceResponse, ProductPriceBreakdown } from '@/types/products';
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerClient();
+    const supabase = await createClient();
 
     // Check authentication
     const {
@@ -44,8 +44,8 @@ export async function POST(request: NextRequest) {
 
     const { product_id, square_footage } = validation.data;
 
-    // Call the database function to calculate the price
-    const { data, error } = await supabase.rpc('calculate_product_price', {
+    // Call the database function to get price breakdown
+    const { data, error } = await supabase.rpc('get_product_price_breakdown', {
       p_product_id: product_id,
       p_square_footage: square_footage,
     });
@@ -98,7 +98,8 @@ export async function POST(request: NextRequest) {
       breakdown,
     };
 
-    return NextResponse.json(response);
+    // Wrap in data property to match expected API response format
+    return NextResponse.json({ data: response });
   } catch (error: any) {
     console.error('Calculate price API error:', error);
     return NextResponse.json(

@@ -1,0 +1,269 @@
+/**
+ * Order Documents API Routes
+ * POST   /api/orders/[id]/documents - Upload document(s)
+ * GET    /api/orders/[id]/documents - List documents
+ * DELETE /api/orders/[id]/documents?documentId=xxx - Delete a document
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import {
+  handleApiError,
+  getAuthenticatedContext,
+  successResponse,
+  NotFoundError,
+  BadRequestError,
+} from '@/lib/errors/api-errors';
+
+// App Router segment config for larger uploads
+export const maxDuration = 60; // Allow up to 60 seconds for large uploads
+export const dynamic = 'force-dynamic';
+
+const BUCKET_NAME = 'order-documents';
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+];
+
+// =============================================
+// GET /api/orders/[id]/documents - List documents
+// =============================================
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const supabase = await createClient();
+    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
+    const { id: orderId } = await params;
+
+    // Fetch documents for this order
+    const { data: documents, error } = await supabase
+      .from('order_documents')
+      .select(`
+        id,
+        document_type,
+        file_name,
+        file_path,
+        file_url,
+        file_size,
+        mime_type,
+        created_at,
+        uploaded_at,
+        uploaded_by
+      `)
+      .eq('order_id', orderId)
+      .eq('tenant_id', tenantId)
+      .order('uploaded_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching documents:', error);
+      throw error;
+    }
+
+    // Generate signed URLs for each document
+    const documentsWithUrls = await Promise.all(
+      (documents || []).map(async (doc: any) => {
+        // Use file_path if available, otherwise fall back to file_url
+        const storagePath = doc.file_path || doc.file_url;
+        let url = null;
+
+        if (storagePath) {
+          const { data: signedUrl } = await supabase.storage
+            .from(BUCKET_NAME)
+            .createSignedUrl(storagePath, 3600); // 1 hour expiry
+          url = signedUrl?.signedUrl || null;
+        }
+
+        return {
+          ...doc,
+          url,
+          // Normalize timestamps
+          created_at: doc.created_at || doc.uploaded_at,
+        };
+      })
+    );
+
+    return successResponse(documentsWithUrls);
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+// =============================================
+// POST /api/orders/[id]/documents - Upload document(s)
+// =============================================
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const supabase = await createClient();
+    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
+    const { id: orderId } = await params;
+
+    // Verify order exists and belongs to tenant
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('id', orderId)
+      .eq('tenant_id', tenantId)
+      .single();
+
+    if (orderError || !order) {
+      throw new NotFoundError('Order');
+    }
+
+    // Parse multipart form data
+    const formData = await request.formData();
+    const files = formData.getAll('files') as File[];
+    const documentType = formData.get('document_type') as string || 'other';
+
+    if (!files || files.length === 0) {
+      throw new BadRequestError('No files provided');
+    }
+
+    const uploadedDocuments = [];
+
+    for (const file of files) {
+      // Validate file size
+      if (file.size > MAX_FILE_SIZE) {
+        throw new BadRequestError(`File "${file.name}" exceeds maximum size of 50MB`);
+      }
+
+      // Validate mime type
+      if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+        throw new BadRequestError(`File type "${file.type}" is not allowed`);
+      }
+
+      // Generate unique file path: tenant_id/order_id/timestamp_filename
+      const timestamp = Date.now();
+      const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const filePath = `${tenantId}/${orderId}/${timestamp}_${sanitizedFileName}`;
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .upload(filePath, file, {
+          contentType: file.type,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        throw new BadRequestError(`Failed to upload "${file.name}": ${uploadError.message}`);
+      }
+
+      // Insert document record
+      const { data: document, error: insertError } = await supabase
+        .from('order_documents')
+        .insert({
+          tenant_id: tenantId,
+          org_id: orgId,
+          order_id: orderId,
+          document_type: documentType,
+          file_name: file.name,
+          file_path: filePath,
+          file_url: filePath, // Legacy column - same as file_path
+          file_size: file.size,
+          mime_type: file.type,
+          uploaded_by: orgId,
+          uploaded_by_id: orgId, // Legacy column
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('Database insert error:', insertError);
+        // Try to clean up the uploaded file
+        await supabase.storage.from(BUCKET_NAME).remove([filePath]);
+        throw insertError;
+      }
+
+      uploadedDocuments.push(document);
+    }
+
+    return successResponse(
+      uploadedDocuments,
+      `Successfully uploaded ${uploadedDocuments.length} document(s)`
+    );
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+// =============================================
+// DELETE /api/orders/[id]/documents?documentId=xxx
+// =============================================
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const supabase = await createClient();
+    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
+    const { id: orderId } = await params;
+
+    const { searchParams } = new URL(request.url);
+    const documentId = searchParams.get('documentId');
+
+    if (!documentId) {
+      throw new BadRequestError('documentId is required');
+    }
+
+    // Fetch the document to get its file path
+    const { data: document, error: fetchError } = await supabase
+      .from('order_documents')
+      .select('id, file_path, file_url')
+      .eq('id', documentId)
+      .eq('order_id', orderId)
+      .eq('tenant_id', tenantId)
+      .single();
+
+    if (fetchError || !document) {
+      console.error('Document fetch error:', fetchError);
+      throw new NotFoundError('Document');
+    }
+
+    // Use file_path or fall back to file_url
+    const storagePath = document.file_path || document.file_url;
+
+    // Delete from storage (if we have a path)
+    if (storagePath) {
+      const { error: storageError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .remove([storagePath]);
+
+      if (storageError) {
+        console.error('Storage delete error:', storageError);
+        // Continue with database deletion even if storage fails
+      }
+    }
+
+    // Delete from database
+    const { error: deleteError } = await supabase
+      .from('order_documents')
+      .delete()
+      .eq('id', documentId);
+
+    if (deleteError) {
+      console.error('Database delete error:', deleteError);
+      throw deleteError;
+    }
+
+    return successResponse({ id: documentId }, 'Document deleted successfully');
+  } catch (error) {
+    return handleApiError(error);
+  }
+}

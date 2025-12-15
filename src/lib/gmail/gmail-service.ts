@@ -48,20 +48,22 @@ export class GmailService {
     console.log(`[Gmail Service] Creating service for org ${orgId}...`);
     const supabase = await createClient();
 
-    // Get OAuth tokens from database
+    // Get OAuth tokens from database (get most recent if multiple exist)
     console.log('[Gmail Service] Fetching OAuth tokens from database...');
-    const { data: token, error } = await supabase
+    const { data: tokens, error } = await supabase
       .from('oauth_tokens')
       .select('*')
       .eq('org_id', orgId)
       .eq('provider', 'google')
-      .single();
+      .order('updated_at', { ascending: false })
+      .limit(1);
 
     if (error) {
       console.error('[Gmail Service] Database error fetching OAuth tokens:', error);
       throw new Error(`Failed to retrieve Gmail tokens: ${error.message}`);
     }
 
+    const token = tokens?.[0];
     if (!token) {
       console.error('[Gmail Service] No OAuth tokens found for this organization');
       throw new Error('Gmail not connected for this organization. Please reconnect Gmail in Settings.');

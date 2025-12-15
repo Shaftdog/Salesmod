@@ -279,9 +279,9 @@ async function expandDraftEmailTask(
   console.log(`[expandDraftEmailTask] Task ${task.id}: Getting target contacts...`);
   console.log(`[expandDraftEmailTask] Input:`, JSON.stringify(input));
 
-  // Get target contacts
-  const targets = await getTargetContacts(input, params, supabase, job.org_id);
-  
+  // Get target contacts using job's tenant_id directly
+  const targets = await getTargetContacts(input, params, supabase, job.tenant_id);
+
   console.log(`[expandDraftEmailTask] Found ${targets.length} target contacts`);
 
   if (targets.length === 0) {
@@ -380,8 +380,8 @@ async function expandCreateTaskTask(
 ): Promise<ExpandTaskResult> {
   const input = task.input;
 
-  // Get target contacts
-  const targets = await getTargetContacts(input, params, supabase, job.org_id);
+  // Get target contacts using job's tenant_id directly
+  const targets = await getTargetContacts(input, params, supabase, job.tenant_id);
 
   // Determine card state based on job settings
   let cardState: string;
@@ -483,15 +483,21 @@ async function getTargetContacts(
   input: any,
   params: JobParams,
   supabase: any,
-  orgId: string
+  tenantId: string
 ): Promise<TargetContact[]> {
   console.log(`[getTargetContacts] Called with input:`, JSON.stringify(input));
   console.log(`[getTargetContacts] Params filter:`, JSON.stringify(params.target_filter));
+  console.log(`[getTargetContacts] Using tenant_id: ${tenantId}`);
+
+  if (!tenantId) {
+    console.error(`[getTargetContacts] No tenant_id provided - cannot query contacts`);
+    return [];
+  }
   
   // If explicit contact IDs provided, use those
   if (input.contact_ids && input.contact_ids.length > 0) {
     console.log(`[getTargetContacts] Using explicit contact_ids: ${input.contact_ids.length} IDs`);
-    
+
     const { data: contacts, error } = await supabase
       .from('contacts')
       .select(`
@@ -500,10 +506,10 @@ async function getTargetContacts(
         last_name,
         email,
         client_id,
-        clients!contacts_client_id_fkey!inner(company_name, org_id)
+        clients!contacts_client_id_fkey!inner(company_name, tenant_id)
       `)
       .in('id', input.contact_ids)
-      .eq('clients.org_id', orgId)
+      .eq('clients.tenant_id', tenantId)
       .not('email', 'is', null);
 
     if (error) {
@@ -540,8 +546,8 @@ async function getTargetContacts(
 
     let clientQuery = supabase
       .from('clients')
-      .select('id, company_name, client_type, is_active, email, primary_contact, org_id')
-      .eq('org_id', orgId)
+      .select('id, company_name, client_type, is_active, email, primary_contact, tenant_id')
+      .eq('tenant_id', tenantId)
       .not('email', 'is', null);
 
     // Apply filters
@@ -617,10 +623,10 @@ async function getTargetContacts(
         company_name,
         client_type,
         is_active,
-        org_id
+        tenant_id
       )
     `)
-    .eq('clients.org_id', orgId)
+    .eq('clients.tenant_id', tenantId)
     .not('email', 'is', null);
 
   // Apply filters
@@ -628,9 +634,14 @@ async function getTargetContacts(
     console.log(`[getTargetContacts] Filtering by client_type: ${filter.client_type}`);
     query = query.eq('clients.client_type', filter.client_type);
   }
-  if (filter.primary_role_code) {
+  if (filter.target_role_codes && filter.target_role_codes.length > 0) {
+    console.log(`[getTargetContacts] Filtering by contact target_role_codes: ${filter.target_role_codes.join(', ')}`);
+    // Filter on the CONTACT's primary_role_code using multi-select
+    query = query.in('primary_role_code', filter.target_role_codes);
+  }
+  // Backwards compatibility: support single primary_role_code
+  else if (filter.primary_role_code) {
     console.log(`[getTargetContacts] Filtering by contact primary_role_code: ${filter.primary_role_code}`);
-    // Filter on the CONTACT's primary_role_code, not the client's
     query = query.eq('primary_role_code', filter.primary_role_code);
   }
   if (filter.is_active !== undefined) {
@@ -703,11 +714,12 @@ async function getTargetContacts(
   let suppressedContactIds: string[] = [];
 
   if (contactIds.length > 0) {
+    // SECURITY: Use tenant_id instead of org_id for proper multi-tenant isolation
     const { data: suppressions } = await supabase
       .from('email_suppressions')
       .select('contact_id')
       .in('contact_id', contactIds)
-      .eq('org_id', orgId);
+      .eq('tenant_id', tenantId);
 
     if (suppressions && suppressions.length > 0) {
       suppressedContactIds = suppressions.map((s: any) => s.contact_id);
@@ -731,13 +743,13 @@ async function getTargetContacts(
   const filteredByBounce = contactsWithoutSuppressions;
 
   // Fetch avoidance rules from agent_memories
-  // Note: orgId is now passed as a parameter instead of from getUser()
+  // Note: Using tenant_id for proper multi-tenant isolation
   let avoidanceRules: any[] = [];
-  if (orgId) {
+  if (tenantId) {
     const { data: memories } = await supabase
       .from('agent_memories')
       .select('*')
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .or('scope.eq.card_feedback,key.ilike.%rejection_%,key.ilike.%deletion_%')
       .gte('importance', 0.7); // Only high-importance feedback
 

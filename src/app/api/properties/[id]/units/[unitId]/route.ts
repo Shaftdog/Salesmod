@@ -12,7 +12,36 @@ export async function GET(
 ) {
   try {
     const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     const { id: propertyId, unitId } = await params;
+
+    // Verify property belongs to user's tenant
+    const { data: property } = await supabase
+      .from('properties')
+      .select('id')
+      .eq('id', propertyId)
+      .eq('tenant_id', profile.tenant_id)
+      .single();
+
+    if (!property) {
+      return NextResponse.json({ error: 'Property not found' }, { status: 404 });
+    }
 
     // Fetch unit
     const { data: unit, error: unitError } = await supabase
@@ -63,7 +92,37 @@ export async function PUT(
 ) {
   try {
     const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     const { id: propertyId, unitId } = await params;
+
+    // Verify property belongs to user's tenant
+    const { data: property } = await supabase
+      .from('properties')
+      .select('id')
+      .eq('id', propertyId)
+      .eq('tenant_id', profile.tenant_id)
+      .single();
+
+    if (!property) {
+      return NextResponse.json({ error: 'Property not found' }, { status: 404 });
+    }
+
     const body = await request.json();
 
     const { unitIdentifier, unitType, props } = body;
@@ -171,7 +230,36 @@ export async function DELETE(
 ) {
   try {
     const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     const { id: propertyId, unitId } = await params;
+
+    // Verify property belongs to user's tenant
+    const { data: property } = await supabase
+      .from('properties')
+      .select('id')
+      .eq('id', propertyId)
+      .eq('tenant_id', profile.tenant_id)
+      .single();
+
+    if (!property) {
+      return NextResponse.json({ error: 'Property not found' }, { status: 404 });
+    }
 
     // Check if unit has any linked orders
     const { data: orders, error: ordersError } = await supabase

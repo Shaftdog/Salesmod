@@ -12,7 +12,36 @@ export async function GET(
 ) {
   try {
     const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     const { id: propertyId } = await params;
+
+    // Verify property belongs to user's tenant
+    const { data: property } = await supabase
+      .from('properties')
+      .select('id')
+      .eq('id', propertyId)
+      .eq('tenant_id', profile.tenant_id)
+      .single();
+
+    if (!property) {
+      return NextResponse.json({ error: 'Property not found' }, { status: 404 });
+    }
 
     // Fetch units
     const { data: units, error: unitsError } = await supabase
@@ -71,6 +100,23 @@ export async function POST(
 ) {
   try {
     const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     const { id: propertyId } = await params;
     const body = await request.json();
 
@@ -121,11 +167,12 @@ export async function POST(
       );
     }
 
-    // Verify property exists and user has access (RLS will handle this)
+    // Verify property exists and belongs to user's tenant
     const { data: property, error: propertyError } = await supabase
       .from('properties')
       .select('id')
       .eq('id', propertyId)
+      .eq('tenant_id', profile.tenant_id)
       .single();
 
     if (propertyError || !property) {

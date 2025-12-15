@@ -21,11 +21,23 @@ export type {
   UserRole,
   PermissionResource,
   PermissionAction,
+  AreaCode,
+  UserAreaAccess,
+  UserAreaAccessInfo,
+  OverrideMode,
 } from './types'
 
-export { PERMISSIONS } from './types'
+export {
+  PERMISSIONS,
+  USER_ROLES,
+  ROLE_DISPLAY_NAMES,
+  ROLE_DESCRIPTIONS,
+  ROLE_HIERARCHY,
+  AREA_CODES,
+  AREA_DISPLAY_NAMES,
+} from './types'
 
-import type { UserRole } from './types'
+import type { UserRole, AreaCode, UserAreaAccess } from './types'
 
 /**
  * Get the current authenticated user's ID
@@ -107,13 +119,37 @@ export async function currentUserHasRole(
 }
 
 /**
- * Check if a user is an admin
+ * Check if a user is an admin (includes super_admin)
  */
 export async function isAdmin(
   userId: string,
   supabase?: SupabaseClient
 ): Promise<boolean> {
-  return hasRole(userId, 'admin', supabase)
+  const userRole = await getUserRole(userId, supabase)
+  return userRole === 'admin' || userRole === 'super_admin'
+}
+
+/**
+ * Check if a user is a super admin
+ */
+export async function isSuperAdmin(
+  userId: string,
+  supabase?: SupabaseClient
+): Promise<boolean> {
+  return hasRole(userId, 'super_admin', supabase)
+}
+
+/**
+ * Check if the current user is a super admin
+ */
+export async function currentUserIsSuperAdmin(supabase?: SupabaseClient): Promise<boolean> {
+  const userId = await getCurrentUserId(supabase)
+
+  if (!userId) {
+    return false
+  }
+
+  return isSuperAdmin(userId, supabase)
 }
 
 /**
@@ -218,12 +254,26 @@ export async function requireRole(
 /**
  * Require admin role - throws error if user is not an admin
  * Use this in admin-only API routes
+ * Note: Accepts both 'admin' and 'super_admin' roles
  */
 export async function requireAdmin(
   supabase?: SupabaseClient,
   customMessage?: string
 ): Promise<string> {
-  return requireRole('admin', supabase, customMessage || 'Unauthorized: Admin access required')
+  const userId = await getCurrentUserId(supabase)
+
+  if (!userId) {
+    throw new Error('Unauthorized: Not authenticated')
+  }
+
+  const isAdminUser = await isAdmin(userId, supabase)
+
+  if (!isAdminUser) {
+    const message = customMessage || 'Unauthorized: Admin access required'
+    throw new Error(message)
+  }
+
+  return userId
 }
 
 /**
@@ -318,4 +368,271 @@ export async function getCurrentUserProfile(supabase?: SupabaseClient) {
   }
 
   return getUserProfile(userId, supabase)
+}
+
+// =============================================
+// AREA ACCESS FUNCTIONS
+// =============================================
+
+/**
+ * Get all areas accessible to a user
+ * Combines role defaults with any user overrides
+ */
+export async function getUserAreas(
+  userId: string,
+  supabase?: SupabaseClient
+): Promise<UserAreaAccess[]> {
+  const client = supabase || await createClient()
+
+  const { data, error } = await client
+    .rpc('get_user_areas', { p_user_id: userId })
+
+  if (error) {
+    console.error('Error getting user areas:', error)
+    return []
+  }
+
+  return (data || []).map((row: any) => ({
+    areaCode: row.area_code as AreaCode,
+    areaName: row.area_name,
+    areaIcon: row.area_icon,
+    accessSource: row.access_source,
+  }))
+}
+
+/**
+ * Get the current user's accessible areas
+ */
+export async function getCurrentUserAreas(
+  supabase?: SupabaseClient
+): Promise<UserAreaAccess[]> {
+  const userId = await getCurrentUserId(supabase)
+
+  if (!userId) {
+    return []
+  }
+
+  return getUserAreas(userId, supabase)
+}
+
+/**
+ * Check if a user has access to a specific area
+ */
+export async function hasAreaAccess(
+  userId: string,
+  areaCode: AreaCode,
+  supabase?: SupabaseClient
+): Promise<boolean> {
+  const client = supabase || await createClient()
+
+  const { data, error } = await client
+    .rpc('user_has_area_access', {
+      p_user_id: userId,
+      p_area_code: areaCode,
+    })
+
+  if (error) {
+    console.error('Error checking area access:', error)
+    return false
+  }
+
+  return data === true
+}
+
+/**
+ * Check if the current user has access to a specific area
+ */
+export async function currentUserHasAreaAccess(
+  areaCode: AreaCode,
+  supabase?: SupabaseClient
+): Promise<boolean> {
+  const userId = await getCurrentUserId(supabase)
+
+  if (!userId) {
+    return false
+  }
+
+  return hasAreaAccess(userId, areaCode, supabase)
+}
+
+/**
+ * Check if a user can access a specific route
+ */
+export async function canAccessRoute(
+  userId: string,
+  pathname: string,
+  supabase?: SupabaseClient
+): Promise<boolean> {
+  const client = supabase || await createClient()
+
+  const { data, error } = await client
+    .rpc('user_has_route_access', {
+      p_user_id: userId,
+      p_pathname: pathname,
+    })
+
+  if (error) {
+    console.error('Error checking route access:', error)
+    return false
+  }
+
+  return data === true
+}
+
+/**
+ * Check if the current user can access a specific route
+ */
+export async function currentUserCanAccessRoute(
+  pathname: string,
+  supabase?: SupabaseClient
+): Promise<boolean> {
+  const userId = await getCurrentUserId(supabase)
+
+  if (!userId) {
+    return false
+  }
+
+  return canAccessRoute(userId, pathname, supabase)
+}
+
+/**
+ * Require access to a specific area - throws error if user doesn't have it
+ */
+export async function requireAreaAccess(
+  areaCode: AreaCode,
+  supabase?: SupabaseClient,
+  customMessage?: string
+): Promise<string> {
+  const userId = await getCurrentUserId(supabase)
+
+  if (!userId) {
+    throw new Error('Unauthorized: Not authenticated')
+  }
+
+  const hasAccess = await hasAreaAccess(userId, areaCode, supabase)
+
+  if (!hasAccess) {
+    const message = customMessage || `Unauthorized: Requires access to '${areaCode}' area`
+    throw new Error(message)
+  }
+
+  return userId
+}
+
+/**
+ * Require Super Admin role - throws error if user is not a super admin
+ */
+export async function requireSuperAdmin(
+  supabase?: SupabaseClient,
+  customMessage?: string
+): Promise<string> {
+  const userId = await getCurrentUserId(supabase)
+
+  if (!userId) {
+    throw new Error('Unauthorized: Not authenticated')
+  }
+
+  const isSuperAdminUser = await isSuperAdmin(userId, supabase)
+
+  if (!isSuperAdminUser) {
+    const message = customMessage || 'Unauthorized: Super Admin access required'
+    throw new Error(message)
+  }
+
+  return userId
+}
+
+/**
+ * Get all areas with their sub-modules (for admin UI)
+ */
+export async function getAllAreasWithSubModules(supabase?: SupabaseClient) {
+  const client = supabase || await createClient()
+
+  const { data, error } = await client
+    .rpc('get_all_areas_with_submodules')
+
+  if (error) {
+    console.error('Error getting areas with sub-modules:', error)
+    return []
+  }
+
+  // Transform flat data into nested structure
+  const areasMap = new Map<string, any>()
+
+  for (const row of data || []) {
+    if (!areasMap.has(row.area_id)) {
+      areasMap.set(row.area_id, {
+        id: row.area_id,
+        code: row.area_code,
+        name: row.area_name,
+        icon: row.area_icon,
+        displayOrder: row.area_display_order,
+        subModules: [],
+      })
+    }
+
+    if (row.submodule_id) {
+      areasMap.get(row.area_id).subModules.push({
+        id: row.submodule_id,
+        code: row.submodule_code,
+        name: row.submodule_name,
+        routePattern: row.submodule_route,
+        displayOrder: row.submodule_display_order,
+      })
+    }
+  }
+
+  return Array.from(areasMap.values()).sort((a, b) => a.displayOrder - b.displayOrder)
+}
+
+/**
+ * Get role area templates (for admin UI)
+ */
+export async function getRoleAreaTemplates(
+  roleName: UserRole,
+  supabase?: SupabaseClient
+) {
+  const client = supabase || await createClient()
+
+  const { data, error } = await client
+    .rpc('get_role_area_templates', { p_role_name: roleName })
+
+  if (error) {
+    console.error('Error getting role area templates:', error)
+    return []
+  }
+
+  return data || []
+}
+
+/**
+ * Check if any of the user's areas include the specified area
+ */
+export async function hasAnyAreaAccess(
+  userId: string,
+  areaCodes: AreaCode[],
+  supabase?: SupabaseClient
+): Promise<boolean> {
+  for (const areaCode of areaCodes) {
+    if (await hasAreaAccess(userId, areaCode, supabase)) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * Check if user has access to all specified areas
+ */
+export async function hasAllAreaAccess(
+  userId: string,
+  areaCodes: AreaCode[],
+  supabase?: SupabaseClient
+): Promise<boolean> {
+  for (const areaCode of areaCodes) {
+    if (!(await hasAreaAccess(userId, areaCode, supabase))) {
+      return false
+    }
+  }
+  return true
 }

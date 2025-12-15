@@ -314,21 +314,11 @@ export function validateQueryParams<T>(
   url: URL,
   schema: { parse: (data: unknown) => T }
 ): T {
-  const params: Record<string, string | number | boolean> = {};
+  const params: Record<string, string> = {};
 
+  // Keep all query params as strings - let Zod schema handle transformations
   url.searchParams.forEach((value, key) => {
-    // Try to parse numbers
-    if (!isNaN(Number(value))) {
-      params[key] = Number(value);
-    }
-    // Try to parse booleans
-    else if (value === 'true' || value === 'false') {
-      params[key] = value === 'true';
-    }
-    // Keep as string
-    else {
-      params[key] = value;
-    }
+    params[key] = value;
   });
 
   try {
@@ -360,6 +350,36 @@ export async function getAuthenticatedOrgId(supabase: any): Promise<string> {
 
   // In this app, user.id is the org_id (profile id)
   return user.id;
+}
+
+/**
+ * Get the authenticated user's org_id and tenant_id from Supabase session
+ */
+export async function getAuthenticatedContext(supabase: any): Promise<{ orgId: string; tenantId: string }> {
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    throw new UnauthorizedError('Authentication required');
+  }
+
+  // Get tenant_id from user's profile
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile?.tenant_id) {
+    throw new ForbiddenError('User has no tenant_id assigned');
+  }
+
+  return {
+    orgId: user.id,
+    tenantId: profile.tenant_id,
+  };
 }
 
 /**

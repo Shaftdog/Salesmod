@@ -17,14 +17,26 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     const propertyId = (await params).id;
 
-    // Get property details
+    // Get property details (filtered by tenant_id)
     const { data: property, error: propertyError } = await supabase
       .from('properties')
       .select(`
         id,
         org_id,
+        tenant_id,
         address_line1,
         address_line2,
         city,
@@ -44,7 +56,7 @@ export async function GET(
         updated_at
       `)
       .eq('id', propertyId)
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .single();
 
     if (propertyError || !property) {
@@ -127,15 +139,26 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     const propertyId = (await params).id;
     const body = await request.json();
 
-    // Verify property belongs to user's org
+    // Verify property belongs to user's tenant
     const { data: existingProperty } = await supabase
       .from('properties')
       .select('id')
       .eq('id', propertyId)
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .single();
 
     if (!existingProperty) {
@@ -200,14 +223,25 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     const propertyId = (await params).id;
 
-    // Verify property belongs to user's org
+    // Verify property belongs to user's tenant
     const { data: existingProperty } = await supabase
       .from('properties')
       .select('id')
       .eq('id', propertyId)
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .single();
 
     if (!existingProperty) {

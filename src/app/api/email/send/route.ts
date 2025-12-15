@@ -62,6 +62,17 @@ export async function POST(request: NextRequest) {
 
     const dailyLimit = settings?.daily_send_limit || 50;
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
+    }
+
     // Count emails sent today
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -97,6 +108,7 @@ export async function POST(request: NextRequest) {
         completed_at: new Date().toISOString(),
         outcome: 'sent',
         created_by: user.id,
+        tenant_id: profile.tenant_id,
       });
       
       return NextResponse.json({
@@ -115,12 +127,12 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: replyTo || 'Account Manager <manager@myroihome.com>',
+          from: replyTo || 'Admin <Admin@roiappraise.com>',
           to: to, // Must be a string
           subject,
           html,
           text,
-          reply_to: replyTo,
+          reply_to: replyTo || 'Admin@roiappraise.com',
         }),
       });
 
@@ -141,6 +153,7 @@ export async function POST(request: NextRequest) {
         completed_at: new Date().toISOString(),
         outcome: 'sent',
         created_by: user.id,
+        tenant_id: profile.tenant_id,
       });
 
       return NextResponse.json({
@@ -160,6 +173,7 @@ export async function POST(request: NextRequest) {
         completed_at: new Date().toISOString(),
         outcome: 'failed',
         created_by: user.id,
+        tenant_id: profile.tenant_id,
       });
 
       return NextResponse.json(

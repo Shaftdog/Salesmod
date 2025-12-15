@@ -139,11 +139,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: tenantProfile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', profile.id)
+      .single();
+
+    if (!tenantProfile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Get sync state
     const { data: syncState } = await supabase
       .from('gmail_sync_state')
       .select('*')
-      .eq('org_id', profile.id)
+      .eq('tenant_id', tenantProfile.tenant_id)
       .single();
 
     if (!syncState) {

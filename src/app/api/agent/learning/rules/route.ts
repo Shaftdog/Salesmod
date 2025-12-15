@@ -21,6 +21,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Parse query parameters
     const searchParams = request.nextUrl.searchParams;
     const cardType = searchParams.get('cardType');
@@ -32,7 +46,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('agent_memories')
       .select('*')
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .eq('scope', 'card_feedback')
       .not('content->>rule', 'is', null);
 
@@ -108,6 +122,20 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { id, rule, reason, importance, cardType } = body;
 
@@ -120,7 +148,7 @@ export async function PATCH(request: NextRequest) {
       .from('agent_memories')
       .select('*')
       .eq('id', id)
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .single();
 
     if (fetchError || !existingRule) {
@@ -148,7 +176,7 @@ export async function PATCH(request: NextRequest) {
       .from('agent_memories')
       .update(updateData)
       .eq('id', id)
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .select()
       .single();
 
@@ -196,6 +224,20 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const id = searchParams.get('id');
 
@@ -207,7 +249,7 @@ export async function DELETE(request: NextRequest) {
       .from('agent_memories')
       .delete()
       .eq('id', id)
-      .eq('org_id', user.id);
+      .eq('tenant_id', profile.tenant_id);
 
     if (deleteError) {
       console.error('[Rules API] Error deleting rule:', deleteError);
@@ -252,11 +294,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Rule is required' }, { status: 400 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Fetch all pending cards
     const { data: pendingCards, error: cardsError } = await supabase
       .from('kanban_cards')
       .select('*, contacts!inner(*), clients!inner(*)')
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .eq('state', 'suggested')
       .limit(100);
 

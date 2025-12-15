@@ -10,6 +10,10 @@ import { ScheduleInspectionDialog } from "@/components/orders/schedule-inspectio
 import { AddNoteDialog } from "@/components/orders/add-note-dialog";
 import { UploadDocumentDialog } from "@/components/orders/upload-document-dialog";
 import { EditWorkflowDialog } from "@/components/orders/edit-workflow-dialog";
+import { StartProductionDialog } from "@/components/orders/start-production-dialog";
+import { CreateCaseButton } from "@/components/orders/create-case-button";
+import { useOrderProductionCard } from "@/hooks/use-production";
+import { PRODUCTION_STAGE_LABELS } from "@/types/production";
 import {
   Card,
   CardContent,
@@ -32,6 +36,8 @@ import {
   Loader2,
   MessageSquare,
   Printer,
+  Play,
+  Kanban,
 } from "lucide-react";
 import { OrderTimeline } from "@/components/orders/order-timeline";
 import { Progress } from "@/components/ui/progress";
@@ -41,6 +47,8 @@ import { formatCurrency } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { PropertyChip } from "@/components/orders/property-chip";
 import { useRouter } from "next/navigation";
+import { OrderInvoicesSection } from "@/components/orders/order-invoices-section";
+import { OrderDocumentsSection } from "@/components/orders/order-documents-section";
 
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -53,6 +61,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   const { data: order, isLoading, error } = useOrder(orderId || "");
   const { clients } = useClients();
   const { appraisers } = useAppraisers();
+  const { data: productionCard, isLoading: productionCardLoading } = useOrderProductionCard(orderId || "");
 
   // Dialog states
   const [changeStatusOpen, setChangeStatusOpen] = useState(false);
@@ -61,6 +70,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   const [addNoteOpen, setAddNoteOpen] = useState(false);
   const [uploadDocumentOpen, setUploadDocumentOpen] = useState(false);
   const [editWorkflowOpen, setEditWorkflowOpen] = useState(false);
+  const [startProductionOpen, setStartProductionOpen] = useState(false);
 
   // Print handler
   const handlePrint = () => {
@@ -122,8 +132,9 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="overview">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="invoice">Invoice</TabsTrigger>
                 <TabsTrigger value="documents">Documents</TabsTrigger>
                 <TabsTrigger value="communication">Communication</TabsTrigger>
                 <TabsTrigger value="history">History</TabsTrigger>
@@ -205,16 +216,14 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                     </div>
                 </div>
               </TabsContent>
+              <TabsContent value="invoice">
+                <div className="pt-6">
+                  <OrderInvoicesSection orderId={order.id} clientId={order.clientId} />
+                </div>
+              </TabsContent>
               <TabsContent value="documents">
-                <div className="pt-6 text-center">
-                    <File className="mx-auto h-12 w-12 text-muted-foreground" />
-                    <h3 className="mt-4 text-lg font-semibold">No Documents Uploaded</h3>
-                    <p className="mb-4 mt-2 text-sm text-muted-foreground">
-                        Drag and drop files here to upload.
-                    </p>
-                    <Button onClick={() => setUploadDocumentOpen(true)}>
-                      Upload Document
-                    </Button>
+                <div className="pt-6 space-y-4">
+                  <OrderDocumentsSection orderId={order.id} onUpload={() => setUploadDocumentOpen(true)} />
                 </div>
               </TabsContent>
                <TabsContent value="communication">
@@ -352,6 +361,27 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 <Button onClick={handleEdit} variant="default">
                   <Edit className="mr-2 h-4 w-4" /> Edit Order
                 </Button>
+                {!productionCardLoading && !productionCard && (
+                  <Button
+                    onClick={() => setStartProductionOpen(true)}
+                    variant="default"
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    <Play className="mr-2 h-4 w-4" /> Start Production
+                  </Button>
+                )}
+                {!productionCardLoading && productionCard && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => router.push('/production')}
+                  >
+                    <Kanban className="mr-2 h-4 w-4" />
+                    View in Production
+                    <span className="ml-2 text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                      {PRODUCTION_STAGE_LABELS[productionCard.current_stage as keyof typeof PRODUCTION_STAGE_LABELS] || productionCard.current_stage}
+                    </span>
+                  </Button>
+                )}
                 <Button onClick={() => setChangeStatusOpen(true)} variant="secondary">
                   Change Status
                 </Button>
@@ -383,6 +413,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                         </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>
+                <CreateCaseButton order={order} variant="outline" />
             </CardContent>
         </Card>
       </div>
@@ -420,6 +451,11 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
           order={order}
           open={editWorkflowOpen}
           onOpenChange={setEditWorkflowOpen}
+        />
+        <StartProductionDialog
+          order={order}
+          open={startProductionOpen}
+          onOpenChange={setStartProductionOpen}
         />
       </>
     )}

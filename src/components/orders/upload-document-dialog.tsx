@@ -23,6 +23,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { FileIcon, Loader2, Upload, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useUploadDocuments } from "@/lib/hooks/use-order-documents";
+import { Progress } from "@/components/ui/progress";
 
 interface UploadDocumentDialogProps {
   order: Order;
@@ -31,11 +33,19 @@ interface UploadDocumentDialogProps {
 }
 
 const documentTypes = [
-  { value: "appraisal_report", label: "Appraisal Report" },
-  { value: "inspection_report", label: "Inspection Report" },
-  { value: "photos", label: "Property Photos" },
-  { value: "contract", label: "Contract/Agreement" },
-  { value: "invoice", label: "Invoice" },
+  { value: "engagement_letter", label: "Engagement Letter" },
+  { value: "order_form", label: "Order Form" },
+  { value: "client_instructions", label: "Client Instructions" },
+  { value: "title_report", label: "Title Report" },
+  { value: "prior_appraisal", label: "Prior Appraisal(s) on the Subject" },
+  { value: "purchase_contract", label: "Purchase Contract" },
+  { value: "contract_addenda", label: "Contract Addenda" },
+  { value: "flood_certification", label: "Flood Certification" },
+  { value: "plans", label: "Plans" },
+  { value: "building_specs", label: "Building Specifications" },
+  { value: "construction_budget", label: "Construction Budget" },
+  { value: "permits", label: "Permits" },
+  { value: "rental_data", label: "Rental Data" },
   { value: "other", label: "Other" },
 ];
 
@@ -44,12 +54,12 @@ export function UploadDocumentDialog({
   open,
   onOpenChange,
 }: UploadDocumentDialogProps) {
-  const [documentType, setDocumentType] = useState("appraisal_report");
+  const [documentType, setDocumentType] = useState("engagement_letter");
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const uploadDocuments = useUploadDocuments();
 
   const handleFiles = (newFiles: FileList | null) => {
     if (!newFiles) return;
@@ -89,20 +99,28 @@ export function UploadDocumentDialog({
       return;
     }
 
-    setIsUploading(true);
+    try {
+      await uploadDocuments.mutateAsync({
+        orderId: order.id,
+        files,
+        documentType,
+      });
 
-    // Simulate file upload (you can implement actual Supabase Storage later)
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+      toast({
+        title: "Documents Uploaded",
+        description: `Successfully uploaded ${files.length} document(s)`,
+      });
 
-    toast({
-      title: "Documents Uploaded",
-      description: `Successfully uploaded ${files.length} document(s)`,
-    });
-
-    setFiles([]);
-    setDocumentType("appraisal_report");
-    setIsUploading(false);
-    onOpenChange(false);
+      setFiles([]);
+      setDocumentType("engagement_letter");
+      onOpenChange(false);
+    } catch (error) {
+      toast({
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to upload documents",
+        variant: "destructive",
+      });
+    }
   };
 
   const formatFileSize = (bytes: number) => {
@@ -159,7 +177,7 @@ export function UploadDocumentDialog({
                   Drag and drop files here, or click to browse
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  PDF, Word, Excel, Images (max 10MB each)
+                  PDF, Word, Excel, Images (max 50MB each)
                 </p>
                 <Input
                   ref={fileInputRef}
@@ -201,12 +219,27 @@ export function UploadDocumentDialog({
                           e.stopPropagation();
                           removeFile(index);
                         }}
+                        disabled={uploadDocuments.isPending}
                       >
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Upload Progress */}
+            {uploadDocuments.isPending && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Uploading...</span>
+                  <span className="font-medium">{uploadDocuments.uploadProgress}%</span>
+                </div>
+                <Progress value={uploadDocuments.uploadProgress} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  Uploading directly to storage. Large files may take a moment.
+                </p>
               </div>
             )}
           </div>
@@ -216,17 +249,17 @@ export function UploadDocumentDialog({
               variant="outline"
               onClick={() => {
                 setFiles([]);
-                setDocumentType("appraisal_report");
+                setDocumentType("engagement_letter");
                 onOpenChange(false);
               }}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isUploading || files.length === 0}>
-              {isUploading && (
+            <Button type="submit" disabled={uploadDocuments.isPending || files.length === 0}>
+              {uploadDocuments.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Upload {files.length > 0 && `(${files.length})`}
+              {uploadDocuments.isPending ? 'Uploading...' : `Upload${files.length > 0 ? ` (${files.length})` : ''}`}
             </Button>
           </DialogFooter>
         </form>

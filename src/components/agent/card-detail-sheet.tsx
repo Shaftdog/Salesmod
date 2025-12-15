@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -12,10 +12,22 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { KanbanCard, useApproveCard, useExecuteCard, useRejectCard } from '@/hooks/use-agent';
-import { Send, Check, X, Loader2, AlertCircle, Calendar, DollarSign, Phone, FileSearch, MessageSquare, Bot } from 'lucide-react';
+import { KanbanCard, useApproveCard, useExecuteCard, useRejectCard, useMarkCardDone } from '@/hooks/use-agent';
+import { Send, Check, X, Loader2, AlertCircle, Calendar, DollarSign, Phone, FileSearch, MessageSquare, Bot, Mail } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { CardReviewChat } from './card-review-chat';
+
+interface GmailMessageData {
+  from_email: string;
+  from_name: string | null;
+  subject: string;
+  snippet: string;
+  body_text: string | null;
+  body_html: string | null;
+  received_at: string;
+  category: string | null;
+  confidence: number | null;
+}
 
 /**
  * Format email body to handle both plain text and HTML
@@ -58,7 +70,35 @@ export function CardDetailSheet({ card, open, onOpenChange }: CardDetailSheetPro
   const approveCard = useApproveCard();
   const executeCard = useExecuteCard();
   const rejectCard = useRejectCard();
+  const markCardDone = useMarkCardDone();
   const [showReviewChat, setShowReviewChat] = useState(false);
+  const [emailData, setEmailData] = useState<GmailMessageData | null>(null);
+  const [emailLoading, setEmailLoading] = useState(false);
+
+  // Fetch email content when card has gmail_message_id
+  useEffect(() => {
+    async function fetchEmailContent() {
+      if (!card?.gmail_message_id || !open) {
+        setEmailData(null);
+        return;
+      }
+
+      setEmailLoading(true);
+      try {
+        const response = await fetch(`/api/integrations/gmail/messages/${card.gmail_message_id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setEmailData(data);
+        }
+      } catch (error) {
+        console.error('Error fetching email content:', error);
+      } finally {
+        setEmailLoading(false);
+      }
+    }
+
+    fetchEmailContent();
+  }, [card?.gmail_message_id, open]);
 
   if (!card) {
     return null;
@@ -137,6 +177,23 @@ export function CardDetailSheet({ card, open, onOpenChange }: CardDetailSheetPro
     }
   };
 
+  const handleMarkDone = async () => {
+    try {
+      await markCardDone.mutateAsync(card.id);
+      toast({
+        title: 'Marked as Done',
+        description: `${card.title} has been moved to done`,
+      });
+      onOpenChange(false);
+    } catch (error: any) {
+      toast({
+        title: 'Failed to Mark as Done',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const isApproved = card.state === 'approved';
   const isDone = card.state === 'done';
   const isBlocked = card.state === 'blocked';
@@ -201,46 +258,106 @@ export function CardDetailSheet({ card, open, onOpenChange }: CardDetailSheetPro
             <Separator />
 
             {/* Original Email Context (if card was created from an email) */}
-            {card.action_payload?.emailId && card.action_payload?.from && (
+            {(card.gmail_message_id || (card.action_payload?.emailId && card.action_payload?.from)) && (
               <>
                 <Separator />
                 <div>
-                  <h3 className="text-sm font-medium mb-2">Original Email</h3>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-xs text-muted-foreground">From</p>
-                      <p className="text-sm font-medium">
-                        {card.action_payload.from.name || card.action_payload.from.email}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{card.action_payload.from.email}</p>
+                  <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+                    <Mail className="h-4 w-4" />
+                    Original Email
+                  </h3>
+                  {emailLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Subject</p>
-                      <p className="text-sm font-medium">{card.action_payload.subject}</p>
-                    </div>
-                    {(card.action_payload.bodyText || card.action_payload.bodyHtml) && (
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-2">Email Content</p>
-                        <div
-                          className="prose prose-sm max-w-none rounded-md border p-4 bg-white text-sm max-h-96 overflow-y-auto"
-                          dangerouslySetInnerHTML={{
-                            __html: formatEmailBody(card.action_payload.bodyHtml || card.action_payload.bodyText || '')
-                          }}
-                        />
-                      </div>
-                    )}
-                    {card.action_payload.classification && (
-                      <div>
-                        <p className="text-xs text-muted-foreground">Classification</p>
-                        <div className="flex gap-2 items-center">
-                          <Badge variant="outline">{card.action_payload.classification.category}</Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {Math.round((card.action_payload.classification.confidence || 0) * 100)}% confidence
-                          </span>
+                  ) : emailData ? (
+                    <div className="space-y-3">
+                      <div className="bg-muted rounded-lg p-3 space-y-2">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-xs text-muted-foreground">From</p>
+                            <p className="text-sm font-medium">
+                              {emailData.from_name || emailData.from_email}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{emailData.from_email}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Received</p>
+                            <p className="text-xs">{new Date(emailData.received_at).toLocaleString()}</p>
+                          </div>
                         </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Subject</p>
+                          <p className="text-sm font-medium">{emailData.subject}</p>
+                        </div>
+                        {emailData.category && (
+                          <div className="flex gap-2 items-center">
+                            <Badge variant="outline">{emailData.category}</Badge>
+                            {emailData.confidence && (
+                              <span className="text-xs text-muted-foreground">
+                                {Math.round(emailData.confidence * 100)}% confidence
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                      {(emailData.body_html || emailData.body_text) ? (
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-2">Email Content</p>
+                          <div
+                            className="prose prose-sm max-w-none rounded-md border p-4 bg-white dark:bg-gray-900 text-sm max-h-[400px] overflow-y-auto"
+                            dangerouslySetInnerHTML={{
+                              __html: formatEmailBody(emailData.body_html || emailData.body_text || '')
+                            }}
+                          />
+                        </div>
+                      ) : emailData.snippet ? (
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-2">Preview</p>
+                          <p className="text-sm text-muted-foreground italic">{emailData.snippet}</p>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : card.action_payload?.from ? (
+                    // Fallback to action_payload if no email data from API
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">From</p>
+                        <p className="text-sm font-medium">
+                          {card.action_payload.from.name || card.action_payload.from.email}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{card.action_payload.from.email}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Subject</p>
+                        <p className="text-sm font-medium">{card.action_payload.subject}</p>
+                      </div>
+                      {(card.action_payload.bodyText || card.action_payload.bodyHtml) && (
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-2">Email Content</p>
+                          <div
+                            className="prose prose-sm max-w-none rounded-md border p-4 bg-white text-sm max-h-96 overflow-y-auto"
+                            dangerouslySetInnerHTML={{
+                              __html: formatEmailBody(card.action_payload.bodyHtml || card.action_payload.bodyText || '')
+                            }}
+                          />
+                        </div>
+                      )}
+                      {card.action_payload.classification && (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Classification</p>
+                          <div className="flex gap-2 items-center">
+                            <Badge variant="outline">{card.action_payload.classification.category}</Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {Math.round((card.action_payload.classification.confidence || 0) * 100)}% confidence
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">Email content not available</p>
+                  )}
                 </div>
               </>
             )}
@@ -416,6 +533,15 @@ export function CardDetailSheet({ card, open, onOpenChange }: CardDetailSheetPro
                     </p>
                     <CardReviewChat
                       card={card}
+                      emailContent={emailData || (card.action_payload?.bodyText || card.action_payload?.bodyHtml ? {
+                        from_email: card.action_payload?.from?.email || '',
+                        from_name: card.action_payload?.from?.name || null,
+                        subject: card.action_payload?.subject || '',
+                        body_text: card.action_payload?.bodyText || null,
+                        body_html: card.action_payload?.bodyHtml || null,
+                        received_at: card.created_at || new Date().toISOString(),
+                        category: card.action_payload?.classification?.category || null,
+                      } : null)}
                       onCardRevised={() => {
                         toast({
                           title: 'Card Revised',
@@ -448,6 +574,19 @@ export function CardDetailSheet({ card, open, onOpenChange }: CardDetailSheetPro
               >
                 <X className="h-4 w-4 mr-2" />
                 Reject
+              </Button>
+              <Button
+                onClick={handleMarkDone}
+                variant="secondary"
+                className="flex-1"
+                disabled={markCardDone.isPending}
+              >
+                {markCardDone.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4 mr-2" />
+                )}
+                Done
               </Button>
               <Button
                 onClick={handleApprove}

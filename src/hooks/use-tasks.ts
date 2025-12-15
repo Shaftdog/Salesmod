@@ -113,9 +113,26 @@ export function useCreateTask() {
 
   return useMutation({
     mutationFn: async (task: any) => {
+      // Get current user and their tenant_id
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.tenant_id) {
+        throw new Error('User has no tenant_id assigned - cannot create task')
+      }
+
       const { data, error } = await supabase
         .from('tasks')
-        .insert(task)
+        .insert({
+          ...task,
+          tenant_id: profile.tenant_id,
+        })
         .select(`
           *,
           client:clients(*),
@@ -126,7 +143,7 @@ export function useCreateTask() {
           creator:profiles!tasks_created_by_fkey(*)
         `)
         .single()
-      
+
       if (error) throw error
       return transformTask(data)
     },

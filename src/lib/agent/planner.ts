@@ -94,18 +94,42 @@ function buildPlanningPrompt(context: AgentContext): string {
     return `- ${g.goal.metricType}: ${g.progress.toFixed(1)}% complete (Target: ${g.goal.targetValue}, Gap: ${g.gapToTarget.toFixed(0)}, ${g.daysRemaining} days left) ${status}`;
   }).join('\n');
 
-  // Format top clients
-  const topClients = clients.slice(0, 15);
+  // Format top clients with recent activity details
+  // Show up to 25 clients for more variety
+  const topClients = clients.slice(0, 25);
   const clientsText = topClients.map(c => {
     const primaryContact = c.contacts.find((ct: any) => ct.isPrimary) || c.contacts[0];
+    const hasContactsWithEmail = c.contacts.some((ct: any) => ct.email);
+    const needsContactResearch = !hasContactsWithEmail;
+
+    // Show recent activities to prevent duplicates
+    const recentActivitySummary = c.recentActivities && c.recentActivities.length > 0
+      ? c.recentActivities.slice(0, 5).map((a: any) => {
+          const activityDate = new Date(a.createdAt);
+          const hoursAgo = Math.floor((currentTime.getTime() - activityDate.getTime()) / (1000 * 60 * 60));
+          const timeAgo = hoursAgo < 24 ? `${hoursAgo}h ago` : `${Math.floor(hoursAgo / 24)}d ago`;
+          return `    • ${a.activityType}: ${a.subject || 'No subject'} (${timeAgo})`;
+        }).join('\n')
+      : '    • No recent activities';
+
+    // Show contact status clearly
+    const contactStatus = needsContactResearch
+      ? '⚠️ NO CONTACTS WITH EMAIL - Use RESEARCH to find contacts first'
+      : primaryContact
+        ? `${primaryContact.firstName} ${primaryContact.lastName} <${primaryContact.email}>`
+        : 'None';
+
     return `
 **${c.client.companyName}** (ID: ${c.client.id})
-- Primary Contact: ${primaryContact ? `${primaryContact.firstName} ${primaryContact.lastName} <${primaryContact.email}>` : 'None'}
-- Last Contact: ${c.lastContactDays} days ago
+- Primary Contact: ${contactStatus}
+- Last Engagement: ${c.lastContactDays === 0 ? 'TODAY (DO NOT CONTACT)' : c.lastContactDays === 999 ? 'Never' : `${c.lastContactDays} days ago`}
+- Total Contacts: ${c.contacts.length} (${c.contacts.filter((ct: any) => ct.email).length} with email)
 - Recent Orders: ${c.recentOrders.length}
 - Engagement Score: ${(c.engagementScore * 100).toFixed(0)}%
 - RFM Score: ${(c.rfmScore * 100).toFixed(0)}%
 - Priority Score: ${c.priorityScore.toFixed(1)}
+- Recent Activities (AVOID DUPLICATING):
+${recentActivitySummary}
 `;
   }).join('\n');
 
@@ -132,11 +156,12 @@ Recent Activity (Last 7 Days):
       }).join('\n')
     : 'No previous rejection feedback';
 
-  // Extract avoidance rules
+  // Extract avoidance rules - sort by importance to keep most critical rules
   const avoidanceRules = cardFeedback
     .filter(m => typeof m.content === 'object' && m.content.rule)
+    .sort((a, b) => (b.importance || 0) - (a.importance || 0)) // Most important first
     .map(m => `- ${m.content.rule}`)
-    .slice(0, 5);
+    .slice(0, 50); // Future-proofed to handle up to 50 rules
   const avoidanceRulesText = avoidanceRules.length > 0
     ? avoidanceRules.join('\n')
     : 'No specific avoidance rules';
@@ -167,14 +192,14 @@ ${highPriorityCases.length > 0 ? `\n⚠️ High Priority Cases:\n${highPriorityC
   // Format order history summary
   const recentOrders = allOrders.slice(0, 100); // Last 100 orders
   const ordersByStatus = {
-    completed: allOrders.filter(o => o.status === 'completed').length,
-    new: allOrders.filter(o => o.status === 'new').length,
-    in_progress: allOrders.filter(o => ['in_progress', 'assigned', 'scheduled'].includes(o.status || '')).length,
-    in_review: allOrders.filter(o => ['in_review', 'revisions'].includes(o.status || '')).length,
+    delivered: allOrders.filter(o => o.status === 'DELIVERED' || o.status === 'WORKFILE').length,
+    intake: allOrders.filter(o => o.status === 'INTAKE').length,
+    in_progress: allOrders.filter(o => ['INSPECTED', 'SCHEDULING', 'SCHEDULED', 'FINALIZATION', 'READY_FOR_DELIVERY'].includes(o.status || '')).length,
+    correction: allOrders.filter(o => ['CORRECTION', 'REVISION'].includes(o.status || '')).length,
   };
   const ordersSummary = `
 Total Orders (Recent 3000): ${allOrders.length}
-Status Breakdown: Completed: ${ordersByStatus.completed}, In Progress: ${ordersByStatus.in_progress}, In Review: ${ordersByStatus.in_review}, New: ${ordersByStatus.new}
+Status Breakdown: Delivered: ${ordersByStatus.delivered}, In Progress: ${ordersByStatus.in_progress}, Corrections: ${ordersByStatus.correction}, New Intake: ${ordersByStatus.intake}
 Recent Activity: ${recentOrders.length} orders in latest batch
 `;
 
@@ -213,29 +238,40 @@ ${memoriesText || 'No other relevant memories'}
 ## Your Task
 Analyze the current situation and propose 3-7 high-impact actions to achieve the goals. Focus on:
 
-1. **Learn from Feedback**: CRITICAL - Review the "Card Rejection Feedback" and "Avoidance Rules" sections above. Do NOT create cards that will be rejected for the same reasons. Apply these learnings to all your recommendations.
-2. **Goal-Driven**: Prioritize actions that directly move the needle on behind-schedule goals
-3. **High-Value Clients**: Target clients with high RFM scores and recent engagement
-4. **Re-engagement**: Reach out to previously active clients who haven't been contacted recently (>10 days)
-5. **Nurture Pipeline**: Follow up on deals in progress, propose new opportunities
-6. **Smart Timing**: Avoid clients contacted in the last 3-5 days
-7. **Personalization**: Use client context to craft relevant, specific messages
-8. **Case Management**: Address high-priority or urgent support cases that need attention
-9. **Service Recovery**: Follow up with clients who have open complaints or quality concerns
-10. **Quality Over Quantity**: Better to create 3 excellent cards than 7 mediocre ones that will be rejected
+1. **NO DUPLICATES - CRITICAL**: Check each client's "Recent Activities" list above. If you see a recent activity (especially within the last 24 hours), DO NOT create another action of the same type for that client. For example, if you see "research: Research Complete" in the last 24h, DO NOT propose another research card for that client.
+2. **Learn from Feedback**: Review the "Card Rejection Feedback" and "Avoidance Rules" sections above. Do NOT create cards that will be rejected for the same reasons.
+3. **Goal-Driven**: Prioritize actions that directly move the needle on behind-schedule goals
+4. **High-Value Clients**: Target clients with high RFM scores and recent engagement
+5. **Re-engagement**: Reach out to previously active clients who haven't been contacted recently (>10 days)
+6. **Nurture Pipeline**: Follow up on deals in progress, propose new opportunities
+7. **Smart Timing**: STRICT RULE - If "Last Engagement" shows "TODAY" or "0 days ago", skip that client entirely. If less than 3 days, strongly prefer other clients.
+8. **Personalization**: Use client context to craft relevant, specific messages
+9. **Case Management**: Address high-priority or urgent support cases that need attention
+10. **Service Recovery**: Follow up with clients who have open complaints or quality concerns
+11. **Quality Over Quantity**: Better to create 3 excellent cards than 7 mediocre ones that will be rejected
 
 ## Action Types Available
-- **send_email**: Reach out via email (follow-ups, check-ins, proposals)
-- **research**: AUTOMATED research about a client using web search and AI analysis. Use this to gather intelligence, find contact info, understand business context, market activity, expansion plans, etc. This executes automatically and saves results to the client's activity feed.
+- **send_email**: Reach out via email (follow-ups, check-ins, proposals). REQUIRES a contact with email address.
+- **research**: AUTOMATED research about a client using web search and AI analysis. This will:
+  - Search for company information and contacts
+  - Extract contact details (name, email, title) from web results
+  - AUTOMATICALLY CREATE new contacts in the database
+  - Save research summary to activities
+  Use this for clients marked "NO CONTACTS WITH EMAIL" or when you need to find more people at a company.
 - **create_task**: Create a task for manual human actions (calls, meetings, in-person visits, physical mail, manual data entry)
 - **follow_up**: Follow up on a previous interaction or order
 - **create_deal**: Create a new deal opportunity in the pipeline
 
+## CRITICAL: Contact Availability Rules
+- **If client shows "NO CONTACTS WITH EMAIL"**: You MUST use **research** first to find contacts. DO NOT create send_email cards for these clients.
+- **If client has contacts with email**: You can create send_email cards
+- Research cards will automatically find and create contacts, then you can email them in the next run
+
 ## Important Notes
 - For calls or meetings: Use **create_task** to request the user schedule and conduct them
-- For research needs (finding contacts, understanding business, market intel): Use **research** - it executes automatically via web search and AI
+- For finding contacts: Use **research** - it automatically finds and creates contacts from web search
 - Only use **create_task** for actions that truly require human presence or manual work
-- Tasks are for actions that require human involvement
+- Spread actions across MANY different clients - don't focus on the same 3-5 clients repeatedly
 
 ## Email Best Practices
 - Keep subject lines clear and actionable

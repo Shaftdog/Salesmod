@@ -1,6 +1,168 @@
 {
-  "decisions": [],
-  "improvements": [],
-  "patterns": [],
-  "last_updated": "2025-11-03"
+  "decisions": [
+    {
+      "date": "2025-12-10",
+      "context": "Research card execution timing out on Vercel with FUNCTION_INVOCATION_TIMEOUT",
+      "decision": "Export maxDuration=300 directly from route.ts file, not vercel.json",
+      "rationale": "vercel.json 'functions' config does NOT work for Next.js App Router. Must use route segment config (export const maxDuration)"
+    },
+    {
+      "date": "2025-12-10",
+      "context": "Need to handle future-dated tasks from research recommendations",
+      "decision": "Added 'scheduled' state to kanban cards with due_at field and auto-promotion scheduler",
+      "rationale": "Separates immediate actions from future follow-ups. Scheduler promotes to 'suggested' when due_at <= now"
+    },
+    {
+      "date": "2025-12-10",
+      "context": "Apollo.io phone reveal requiring webhook",
+      "decision": "Disabled reveal_phone_number in Apollo API calls",
+      "rationale": "Apollo requires webhook_url for phone number reveals on some plans. Focus on email enrichment instead"
+    },
+    {
+      "date": "2025-12-09",
+      "context": "Agent duplicate card spam - research on same client 5+ times per day",
+      "decision": "Changed research activity_type from 'note' to 'research' and expanded calculateLastContactDays() to include all engagement types",
+      "rationale": "Activity-based timing logic only counted email/call/meeting, making research invisible to the 'smart timing' feature"
+    },
+    {
+      "date": "2025-12-09",
+      "context": "Jobs not producing cards after multi-tenant migration",
+      "decision": "Pass tenant_id directly to getTargetContacts() instead of looking it up from org_id via profiles",
+      "rationale": "Looking up tenant from org_id is fragile and can fail. Jobs table has tenant_id, use it directly"
+    },
+    {
+      "date": "2025-12-09",
+      "context": "Learning rules capped at exactly 20 despite having 59 in database",
+      "decision": "Fetch card_feedback memories separately with dedicated 100 limit instead of sharing 50 limit with all memory types",
+      "rationale": "Shared memory limit was silently truncating card_feedback rules, breaking agent learning"
+    }
+  ],
+  "improvements": [
+    {
+      "date": "2025-12-10",
+      "area": "Contact Enrichment",
+      "change": "Added Apollo.io integration for verified email addresses during research",
+      "impact": "Contacts found via research now have verified emails instead of scraped/guessed ones"
+    },
+    {
+      "date": "2025-12-10",
+      "area": "Task Scheduling",
+      "change": "Research actions now auto-schedule based on timeframe: immediate=suggested, short_term=+7d, ongoing=+21d",
+      "impact": "Future follow-ups don't clutter immediate action queue"
+    },
+    {
+      "date": "2025-12-10",
+      "area": "Contact Visibility",
+      "change": "Added 'Verified' (green) and 'Research' (cyan) badges to contact cards",
+      "impact": "Users can see which contacts have Apollo-verified emails vs web-scraped data"
+    },
+    {
+      "date": "2025-12-09",
+      "area": "Agent Planner Prompt",
+      "change": "Added 'Recent Activities (AVOID DUPLICATING)' section per client with timestamps showing hours/days ago",
+      "impact": "AI can now SEE what actions were recently taken, not just be told to avoid duplicates"
+    },
+    {
+      "date": "2025-12-09",
+      "area": "Activity Tracking",
+      "change": "Research cards now log as activity_type: 'research' instead of 'note'",
+      "impact": "Research engagements now visible to timing logic, prevents research spam"
+    },
+    {
+      "date": "2025-12-09",
+      "area": "Tenant Consolidation",
+      "change": "Created scripts to diagnose and fix fragmented tenant memories (check-agent-memories-tenant.js, fix-agent-memories-tenant.js)",
+      "impact": "Consolidated 59 memories from 6 duplicate tenants into correct tenant"
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Vercel Function Timeouts (App Router)",
+      "description": "For Next.js App Router, export maxDuration directly from route.ts. vercel.json 'functions' config is ignored. Research tasks need 300s due to: web search + Apollo enrichment + AI summarization + action extraction.",
+      "files": ["src/app/api/agent/execute-card/route.ts", "src/app/api/agent/run/route.ts"]
+    },
+    {
+      "name": "Database Tags Need UI Components",
+      "description": "Tags stored in DB arrays (like contact.tags) are invisible to users until you add UI components to display them. Always add badges/indicators when creating new tag types.",
+      "files": ["src/components/contacts/contact-card.tsx"]
+    },
+    {
+      "name": "Scheduled State Pattern",
+      "description": "For future-dated actions: 1) Add state to DB constraint, 2) Set due_at timestamp, 3) Create scheduler to promote when due, 4) Call scheduler at start of orchestrator run, 5) Add UI column with due date display.",
+      "files": ["src/lib/agent/scheduler.ts", "src/lib/agent/orchestrator.ts", "src/components/agent/kanban-board.tsx"]
+    },
+    {
+      "name": "Apollo API Limitations",
+      "description": "Apollo People Enrichment: reveal_phone_number requires webhook_url, linkedin column may not exist in your schema. Focus on email enrichment. Only save contacts that have email OR phone.",
+      "files": ["src/lib/research/apollo-enrichment.ts", "src/lib/agent/executor.ts"]
+    },
+    {
+      "name": "Activity Type Visibility",
+      "description": "When creating new activity types, ensure they're included in ALL filtering logic that determines engagement - calculateLastContactDays(), getRecentActivities(), engagement scoring, etc.",
+      "files": ["src/lib/agent/context-builder.ts", "src/lib/agent/executor.ts"]
+    },
+    {
+      "name": "TypeScript Interface Alignment",
+      "description": "When database tables have tenant_id, TypeScript interfaces MUST include tenant_id. Always check interfaces after schema changes.",
+      "files": ["src/types/jobs.ts"]
+    },
+    {
+      "name": "Direct Tenant ID Passing",
+      "description": "Never look up tenant_id from org_id via profiles. Pass tenant_id directly from the source (job.tenant_id, context.tenantId, etc.).",
+      "files": ["src/lib/agent/job-planner.ts"]
+    },
+    {
+      "name": "AI Prompt Visibility",
+      "description": "Soft rules in AI prompts ('do not duplicate') are not enough. The AI needs to SEE the data (recent activities, timestamps) to make informed decisions.",
+      "files": ["src/lib/agent/planner.ts"]
+    },
+    {
+      "name": "Memory Limit Separation",
+      "description": "Different memory scopes need separate limits. card_feedback rules should not compete with chat/classification for a shared limit.",
+      "files": ["src/lib/agent/context-builder.ts"]
+    },
+    {
+      "name": "Multi-Tenant Migration Checklist",
+      "description": "When migrating org_id to tenant_id: 1) Update TypeScript interfaces, 2) Update all function signatures, 3) Remove profile-based tenant lookups, 4) Consolidate fragmented records, 5) Verify memory/rule associations",
+      "files": ["src/types/*.ts", "src/lib/agent/*.ts"]
+    }
+  ],
+  "last_updated": "2025-12-14",
+  "critical_bugs": [
+    {
+      "date": "2025-12-14",
+      "bug": "React Query hook bypassing API endpoint",
+      "symptom": "Subtasks returned by API but not showing in UI",
+      "root_cause": "useMyProductionTasksToday hook queried Supabase directly, not using the /api/production/my-tasks endpoint that had been updated to fetch subtasks",
+      "fix": "Changed hook to use fetch('/api/production/my-tasks') instead of direct Supabase query",
+      "lesson": "When updating an API endpoint with new data (subtasks, relations, etc.), ALWAYS check if there's a React Query hook that bypasses the API. Hooks that query Supabase directly will miss API-level enhancements.",
+      "files": ["src/hooks/use-production.ts", "src/app/api/production/my-tasks/route.ts"]
+    },
+    {
+      "date": "2025-12-14",
+      "bug": "Authorization comparing org_id to user.id",
+      "symptom": "403 Forbidden errors on task detail page",
+      "root_cause": "Code checked `production_card.org_id !== user.id` but org_id is a tenant identifier, not a user ID",
+      "fix": "Get user's tenant_id from profile, then compare: `production_card.org_id === profile.tenant_id`",
+      "lesson": "org_id/tenant_id are organization identifiers, NOT user IDs. Authorization must compare tenant_id to tenant_id, not to user.id.",
+      "files": ["src/app/api/production/tasks/[id]/route.ts", "src/app/api/production/tasks/[id]/time-entries/route.ts"]
+    }
+  ],
+  "debugging_techniques": [
+    {
+      "date": "2025-12-14",
+      "scenario": "Data returned by API but not rendered in UI",
+      "technique": "Use Playwright evaluate() to check if expected text exists in DOM",
+      "example": "document.body.textContent.includes('Subtasks') returned false, proving the component wasn't rendering subtasks despite API returning them",
+      "next_step": "If DOM doesn't have expected content, trace data flow: API -> React Query hook -> Component props -> Render logic"
+    }
+  ],
+  "anti_patterns": [
+    {
+      "name": "Dual Data Paths",
+      "description": "Having both a React Query hook that queries Supabase directly AND an API endpoint for the same data. When you update one, the other gets stale.",
+      "solution": "Use API endpoints consistently. Hooks should call fetch('/api/...') not query Supabase directly. This ensures all enhancements (subtasks, timers, relations) are available to the frontend.",
+      "example": "useMyProductionTasksToday was querying Supabase while /api/production/my-tasks had subtask fetching logic"
+    }
+  ]
 }

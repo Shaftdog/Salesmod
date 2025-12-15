@@ -87,18 +87,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate pagination metadata
-    const totalPages = count ? Math.ceil(count / limit) : 0;
+    const total_pages = count ? Math.ceil(count / limit) : 0;
 
-    return successResponse<Product[]>(
-      data || [],
-      undefined,
-      {
+    // Return response matching ProductListResponse type
+    return NextResponse.json({
+      data: data || [],
+      pagination: {
         page,
         limit,
         total: count || 0,
-        totalPages,
-      }
-    );
+        total_pages,
+      },
+    });
   } catch (error) {
     return handleApiError(error);
   }
@@ -120,6 +120,21 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    const tenantId = profile?.tenant_id;
+    if (!tenantId) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned - cannot create product' },
+        { status: 403 }
+      );
     }
 
     // Validate request body
@@ -148,6 +163,7 @@ export async function POST(request: NextRequest) {
 
     // Prepare product data
     const productData = {
+      tenant_id: tenantId,
       org_id: orgId,
       name: body.name,
       description: body.description || null,

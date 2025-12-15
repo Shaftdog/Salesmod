@@ -10,6 +10,20 @@ export function useDeals(clientId?: string) {
   const { data: deals = [], isLoading, error } = useQuery({
     queryKey: clientId ? ['deals', 'client', clientId] : ['deals'],
     queryFn: async () => {
+      // Get current user and their tenant_id for multi-tenant isolation
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.tenant_id) {
+        throw new Error('User has no tenant_id assigned')
+      }
+
       let query = supabase
         .from('deals')
         .select(`
@@ -19,6 +33,7 @@ export function useDeals(clientId?: string) {
           assignee:profiles!deals_assigned_to_fkey(*),
           creator:profiles!deals_created_by_fkey(*)
         `)
+        .eq('tenant_id', profile.tenant_id)
         .order('created_at', { ascending: false })
 
       if (clientId) {
@@ -42,6 +57,20 @@ export function useActiveDeals() {
   const { data: deals = [], isLoading, error } = useQuery({
     queryKey: ['deals', 'active'],
     queryFn: async () => {
+      // Get current user and their tenant_id for multi-tenant isolation
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.tenant_id) {
+        throw new Error('User has no tenant_id assigned')
+      }
+
       const { data, error } = await supabase
         .from('deals')
         .select(`
@@ -51,6 +80,7 @@ export function useActiveDeals() {
           assignee:profiles!deals_assigned_to_fkey(*),
           creator:profiles!deals_created_by_fkey(*)
         `)
+        .eq('tenant_id', profile.tenant_id)
         .not('stage', 'in', '(won,lost)')
         .order('expected_close_date')
 
@@ -69,6 +99,20 @@ export function useDeal(id: string) {
   const { data: deal, isLoading, error } = useQuery({
     queryKey: ['deals', id],
     queryFn: async () => {
+      // Get current user and their tenant_id for multi-tenant isolation
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.tenant_id) {
+        throw new Error('User has no tenant_id assigned')
+      }
+
       const { data, error } = await supabase
         .from('deals')
         .select(`
@@ -79,6 +123,7 @@ export function useDeal(id: string) {
           creator:profiles!deals_created_by_fkey(*)
         `)
         .eq('id', id)
+        .eq('tenant_id', profile.tenant_id)
         .single()
 
       if (error) throw error
@@ -97,9 +142,26 @@ export function useCreateDeal() {
 
   return useMutation({
     mutationFn: async (deal: any) => {
+      // Get current user and their tenant_id
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.tenant_id) {
+        throw new Error('User has no tenant_id assigned - cannot create deal')
+      }
+
       const { data, error } = await supabase
         .from('deals')
-        .insert(deal)
+        .insert({
+          ...deal,
+          tenant_id: profile.tenant_id,
+        })
         .select(`
           *,
           client:clients(*),
@@ -108,7 +170,7 @@ export function useCreateDeal() {
           creator:profiles!deals_created_by_fkey(*)
         `)
         .single()
-      
+
       if (error) throw error
       return transformDeal(data)
     },

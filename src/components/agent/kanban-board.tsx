@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Check, X, Clock, AlertCircle, Trash2 } from 'lucide-react';
+import { Loader2, Check, X, Clock, AlertCircle, Trash2, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   AlertDialog,
@@ -21,6 +21,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 
 const COLUMNS = [
+  { id: 'scheduled', title: 'Scheduled', color: 'bg-indigo-50 border-indigo-200' },
   { id: 'suggested', title: 'Suggested', color: 'bg-blue-50 border-blue-200' },
   { id: 'in_review', title: 'In Review', color: 'bg-yellow-50 border-yellow-200' },
   { id: 'approved', title: 'Approved', color: 'bg-green-50 border-green-200' },
@@ -28,6 +29,21 @@ const COLUMNS = [
   { id: 'done', title: 'Done', color: 'bg-gray-50 border-gray-200' },
   { id: 'blocked', title: 'Blocked', color: 'bg-red-50 border-red-200' },
 ];
+
+/**
+ * Format due date for display on scheduled cards
+ */
+function formatDueDate(dueAt: string): string {
+  const due = new Date(dueAt);
+  const now = new Date();
+  const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 0) return 'Today';
+  if (diffDays === 1) return 'Tomorrow';
+  if (diffDays <= 7) return `${diffDays} days`;
+
+  return due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
 interface KanbanBoardProps {
   onCardClick?: (card: KanbanCard) => void;
@@ -222,6 +238,13 @@ function KanbanCardItem({ card, onDragStart, onClick, onDelete }: KanbanCardItem
         <p className="text-xs text-muted-foreground line-clamp-2">
           {card.rationale}
         </p>
+
+        {card.state === 'scheduled' && card.due_at && (
+          <div className="flex items-center gap-1 text-xs text-indigo-600">
+            <Calendar className="h-3 w-3" />
+            <span>Due: {formatDueDate(card.due_at)}</span>
+          </div>
+        )}
 
         {card.state === 'in_review' && (
           <div className="flex items-center gap-1 text-xs text-yellow-600">

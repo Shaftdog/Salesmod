@@ -28,6 +28,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -37,6 +38,7 @@ import {
 } from '@/components/ui/select';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { CreateJobRequestSchema } from '@/types/jobs';
+import { PartyRoleCode, getRoleLabel } from '@/lib/roles/mapPartyRole';
 
 type CreateJobFormData = z.infer<typeof CreateJobRequestSchema>;
 
@@ -45,6 +47,44 @@ interface JobFormDialogProps {
   onOpenChange: (open: boolean) => void;
   job?: Job | null; // Optional job for edit mode
 }
+
+// All available role codes for contact targeting
+const ALL_ROLE_CODES: PartyRoleCode[] = [
+  'mortgage_lender',
+  'loan_officer',
+  'qm_lender_contact',
+  'non_qm_lender_contact',
+  'private_lender',
+  'investor',
+  'accredited_investor',
+  'real_estate_investor',
+  'short_term_re_investor',
+  'long_term_re_investor',
+  'registered_investment_advisor',
+  'fund_manager',
+  'co_gp',
+  'realtor',
+  'real_estate_broker',
+  'real_estate_dealer',
+  'wholesaler',
+  'buyer',
+  'seller',
+  'owner',
+  'builder',
+  'general_contractor',
+  'attorney',
+  'real_estate_attorney',
+  'estate_attorney',
+  'family_attorney',
+  'accountant',
+  'ira_custodian_contact',
+  'amc_contact',
+  'amc_billing_contact',
+  'gse',
+  'vendor',
+  'personal',
+  'staff',
+];
 
 export function JobFormDialog({ open, onOpenChange, job }: JobFormDialogProps) {
   const isEditMode = !!job;
@@ -62,6 +102,9 @@ export function JobFormDialog({ open, onOpenChange, job }: JobFormDialogProps) {
       params: {
         target_type: 'contacts',
         target_group: 'all_clients',
+        target_filter: {
+          target_role_codes: [],
+        },
         cadence: {
           day0: true,
           day4: false,
@@ -254,6 +297,57 @@ export function JobFormDialog({ open, onOpenChange, job }: JobFormDialogProps) {
                     <FormMessage />
                   </FormItem>
                 )}
+              />
+
+              <FormField
+                control={form.control}
+                name="params.target_filter.target_role_codes"
+                render={({ field }) => {
+                  const selectedCount = field.value?.length || 0;
+
+                  return (
+                    <FormItem>
+                      <FormLabel>
+                        Target Roles (Optional)
+                        {selectedCount > 0 && (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            ({selectedCount} selected)
+                          </span>
+                        )}
+                      </FormLabel>
+                      <FormDescription>
+                        Select specific contact roles to target. Leave empty to target all roles.
+                      </FormDescription>
+                      <div className="mt-2 border rounded-lg p-3 max-h-64 overflow-y-auto bg-background">
+                        <div className="space-y-2">
+                          {ALL_ROLE_CODES.map((roleCode) => (
+                            <div key={roleCode} className="flex items-center space-x-2 hover:bg-accent/50 rounded p-2 transition-colors">
+                              <Checkbox
+                                id={`role-${roleCode}`}
+                                checked={field.value?.includes(roleCode) || false}
+                                onCheckedChange={(checked) => {
+                                  const currentValues = field.value || [];
+                                  if (checked) {
+                                    field.onChange([...currentValues, roleCode]);
+                                  } else {
+                                    field.onChange(currentValues.filter((v) => v !== roleCode));
+                                  }
+                                }}
+                              />
+                              <label
+                                htmlFor={`role-${roleCode}`}
+                                className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                              >
+                                {getRoleLabel(roleCode)}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
 
               <FormField

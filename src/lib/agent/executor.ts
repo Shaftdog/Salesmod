@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 export interface KanbanCard {
   id: string;
   org_id: string;
+  tenant_id: string;
   run_id?: string;
   client_id: string;
   contact_id?: string;
@@ -168,6 +169,12 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
     };
   }
 
+  // Use card's tenant_id (already validated by API route)
+  const tenantId = card.tenant_id;
+  if (!tenantId) {
+    throw new Error('Card has no tenant_id assigned');
+  }
+
   // Get recipient email from payload, contact, or client
   let recipientEmail = payload.to;
   const debugInfo: string[] = [];
@@ -312,7 +319,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
     const { data: suppression } = await supabase
       .from('email_suppressions')
       .select('*')
-      .eq('org_id', card.org_id)
+      .eq('tenant_id', card.tenant_id)
       .eq('contact_id', contactId)
       .single();
 
@@ -337,6 +344,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
       await supabase
         .from('activities')
         .insert({
+          tenant_id: tenantId,
           client_id: card.client_id,
           contact_id: card.contact_id,
           activity_type: 'email',
@@ -397,6 +405,7 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
     await supabase
       .from('activities')
       .insert({
+        tenant_id: tenantId,
         client_id: card.client_id,
         contact_id: card.contact_id,
         activity_type: 'email',
@@ -442,6 +451,12 @@ async function executeCreateTask(card: KanbanCard): Promise<ExecutionResult> {
       throw new Error('User not authenticated');
     }
 
+    // Use card's tenant_id (already validated by API route) with profile fallback
+    const tenantId = card.tenant_id;
+    if (!tenantId) {
+      throw new Error('Card has no tenant_id assigned');
+    }
+
     // Map priority values from kanban card to tasks table
     // Kanban: low, medium, high → Tasks: low, normal, high, urgent
     const priorityMap: Record<string, string> = {
@@ -454,6 +469,7 @@ async function executeCreateTask(card: KanbanCard): Promise<ExecutionResult> {
     const { data, error } = await supabase
       .from('tasks')
       .insert({
+        tenant_id: tenantId, // Required for multi-tenant RLS
         title: card.title,
         description: payload.description || card.description,
         client_id: card.client_id,
@@ -473,6 +489,7 @@ async function executeCreateTask(card: KanbanCard): Promise<ExecutionResult> {
     await supabase
       .from('activities')
       .insert({
+        tenant_id: tenantId,
         client_id: card.client_id,
         contact_id: card.contact_id,
         activity_type: 'task',
@@ -515,11 +532,18 @@ async function executeFollowUp(card: KanbanCard): Promise<ExecutionResult> {
     };
   }
 
+  // Use card's tenant_id (already validated by API route)
+  const tenantId = card.tenant_id;
+  if (!tenantId) {
+    throw new Error('Card has no tenant_id assigned');
+  }
+
   // Create an activity record for the follow-up
   try {
     await supabase
       .from('activities')
       .insert({
+        tenant_id: tenantId,
         client_id: card.client_id,
         contact_id: card.contact_id,
         activity_type: 'note',
@@ -559,10 +583,28 @@ async function executeCreateDeal(card: KanbanCard): Promise<ExecutionResult> {
       throw new Error('User not authenticated');
     }
 
+    // Use card's tenant_id (already validated by API route)
+    const tenantId = card.tenant_id;
+    if (!tenantId) {
+      throw new Error('Card has no tenant_id assigned - cannot create deal');
+    }
+
+    // Get client_id from card or payload
+    const clientId = card.client_id || payload?.clientId;
+    if (!clientId) {
+      return {
+        success: false,
+        cardId: card.id,
+        message: 'Cannot create deal without a client',
+        error: 'No client_id associated with this card. Please link a client first.',
+      };
+    }
+
     const { data, error } = await supabase
       .from('deals')
       .insert({
-        client_id: card.client_id,
+        tenant_id: tenantId, // Required for multi-tenant RLS
+        client_id: clientId,
         contact_id: card.contact_id,
         title: payload.title || card.title,
         description: payload.description || card.description,
@@ -581,8 +623,10 @@ async function executeCreateDeal(card: KanbanCard): Promise<ExecutionResult> {
     await supabase
       .from('activities')
       .insert({
-        client_id: card.client_id,
+        tenant_id: tenantId, // Required for multi-tenant RLS
+        client_id: clientId,
         contact_id: card.contact_id,
+        deal_id: data.id, // Link activity to the deal
         activity_type: 'note',
         subject: `Deal Created: ${data.title}`,
         description: `AI agent created new deal opportunity: ${card.rationale}\n\nDeal Stage: ${data.stage}\nEstimated Value: ${data.value ? `$${data.value}` : 'Not specified'}\n\n${data.description || ''}`,
@@ -622,12 +666,19 @@ async function executeScheduleCall(card: KanbanCard): Promise<ExecutionResult> {
       throw new Error('User not authenticated');
     }
 
+    // Use card's tenant_id (already validated by API route)
+    const tenantId = card.tenant_id;
+    if (!tenantId) {
+      throw new Error('Card has no tenant_id assigned');
+    }
+
     // Create a task for the user to actually make the call
     const dueDate = payload.scheduledAt || new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
-    
+
     const { data: task, error: taskError } = await supabase
       .from('tasks')
       .insert({
+        tenant_id: tenantId, // Required for multi-tenant RLS
         title: card.title,
         description: `${card.rationale}\n\nCall Purpose: ${card.description || 'Strategic discussion'}\nDuration: ${payload.durationMinutes || 30} minutes`,
         client_id: card.client_id,
@@ -647,6 +698,7 @@ async function executeScheduleCall(card: KanbanCard): Promise<ExecutionResult> {
     await supabase
       .from('activities')
       .insert({
+        tenant_id: tenantId,
         client_id: card.client_id,
         contact_id: card.contact_id,
         activity_type: 'task',
@@ -685,11 +737,28 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
       throw new Error('User not authenticated');
     }
 
+    // Use card's tenant_id (already validated by API route)
+    const tenantId = card.tenant_id;
+    if (!tenantId) {
+      throw new Error('Card has no tenant_id assigned');
+    }
+
     // Dynamic imports to avoid errors if modules don't exist
-    const { gatherClientIntel, formatClientIntel } = await import('../research/internal-search');
+    const { gatherClientIntel } = await import('../research/internal-search');
     const { searchWeb } = await import('../research/web-search');
     const { summarizeResearch, extractKeyInsights } = await import('../research/summarizer');
     const { indexContent } = await import('../agent/rag');
+    const {
+      buildContactSearchQueries,
+      extractContactsFromResults,
+      validateContacts,
+      checkExistingContact
+    } = await import('../research/contact-extractor');
+    const {
+      enrichContactWithApollo,
+      getBestEmail,
+      getBestPhone
+    } = await import('../research/apollo-enrichment');
 
     console.log(`[Research] Starting research for client ${card.client_id}`);
 
@@ -697,15 +766,125 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
     const intel = await gatherClientIntel(card.client_id);
     console.log(`[Research] Gathered internal data: ${intel.metrics.totalOrders} orders, ${intel.metrics.totalRevenue} revenue`);
 
-    // Step 2: Web search (if API key configured)
+    // Step 2: Web search for company info AND contacts (if API key configured)
     let webResults: any[] = [];
+    let contactResults: any[] = [];
+    let contactsCreated = 0;
     const hasSearchAPI = process.env.TAVILY_API_KEY || process.env.BRAVE_SEARCH_API_KEY;
-    
+
     if (hasSearchAPI && intel.client) {
       try {
-        const query = `${intel.client.company_name} company information business`;
-        webResults = await searchWeb(query, 5);
-        console.log(`[Research] Found ${webResults.length} web results`);
+        // Search for company info
+        const companyQuery = `${intel.client.company_name} company information business`;
+        webResults = await searchWeb(companyQuery, 5);
+        console.log(`[Research] Found ${webResults.length} web results for company`);
+
+        // Search specifically for contacts
+        const contactQueries = buildContactSearchQueries(intel.client.company_name);
+        for (const query of contactQueries.slice(0, 2)) { // Limit to 2 contact searches
+          const results = await searchWeb(query, 5);
+          contactResults.push(...results);
+        }
+        console.log(`[Research] Found ${contactResults.length} web results for contacts`);
+
+        // Extract contacts using AI
+        if (contactResults.length > 0) {
+          const allResults = [...webResults, ...contactResults];
+          const extraction = await extractContactsFromResults(intel.client.company_name, allResults);
+          const validatedContacts = validateContacts(extraction.contacts);
+
+          console.log(`[Research] Extracted ${validatedContacts.length} valid contacts from web search`);
+
+          // Enrich contacts with Apollo.io to get verified emails/phones
+          const hasApolloKey = !!process.env.APOLLO_API_KEY;
+
+          for (const contact of validatedContacts) {
+            try {
+              let finalEmail = contact.email || null;
+              let finalPhone = contact.phone || null;
+              let finalTitle = contact.title || null;
+              let enrichmentSource = 'web-search';
+
+              // Try Apollo enrichment if we have the API key
+              if (hasApolloKey && contact.first_name && contact.last_name) {
+                const enrichResult = await enrichContactWithApollo({
+                  first_name: contact.first_name,
+                  last_name: contact.last_name,
+                  organization_name: intel.client.company_name,
+                  linkedin_url: contact.linkedin_url,
+                });
+
+                if (enrichResult.success && enrichResult.person) {
+                  const apolloEmail = getBestEmail(enrichResult.person);
+                  const apolloPhone = getBestPhone(enrichResult.person);
+
+                  if (apolloEmail) {
+                    finalEmail = apolloEmail;
+                    enrichmentSource = 'apollo-verified';
+                  }
+                  if (apolloPhone) {
+                    finalPhone = apolloPhone;
+                    enrichmentSource = 'apollo-verified';
+                  }
+                  if (enrichResult.person.title) {
+                    finalTitle = enrichResult.person.title;
+                  }
+                  // Note: linkedin_url available but contacts table doesn't have linkedin column
+
+                  console.log(`[Research] Apollo enriched ${contact.first_name} ${contact.last_name}: email=${apolloEmail || 'none'}, phone=${apolloPhone || 'none'}`);
+                }
+              }
+
+              // ONLY save contacts that have email OR phone - otherwise useless
+              if (!finalEmail && !finalPhone) {
+                console.log(`[Research] Skipping ${contact.first_name} ${contact.last_name} - no email or phone found`);
+                continue;
+              }
+
+              // Check if contact already exists
+              const exists = await checkExistingContact(
+                supabase,
+                tenantId,
+                finalEmail || undefined,
+                contact.first_name,
+                contact.last_name
+              );
+
+              if (exists) {
+                console.log(`[Research] Contact ${contact.first_name} ${contact.last_name} already exists, skipping`);
+                continue;
+              }
+
+              // Create the contact with verified info
+              const { data: newContact, error: contactError } = await supabase
+                .from('contacts')
+                .insert({
+                  tenant_id: tenantId,
+                  client_id: card.client_id,
+                  first_name: contact.first_name,
+                  last_name: contact.last_name,
+                  email: finalEmail,
+                  phone: finalPhone,
+                  title: finalTitle,
+                  department: contact.department || null,
+                  notes: `Found via research on ${new Date().toISOString().split('T')[0]}. Source: ${enrichmentSource}. Original source: ${contact.source_url || 'web search'}.`,
+                  tags: ['research-found', enrichmentSource === 'apollo-verified' ? 'apollo-verified' : `confidence-${contact.confidence}`],
+                  is_primary: false,
+                })
+                .select('id, first_name, last_name, email, phone')
+                .single();
+
+              if (contactError) {
+                console.error(`[Research] Failed to create contact ${contact.first_name} ${contact.last_name}:`, contactError);
+              } else {
+                console.log(`[Research] Created contact: ${newContact.first_name} ${newContact.last_name} (${newContact.email || 'no email'}, ${newContact.phone || 'no phone'})`);
+                contactsCreated++;
+              }
+            } catch (contactErr) {
+              console.error(`[Research] Error creating contact:`, contactErr);
+            }
+          }
+        }
       } catch (error) {
         console.error('[Research] Web search failed, continuing with internal data only:', error);
       }
@@ -714,49 +893,78 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
     }
 
     // Step 3: AI summarization
-    const summary = await summarizeResearch(intel, webResults);
-    console.log(`[Research] Generated summary (${summary.length} chars)`);
+    let summary: string;
+    try {
+      summary = await summarizeResearch(intel, webResults);
+      console.log(`[Research] Generated summary (${summary.length} chars)`);
+    } catch (summaryError: any) {
+      console.error('[Research] AI summarization failed:', summaryError);
+      // Use a basic fallback summary
+      summary = `# Research Summary: ${intel.client.company_name}
 
-    // Step 4: Save to activities
+## Our Relationship
+- Total Orders: ${intel.metrics.totalOrders}
+- Total Revenue: $${intel.metrics.totalRevenue.toFixed(2)}
+- Last Order: ${intel.metrics.lastOrderDate ? new Date(intel.metrics.lastOrderDate).toLocaleDateString() : 'Never'}
+- Contacts Found: ${contactsCreated}
+
+## Web Research
+Found ${webResults.length} web results.
+
+## Status
+AI summarization unavailable. Error: ${summaryError.message}`;
+    }
+
+    // Step 4: Save to activities (include contact findings)
+    const activityDescription = contactsCreated > 0
+      ? `${summary}\n\n---\n**Contacts Found:** ${contactsCreated} new contact(s) added to this company.`
+      : summary;
+
     const { data: activity, error: activityError } = await supabase
       .from('activities')
       .insert({
+        tenant_id: tenantId,
         client_id: card.client_id,
-        activity_type: 'note',
-        subject: `Research Complete: ${intel.client.company_name}`,
-        description: summary,
+        activity_type: 'research',
+        subject: `Research Complete: ${intel.client.company_name}${contactsCreated > 0 ? ` (+${contactsCreated} contacts)` : ''}`,
+        description: activityDescription,
         status: 'completed',
         completed_at: new Date().toISOString(),
         created_by: user.id,
       })
       .select()
       .single();
-    
+
     if (activityError) {
       console.error('[Research] Failed to save activity:', activityError);
       throw new Error(`Failed to save research to activities: ${activityError.message}`);
     }
-    
+
     console.log('[Research] Saved to activities:', activity.id);
 
     // Step 5: Index to RAG for future reference
     try {
-      await indexContent(
-        card.org_id,
-        'note', // Changed from 'research' to match DB constraint
-        card.id,
-        `Research: ${intel.client.company_name}`,
-        summary,
-        {
-          client_id: card.client_id,
-          client_name: intel.client.company_name,
-          research_date: new Date().toISOString(),
-          sources: webResults.length > 0 ? ['internal', 'web'] : ['internal'],
-          web_results_count: webResults.length,
-          metrics: intel.metrics,
-        }
-      );
-      console.log('[Research] Indexed to RAG');
+      const orgId = user?.id;
+
+      if (orgId) {
+        await indexContent(
+          orgId,
+          'note',
+          card.id,
+          `Research: ${intel.client.company_name}`,
+          summary,
+          {
+            client_id: card.client_id,
+            client_name: intel.client.company_name,
+            research_date: new Date().toISOString(),
+            sources: webResults.length > 0 ? ['internal', 'web'] : ['internal'],
+            web_results_count: webResults.length,
+            contacts_found: contactsCreated,
+            metrics: intel.metrics,
+          }
+        );
+        console.log('[Research] Indexed to RAG');
+      }
     } catch (error) {
       console.error('[Research] RAG indexing failed:', error);
     }
@@ -764,33 +972,103 @@ async function executeResearch(card: KanbanCard): Promise<ExecutionResult> {
     // Step 6: Save key insights to agent_memories
     try {
       const insights = extractKeyInsights(summary);
-      
+
       await supabase.from('agent_memories').insert({
-        org_id: card.org_id,
+        tenant_id: tenantId,
+        org_id: user?.id,
         scope: 'client_context',
         key: `research_${card.client_id}_${Date.now()}`,
         content: {
           client_id: card.client_id,
           client_name: intel.client.company_name,
           ...insights,
+          contacts_found: contactsCreated,
           metrics: intel.metrics,
         },
         importance: 0.8,
-        expires_at: null, // Never expires
+        expires_at: null,
       });
       console.log('[Research] Saved insights to agent_memories');
     } catch (error) {
       console.error('[Research] Memory save failed:', error);
     }
 
+    // Step 7: Extract actionable tasks and create follow-up cards
+    let actionsCreated = 0;
+    try {
+      const { extractActionsFromResearch, actionsToCardPayloads } = await import('../research/action-extractor');
+
+      // Get existing contacts for this client
+      const { data: clientContacts } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, email, title')
+        .eq('client_id', card.client_id);
+
+      const contactsForExtraction = (clientContacts || []).map(c => ({
+        name: `${c.first_name} ${c.last_name}`,
+        email: c.email || undefined,
+        title: c.title || undefined,
+      }));
+
+      const contactsForCards = (clientContacts || []).map(c => ({
+        id: c.id,
+        firstName: c.first_name,
+        lastName: c.last_name,
+        email: c.email || undefined,
+      }));
+
+      // Extract actions from research summary
+      const actions = await extractActionsFromResearch(summary, intel.client.company_name, contactsForExtraction);
+      console.log(`[Research] Extracted ${actions.length} actionable tasks`);
+
+      if (actions.length > 0) {
+        // Convert to card payloads
+        const cardPayloads = actionsToCardPayloads(actions, card.client_id, contactsForCards);
+
+        // Create kanban cards for each action
+        for (const payload of cardPayloads) {
+          const { error: cardError } = await supabase
+            .from('kanban_cards')
+            .insert({
+              tenant_id: tenantId,
+              org_id: user?.id,
+              client_id: payload.client_id,
+              contact_id: payload.contact_id || null,
+              type: payload.type,
+              title: payload.title,
+              description: payload.description,
+              rationale: payload.rationale,
+              priority: payload.priority,
+              state: payload.state, // 'scheduled' for future, 'suggested' for immediate
+              due_at: payload.due_at, // When scheduled cards become due
+              action_payload: payload.action_payload || {},
+              created_by: user?.id,
+            });
+
+          if (cardError) {
+            console.error(`[Research] Failed to create action card: ${cardError.message}`);
+          } else {
+            actionsCreated++;
+          }
+        }
+        console.log(`[Research] Created ${actionsCreated} follow-up action cards`);
+      }
+    } catch (actionError) {
+      console.error('[Research] Action extraction failed:', actionError);
+    }
+
     return {
       success: true,
       cardId: card.id,
-      message: 'Research completed and indexed',
+      message: contactsCreated > 0 || actionsCreated > 0
+        ? `Research completed. ${contactsCreated > 0 ? `Found ${contactsCreated} contact(s). ` : ''}${actionsCreated > 0 ? `Created ${actionsCreated} action card(s).` : ''}`
+        : 'Research completed and indexed',
       metadata: {
         summary: summary.substring(0, 200) + '...',
         sources: webResults.length > 0 ? 'internal + web' : 'internal only',
         web_results: webResults.length,
+        contacts_found: contactsCreated,
+        actions_created: actionsCreated,
       },
     };
   } catch (error: any) {
@@ -845,6 +1123,18 @@ async function executeReplyToEmail(card: KanbanCard): Promise<ExecutionResult> {
   const payload = card.action_payload;
 
   try {
+    // Get authenticated user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    // Use card's tenant_id (already validated by API route)
+    const tenantId = card.tenant_id;
+    if (!tenantId) {
+      throw new Error('Card has no tenant_id assigned');
+    }
+
     // Import Gmail service and response generator
     const { GmailService } = await import('@/lib/gmail/gmail-service');
     const { generateEmailResponse } = await import('@/lib/agent/email-response-generator');
@@ -918,9 +1208,16 @@ async function executeReplyToEmail(card: KanbanCard): Promise<ExecutionResult> {
       }
     }
 
+    // Get user for org_id (needed by email-response-generator and GmailService)
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    const orgId = currentUser?.id;
+    if (!orgId) {
+      throw new Error('User not authenticated');
+    }
+
     // Generate response using AI (with campaign context if available)
     const response = await generateEmailResponse(
-      card.org_id,
+      orgId,
       email,
       payload.classification,
       undefined, // business context (will be built automatically)
@@ -928,7 +1225,7 @@ async function executeReplyToEmail(card: KanbanCard): Promise<ExecutionResult> {
     );
 
     // Create Gmail service
-    const gmailService = await GmailService.create(card.org_id);
+    const gmailService = await GmailService.create(orgId);
 
     // Send reply via Gmail API
     const sentMessageId = await gmailService.sendReply({
@@ -941,19 +1238,16 @@ async function executeReplyToEmail(card: KanbanCard): Promise<ExecutionResult> {
 
     // Log activity
     await supabase.from('activities').insert({
-      org_id: card.org_id,
+      tenant_id: tenantId,
       client_id: card.client_id,
       contact_id: card.contact_id,
-      type: 'email_sent',
+      activity_type: 'email',
       subject: `Replied to: ${email.subject}`,
-      body: response.bodyText,
-      metadata: {
-        cardId: card.id,
-        gmailMessageId: sentMessageId,
-        threadId: email.threadId,
-        category: payload.category,
-        autoSent: response.shouldAutoSend,
-      },
+      description: response.bodyText,
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      outcome: 'sent',
+      created_by: user.id,
     });
 
     return {
@@ -984,22 +1278,31 @@ async function executeReplyToEmail(card: KanbanCard): Promise<ExecutionResult> {
 async function executeNeedsHumanResponse(card: KanbanCard): Promise<ExecutionResult> {
   const supabase = await createClient();
 
+  // Get authenticated user
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  // Use card's tenant_id (already validated by API route)
+  const tenantId = card.tenant_id;
+  if (!tenantId) {
+    throw new Error('Card has no tenant_id assigned');
+  }
+
   // This card type should not auto-execute
   // It's meant to stay in "in_review" state until a human handles it
 
   // Log activity to notify
   await supabase.from('activities').insert({
-    org_id: card.org_id,
+    tenant_id: tenantId,
     client_id: card.client_id,
     contact_id: card.contact_id,
-    type: 'note',
+    activity_type: 'note',
     subject: `Email requires human response: ${card.title}`,
-    body: card.description || '',
-    metadata: {
-      cardId: card.id,
-      emailCategory: card.action_payload?.category,
-      urgent: card.priority === 'high',
-    },
+    description: card.description || '',
+    status: 'pending',
+    created_by: user.id,
   });
 
   return {

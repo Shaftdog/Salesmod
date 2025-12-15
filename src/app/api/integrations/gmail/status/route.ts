@@ -18,10 +18,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get org_id
+    // Get profile with tenant_id
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id, tenant_id')
       .eq('id', user.id)
       .single();
 
@@ -29,19 +29,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    // Check for OAuth tokens
-    const { data: token } = await supabase
+    const tenantId = profile.tenant_id;
+
+    // Check for OAuth tokens (get the most recently updated one if multiple exist)
+    const { data: tokens } = await supabase
       .from('oauth_tokens')
-      .select('account_email, expires_at, scopes')
+      .select('account_email, expires_at, scopes, updated_at')
       .eq('org_id', profile.id)
       .eq('provider', 'google')
-      .single();
+      .order('updated_at', { ascending: false })
+      .limit(1);
 
-    // Get sync state
+    const token = tokens?.[0] || null;
+
+    // Get sync state using tenant_id for multi-tenant isolation
     const { data: syncState } = await supabase
       .from('gmail_sync_state')
       .select('*')
-      .eq('org_id', profile.id)
+      .eq('tenant_id', tenantId)
       .single();
 
     // Get stats from last 24 hours

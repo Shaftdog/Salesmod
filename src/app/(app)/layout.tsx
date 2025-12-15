@@ -1,8 +1,18 @@
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import Header from "@/components/layout/header";
 import Sidebar from "@/components/layout/sidebar";
 import { Toaster } from "@/components/ui/toaster";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  // Server-side auth check - happens before any rendering
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
       <Sidebar />

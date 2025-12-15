@@ -1,0 +1,23 @@
+{
+  "loginSuccessful": true,
+  "currentUrl": "http://localhost:9002/dashboard",
+  "consoleMessages": [
+    "[info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+    "[verbose] [DOM] Input elements should have autocomplete attributes (suggested: \"current-password\"): (More info: https://goo.gl/9p2vKq) %o",
+    "[info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+    "[log] Fetching profile for user: bde00714-427d-4024-9fbd-6f895824f733",
+    "[error] TypeError: Failed to fetch\n    at http://localhost:9002/_next/static/chunks/node_modules_d4f382ef._.js:19624:23\n    at _handleRequest (http://localhost:9002/_next/static/chunks/node_modules_d4f382ef._.js:19953:24)\n    at _request (http://localhost:9002/_next/static/chunks/node_modules_d4f382ef._.js:19940:24)\n    at http://localhost:9002/_next/static/chunks/node_modules_d4f382ef._.js:23084:220\n    at SupabaseAuthClient._useSession (http://localhost:9002/_next/static/chunks/node_modules_d4f382ef._.js:22953:26)\n    at async SupabaseAuthClient._getUser (http://localhost:9002/_next/static/chunks/node_modules_d4f382ef._.js:23069:20)\n    at async http://localhost:9002/_next/static/chunks/node_modules_d4f382ef._.js:23056:20",
+    "[info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+    "[log] [Fast Refresh] done in NaNms",
+    "[log] Fetching profile for user: bde00714-427d-4024-9fbd-6f895824f733",
+    "[log] Profile loaded successfully: {id: bde00714-427d-4024-9fbd-6f895824f733, name: Rod Haugabrooks, email: rod@myroihome.com, avatar_url: null, availability: true}",
+    "[log] [Fast Refresh] rebuilding",
+    "[log] [Fast Refresh] done in 426ms"
+  ],
+  "networkErrors": [
+    "Failed: https://zqhenxhgcjxslpfezybm.supabase.co/auth/v1/user - net::ERR_ABORTED",
+    "Failed: http://localhost:9002/admin/users?_rsc=1a4zq - net::ERR_ABORTED",
+    "Failed: http://localhost:9002/admin/users?_rsc=1a4zq - net::ERR_ABORTED"
+  ],
+  "timestamp": "2025-12-05T19:39:03.387Z"
+}

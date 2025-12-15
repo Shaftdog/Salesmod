@@ -1,6 +1,6 @@
 import {
   Home,
-  Package,
+  Package as PackageIcon,
   Settings,
   Briefcase,
   Target,
@@ -26,6 +26,7 @@ import {
   UserPlus,
   CheckCircle,
   FileCheck,
+  Library,
   CalendarClock,
   MapPinned,
   UserCog,
@@ -33,6 +34,17 @@ import {
   CreditCard,
   PieChart,
   Wallet,
+  ShoppingBag,
+  FolderOpen,
+  Mail,
+  Video,
+  CalendarDays,
+  Star,
+  Clock,
+  Package,
+  Kanban,
+  ListTodo,
+  Blocks,
 } from "lucide-react";
 
 export interface NavItem {
@@ -47,6 +59,7 @@ export interface NavSection {
   icon: React.ComponentType<{ className?: string }>;
   dashboardHref: string;
   items: NavItem[];
+  areaCode?: string; // For area-based access control
 }
 
 export const DEPARTMENT_SECTIONS: NavSection[] = [
@@ -55,14 +68,17 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     label: "Sales",
     icon: TrendingUp,
     dashboardHref: "/sales",
+    areaCode: "sales",
     items: [
       { href: "/sales", icon: LayoutDashboard, label: "Dashboard" },
-      { href: "/orders", icon: Package, label: "Orders" },
+      { href: "/orders", icon: PackageIcon, label: "Orders" },
       { href: "/clients", icon: Briefcase, label: "Clients" },
       { href: "/contacts", icon: Users, label: "Contacts" },
       { href: "/deals", icon: Target, label: "Deals" },
       { href: "/cases", icon: LifeBuoy, label: "Cases" },
       { href: "/properties", icon: MapPin, label: "Properties" },
+      { href: "/sales/campaigns", icon: Mail, label: "Campaigns" },
+      { href: "/sales/products", icon: ShoppingBag, label: "Products" },
     ],
   },
   {
@@ -70,11 +86,18 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     label: "Marketing",
     icon: Megaphone,
     dashboardHref: "/marketing",
+    areaCode: "marketing",
     items: [
       { href: "/marketing", icon: LayoutDashboard, label: "Dashboard" },
       { href: "/marketing/campaigns", icon: FileText, label: "Campaigns" },
-      { href: "/marketing/leads", icon: UserPlus, label: "Leads" },
+      { href: "/marketing/content", icon: FolderOpen, label: "Content Library" },
+      { href: "/marketing/audiences", icon: UserPlus, label: "Lead Scoring" },
+      { href: "/marketing/newsletters", icon: Mail, label: "Newsletters" },
+      { href: "/marketing/email-templates", icon: Mail, label: "Email Templates" },
+      { href: "/marketing/webinars", icon: Video, label: "Webinars" },
+      { href: "/marketing/reputation", icon: Star, label: "Reputation" },
       { href: "/marketing/analytics", icon: BarChart3, label: "Analytics" },
+      { href: "/marketing/calendar", icon: CalendarDays, label: "Calendar" },
     ],
   },
   {
@@ -82,11 +105,16 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     label: "Production",
     icon: Factory,
     dashboardHref: "/production",
+    areaCode: "production",
     items: [
       { href: "/production", icon: LayoutDashboard, label: "Dashboard" },
+      { href: "/production/board", icon: Kanban, label: "Kanban Board" },
+      { href: "/production/my-tasks", icon: ListTodo, label: "My Tasks" },
       { href: "/production/active-appraisals", icon: ClipboardList, label: "Active Appraisals" },
       { href: "/production/quality-control", icon: CheckCircle, label: "Quality Control" },
       { href: "/production/templates", icon: FileCheck, label: "Templates" },
+      { href: "/production/library", icon: Library, label: "Task Library" },
+      { href: "/production/resources", icon: UserCog, label: "Resources" },
     ],
   },
   {
@@ -94,6 +122,7 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     label: "Operations",
     icon: Cog,
     dashboardHref: "/operations",
+    areaCode: "operations",
     items: [
       { href: "/operations", icon: LayoutDashboard, label: "Dashboard" },
       { href: "/tasks", icon: CheckSquare, label: "Tasks" },
@@ -106,11 +135,15 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     label: "Logistics",
     icon: Truck,
     dashboardHref: "/logistics",
+    areaCode: "logistics",
     items: [
       { href: "/logistics", icon: LayoutDashboard, label: "Dashboard" },
-      { href: "/logistics/scheduling", icon: CalendarClock, label: "Scheduling" },
-      { href: "/logistics/inspections", icon: MapPinned, label: "Inspections" },
-      { href: "/logistics/assignments", icon: UserCog, label: "Assignments" },
+      { href: "/logistics/resources", icon: UserCog, label: "Resources" },
+      { href: "/logistics/equipment", icon: Package, label: "Equipment" },
+      { href: "/logistics/territories", icon: MapPinned, label: "Territories" },
+      { href: "/logistics/availability", icon: Calendar, label: "Availability" },
+      { href: "/logistics/bookings", icon: CalendarClock, label: "Bookings" },
+      { href: "/logistics/daily-schedule", icon: Clock, label: "Daily View" },
     ],
   },
   {
@@ -118,6 +151,7 @@ export const DEPARTMENT_SECTIONS: NavSection[] = [
     label: "Finance",
     icon: DollarSign,
     dashboardHref: "/finance",
+    areaCode: "finance",
     items: [
       { href: "/finance", icon: LayoutDashboard, label: "Dashboard" },
       { href: "/finance/invoicing", icon: Receipt, label: "Invoicing" },
@@ -133,10 +167,12 @@ export const AI_SECTION: NavSection = {
   label: "AI & Automation",
   icon: Brain,
   dashboardHref: "/agent",
+  areaCode: "ai_automation",
   items: [
     { href: "/agent", icon: Bot, label: "AI Agent" },
     { href: "/agent/jobs", icon: Calendar, label: "Jobs" },
     { href: "/ai-analytics", icon: Brain, label: "AI Analytics" },
+    { href: "/settings/integrations", icon: Blocks, label: "Integrations" },
   ],
 };
 
@@ -150,6 +186,12 @@ export const ADMIN_ITEM: NavItem = {
   href: "/admin",
   icon: Shield,
   label: "Admin",
+};
+
+export const SUPER_ADMIN_ITEM: NavItem = {
+  href: "/admin/roles",
+  icon: UserCog,
+  label: "Role Management",
 };
 
 // Generate initial expanded state from sections
@@ -181,4 +223,5 @@ export const DEPARTMENT_PAGES: Record<string, Department> = {
   deals: 'sales',
   cases: 'sales',
   properties: 'sales',
+  campaigns: 'sales',
 };

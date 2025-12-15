@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { executeCard } from '@/lib/agent/executor';
 
-export const maxDuration = 30;
+// Research tasks can take 2-5 minutes due to:
+// - Web search (Tavily/Brave)
+// - Apollo API enrichment for each contact
+// - AI summarization
+// - Action extraction with AI
+// - Creating follow-up cards
+export const maxDuration = 300;
 
 /**
  * POST /api/agent/execute-card
@@ -22,6 +28,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Get card ID from request
     const body = await request.json();
     const { cardId } = body;
@@ -30,12 +50,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Card ID is required' }, { status: 400 });
     }
 
-    // Verify card belongs to user's org
+    // Verify card belongs to user's tenant
     const { data: card, error: cardError } = await supabase
       .from('kanban_cards')
       .select('*')
       .eq('id', cardId)
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .single();
 
     if (cardError || !card) {

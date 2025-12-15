@@ -18,6 +18,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     const { cardId } = await request.json();
 
     if (!cardId) {
@@ -31,7 +45,7 @@ export async function POST(request: NextRequest) {
       .from('kanban_cards')
       .select('id, title, type, state, client:clients(company_name)')
       .eq('id', cardId)
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .single();
 
     if (!card) {
@@ -43,7 +57,7 @@ export async function POST(request: NextRequest) {
       .from('kanban_cards')
       .delete()
       .eq('id', cardId)
-      .eq('org_id', user.id);
+      .eq('tenant_id', profile.tenant_id);
 
     if (deleteError) {
       console.error('[Delete] Database error:', deleteError);

@@ -25,11 +25,25 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return Response.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Get recent chat memory
     const { data: memories } = await supabase
       .from('agent_memories')
       .select('*')
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .eq('scope', 'chat')
       .order('last_used_at', { ascending: false })
       .limit(5);
@@ -146,6 +160,14 @@ Guidelines:
 - Suggest next steps proactively
 - If you use RAG context, cite the source
 
+**CRITICAL - Tool Response Validation:**
+- ALWAYS check the 'success' field in tool responses before claiming an action succeeded
+- If success === false, inform the user the action FAILED and explain the error
+- After creating a card, VERIFY it exists by checking the returned card.id
+- NEVER tell the user you created something if the tool returned success: false or error: "..."
+- If a tool fails, explain WHY it failed (e.g., "The email address was invalid" or "The card couldn't be created")
+- Example: If createCard returns {success: false, error: "Email must include a valid to address"}, tell the user "I couldn't create the card because the email address was invalid"
+
 **Contact Creation Workflow:**
 - To add a contact: FIRST use searchClients to get the client UUID, THEN use createContact with that UUID
 - NEVER create cards for adding contacts - use the createContact tool directly
@@ -198,6 +220,18 @@ async function saveConversationMemory(
 ): Promise<void> {
   const supabase = await createClient();
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  if (!profile?.tenant_id) {
+    console.error('saveConversationMemory: User has no tenant_id assigned');
+    return;
+  }
+
   // Create a summary key based on timestamp
   const timestamp = new Date().toISOString().split('T')[0];
   const key = `chat_${timestamp}_${messages.length}`;
@@ -209,6 +243,7 @@ async function saveConversationMemory(
     .from('agent_memories')
     .upsert({
       org_id: orgId,
+      tenant_id: profile.tenant_id,
       scope: 'chat',
       key,
       content: {
@@ -229,12 +264,25 @@ async function saveConversationMemory(
 async function saveChatMessages(orgId: string, messages: any[]): Promise<void> {
   const supabase = await createClient();
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  if (!profile?.tenant_id) {
+    console.error('saveChatMessages: User has no tenant_id assigned');
+    return;
+  }
+
   // Only save the last message (to avoid duplicates)
   const lastMessage = messages[messages.length - 1];
 
   if (lastMessage) {
     await supabase.from('chat_messages').insert({
       org_id: orgId,
+      tenant_id: profile.tenant_id,
       role: lastMessage.role,
       content: lastMessage.content,
       metadata: {

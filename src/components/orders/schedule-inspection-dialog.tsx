@@ -21,8 +21,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
+import { useCreateBooking } from "@/hooks/use-bookings";
 import { CalendarIcon, Loader2 } from "lucide-react";
-import { format } from "date-fns";
+import { format, addHours } from "date-fns";
 import { cn } from "@/lib/utils";
 
 interface ScheduleInspectionDialogProps {
@@ -39,8 +40,8 @@ export function ScheduleInspectionDialog({
   const [date, setDate] = useState<Date>();
   const [time, setTime] = useState("");
   const [notes, setNotes] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const { mutateAsync: createBooking, isPending } = useCreateBooking();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,18 +64,55 @@ export function ScheduleInspectionDialog({
       return;
     }
 
-    setIsSubmitting(true);
+    try {
+      // Combine date and time into ISO string
+      const [hours, minutes] = time.split(':');
+      const scheduledStart = new Date(date);
+      scheduledStart.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
-    // Simulate API call (you can implement actual backend later)
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Default 2-hour inspection window
+      const scheduledEnd = addHours(scheduledStart, 2);
 
-    toast({
-      title: "Inspection Scheduled",
-      description: `Inspection scheduled for ${format(date, "PPP")} at ${time}`,
-    });
+      // Create booking linked to this order
+      await createBooking({
+        orderId: order.id,
+        bookingType: 'inspection',
+        resourceId: order.assignedTo || undefined, // Assign to appraiser if already assigned
+        scheduledStart: scheduledStart.toISOString(),
+        scheduledEnd: scheduledEnd.toISOString(),
+        status: 'scheduled',
+        // Pre-populate property data from order
+        propertyAddress: order.propertyAddress,
+        propertyCity: order.propertyCity || undefined,
+        propertyState: order.propertyState || undefined,
+        propertyZip: order.propertyZip || undefined,
+        // Contact information
+        contactName: order.borrowerName || order.propertyContactName || undefined,
+        contactPhone: order.borrowerPhone || order.propertyContactPhone || undefined,
+        contactEmail: order.borrowerEmail || order.propertyContactEmail || undefined,
+        // Access and special instructions
+        accessInstructions: order.accessInstructions || undefined,
+        specialInstructions: notes || order.specialInstructions || undefined,
+      });
 
-    setIsSubmitting(false);
-    onOpenChange(false);
+      toast({
+        title: "Inspection Scheduled",
+        description: `Inspection scheduled for ${format(date, "PPP")} at ${time}`,
+      });
+
+      // Reset form and close dialog
+      setDate(undefined);
+      setTime("");
+      setNotes("");
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Failed to create booking:', error);
+      toast({
+        title: "Error",
+        description: "Failed to schedule inspection. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -142,11 +180,12 @@ export function ScheduleInspectionDialog({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={isPending}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting && (
+            <Button type="submit" disabled={isPending}>
+              {isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Schedule Inspection

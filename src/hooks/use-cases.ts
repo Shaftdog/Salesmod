@@ -74,6 +74,10 @@ export function useCreateCase() {
 
   return useMutation({
     mutationFn: async (caseData: any) => {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
       const { data, error } = await supabase
         .from('cases')
         .insert(caseData)

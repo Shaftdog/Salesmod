@@ -36,11 +36,26 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData: CreateJobRequest = CreateJobRequestSchema.parse(body);
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Create job record
     const { data: job, error: insertError } = await supabase
       .from('jobs')
       .insert({
         org_id: user.id,
+        tenant_id: profile.tenant_id,
         owner_id: user.id,
         name: validatedData.name,
         description: validatedData.description || null,
@@ -138,17 +153,31 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Parse query parameters
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
 
-    // Build query
+    // Build query - filter by tenant_id for multi-tenant isolation
     let query = supabase
       .from('jobs')
       .select('*', { count: 'exact' })
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 

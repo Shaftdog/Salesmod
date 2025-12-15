@@ -1,6 +1,6 @@
 import { streamText } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { searchWeb } from '@/lib/research/web-search';
 import { parseCommand, isCommand } from '@/lib/chat/command-parser';
 
@@ -46,11 +46,11 @@ export async function POST(request: Request) {
       .select('id, company_name, primary_contact, email')
       .eq('is_active', true);
 
-    // Get contacts for context (using service role to bypass RLS)
-    const serviceClient = createServiceRoleClient();
+    // Get contacts for context (RLS will automatically filter by user's tenant)
+    // No longer using service-role client - RLS provides proper tenant isolation
 
     // Get contacts with assigned clients (limit to 300 to avoid timeout)
-    const { data: contacts, error: contactsError } = await serviceClient
+    const { data: contacts, error: contactsError } = await supabase
       .from('contacts')
       .select(`
         id,
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
     if (contactsError) {
       console.error('[Chat] Error fetching contacts:', contactsError);
     } else {
-      console.log(`[Chat] Loaded ${contacts?.length || 0} contacts`);
+      console.log(`[Chat] Loaded ${contacts?.length || 0} contacts (tenant-scoped via RLS)`);
       if (contacts && contacts.length > 0) {
         console.log('[Chat] Sample contact:', JSON.stringify(contacts[0], null, 2));
 
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     }
 
     // Get properties for context (limit to recent 500 to avoid timeout)
-    const { data: properties, error: propertiesError } = await serviceClient
+    const { data: properties, error: propertiesError } = await supabase
       .from('properties')
       .select(`
         id,
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
     // Add client names to properties using org_id
     if (properties && properties.length > 0) {
       const orgIds = [...new Set(properties.map(p => p.org_id).filter(Boolean))];
-      const { data: propertyClients } = await serviceClient
+      const { data: propertyClients } = await supabase
         .from('clients')
         .select('id, company_name')
         .in('id', orgIds);
@@ -122,11 +122,11 @@ export async function POST(request: Request) {
     if (propertiesError) {
       console.error('[Chat] Error fetching properties:', propertiesError);
     } else {
-      console.log(`[Chat] Loaded ${properties?.length || 0} properties`);
+      console.log(`[Chat] Loaded ${properties?.length || 0} properties (tenant-scoped via RLS)`);
     }
 
     // Get orders for context (limit to recent 500 to avoid timeout)
-    const { data: orders, error: ordersError } = await serviceClient
+    const { data: orders, error: ordersError } = await supabase
       .from('orders')
       .select(`
         id,
@@ -153,7 +153,7 @@ export async function POST(request: Request) {
     // Add client names to orders
     if (orders && orders.length > 0) {
       const clientIds = [...new Set(orders.map(o => o.client_id).filter(Boolean))];
-      const { data: orderClients } = await serviceClient
+      const { data: orderClients } = await supabase
         .from('clients')
         .select('id, company_name')
         .in('id', clientIds);
@@ -172,7 +172,7 @@ export async function POST(request: Request) {
     }
 
     // Get cases for context (limit to recent 200 to avoid timeout)
-    const { data: cases, error: casesError } = await serviceClient
+    const { data: cases, error: casesError } = await supabase
       .from('cases')
       .select(`
         id,
@@ -201,17 +201,17 @@ export async function POST(request: Request) {
       const contactIds = [...new Set(cases.map(c => c.contact_id).filter(Boolean))];
       const orderIds = [...new Set(cases.map(c => c.order_id).filter(Boolean))];
 
-      const { data: caseClients } = await serviceClient
+      const { data: caseClients } = await supabase
         .from('clients')
         .select('id, company_name')
         .in('id', clientIds);
 
-      const { data: caseContacts } = await serviceClient
+      const { data: caseContacts } = await supabase
         .from('contacts')
         .select('id, first_name, last_name')
         .in('id', contactIds);
 
-      const { data: caseOrders } = await serviceClient
+      const { data: caseOrders } = await supabase
         .from('orders')
         .select('id, order_number')
         .in('id', orderIds);
@@ -233,6 +233,20 @@ export async function POST(request: Request) {
       console.log(`[Chat] Loaded ${cases?.length || 0} cases`);
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return Response.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Get current Kanban cards
     const { data: kanbanCards } = await supabase
       .from('kanban_cards')
@@ -246,7 +260,7 @@ export async function POST(request: Request) {
         created_at,
         client:clients(company_name)
       `)
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .in('state', ['suggested', 'in_review', 'approved'])
       .order('created_at', { ascending: false })
       .limit(20);
@@ -378,7 +392,7 @@ export async function POST(request: Request) {
                   .from('kanban_cards')
                   .delete()
                   .eq('id', card.id)
-                  .eq('org_id', user.id);
+                  .eq('tenant_id', profile.tenant_id);
                 
                 if (deleteError) {
                   errors.push(deleteError.message);
@@ -418,7 +432,7 @@ export async function POST(request: Request) {
                 .from('kanban_cards')
                 .update({ state: 'approved' })
                 .eq('id', card.id)
-                .eq('org_id', user.id);
+                .eq('tenant_id', profile.tenant_id);
               
               if (!error) approved++;
             }
@@ -676,8 +690,8 @@ You help manage client relationships and achieve business goals. Be helpful, con
           // and database connections fail with "TypeError: fetch failed"
           if (fullResponse.length > 0) {
             console.log('[Chat] Parsing response for card operations (before closing stream)...');
-            await parseAndCreateCards(fullResponse, user.id, clients || []);
-            await parseAndDeleteCards(fullResponse, user.id);
+            await parseAndCreateCards(supabase, fullResponse, user.id, clients || []);
+            await parseAndDeleteCards(supabase, fullResponse, user.id);
             console.log('[Chat] ✓ Card operations completed successfully');
           }
           
@@ -720,18 +734,17 @@ You help manage client relationships and achieve business goals. Be helpful, con
 /**
  * Parse agent response for [CREATE_CARD: ...] tags and create those cards
  */
-async function parseAndCreateCards(response: string, orgId: string, clients: any[]) {
+async function parseAndCreateCards(supabase: any, response: string, orgId: string, clients: any[]) {
   const cardPattern = /\[CREATE_CARD:\s*([^\]]+)\]/g;
   const matches = [...response.matchAll(cardPattern)];
-  
+
   if (matches.length === 0) {
     return;
   }
-  
+
   console.log(`[Chat] Found ${matches.length} card creation tags in agent response`);
-  
-  // Use service role client to bypass auth issues
-  const supabase = createServiceRoleClient();
+
+  // Now using authenticated client - RLS will enforce proper tenant isolation
   
   for (const match of matches) {
     try {
@@ -834,20 +847,19 @@ async function parseAndCreateCards(response: string, orgId: string, clients: any
 /**
  * Parse agent response for [DELETE_CARD: ...] tags and delete those cards
  */
-async function parseAndDeleteCards(response: string, orgId: string) {
+async function parseAndDeleteCards(supabase: any, response: string, orgId: string) {
   // Match [DELETE_CARD: id] or [DELETE_CARD: id=uuid]
   const deletePattern = /\[DELETE_CARD:\s*([^\]]+)\]/g;
   const matches = [...response.matchAll(deletePattern)];
-  
+
   if (matches.length === 0) {
     console.log('[Chat] No DELETE_CARD tags found in response');
     return;
   }
-  
+
   console.log(`[Chat] Found ${matches.length} delete card tags in agent response`);
-  
-  // Use service role client to bypass auth issues
-  const serviceClient = createServiceRoleClient();
+
+  // Now using authenticated client - RLS will enforce proper tenant isolation
   
   for (const match of matches) {
     try {
@@ -867,12 +879,24 @@ async function parseAndDeleteCards(response: string, orgId: string) {
       
       console.log(`[Chat] Attempting to delete card: ${cardId}`);
       
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', orgId)
+        .single();
+
+      if (!profile?.tenant_id) {
+        console.error(`[Chat] User ${orgId} has no tenant_id assigned`);
+        continue;
+      }
+
       // Get card info before deleting for logging
-      const { data: card } = await serviceClient
+      const { data: card } = await supabase
         .from('kanban_cards')
         .select('id, title, type')
         .eq('id', cardId)
-        .eq('org_id', orgId)
+        .eq('tenant_id', profile.tenant_id)
         .single();
       
       if (!card) {
@@ -882,12 +906,12 @@ async function parseAndDeleteCards(response: string, orgId: string) {
       
       console.log(`[Chat] Found card to delete: "${card.title}" (${card.type})`);
       
-      // Delete the card using service role to bypass RLS
-      const { error: deleteError } = await serviceClient
+      // Delete the card
+      const { error: deleteError } = await supabase
         .from('kanban_cards')
         .delete()
         .eq('id', cardId)
-        .eq('org_id', orgId);
+        .eq('tenant_id', profile.tenant_id);
       
       if (deleteError) {
         console.error('[Chat] Auto-delete error:', deleteError);

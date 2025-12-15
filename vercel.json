@@ -8,7 +8,18 @@
       "path": "/api/agent/chat/cleanup",
       "schedule": "0 2 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "app/api/agent/execute-card/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/agent/run/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/agent/chat/route.ts": {
+      "maxDuration": 120
+    }
+  }
 }
 
 

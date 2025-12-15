@@ -26,7 +26,7 @@ import { Loader2 } from "lucide-react";
 
 const quickClientSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
-  primaryContact: z.string().min(1, "Primary contact is required"),
+  primaryContact: z.string().optional(),
   email: z.string().email("Invalid email address"),
   phone: z.string().min(1, "Phone number is required"),
   address: z.string().min(1, "Address is required"),
@@ -143,10 +143,10 @@ export function QuickClientForm({ open, onOpenChange, onSuccess }: QuickClientFo
               </Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? (
-                    <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                    </>
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
                 ) : "Save Client"}
               </Button>
             </DialogFooter>

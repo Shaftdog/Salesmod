@@ -21,11 +21,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'User has no tenant_id assigned' },
+        { status: 403 }
+      );
+    }
+
     // Fetch all feedback and rules
     const { data: memories, error: memoriesError } = await supabase
       .from('agent_memories')
       .select('*')
-      .eq('org_id', user.id)
+      .eq('tenant_id', profile.tenant_id)
       .eq('scope', 'card_feedback')
       .order('created_at', { ascending: false })
       .limit(200);
@@ -43,8 +57,8 @@ export async function POST(request: NextRequest) {
     const autoRuleSuggestions = await analyzeForAutoRules(feedback, rules);
     const consolidationSuggestions = await analyzeForConsolidation(rules);
     const conflicts = await detectConflicts(rules);
-    const deprecationCandidates = await findDeprecationCandidates(rules, supabase, user.id);
-    const effectiveness = await calculateEffectiveness(rules, supabase, user.id);
+    const deprecationCandidates = await findDeprecationCandidates(rules, supabase, profile.tenant_id);
+    const effectiveness = await calculateEffectiveness(rules, supabase, profile.tenant_id);
 
     return NextResponse.json({
       success: true,
@@ -376,7 +390,7 @@ function suggestConflictResolution(rule1: any, rule2: any): string {
 /**
  * Find rules that should be deprecated
  */
-async function findDeprecationCandidates(rules: any[], supabase: any, orgId: string) {
+async function findDeprecationCandidates(rules: any[], supabase: any, tenantId: string) {
   const candidates: any[] = [];
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -388,7 +402,7 @@ async function findDeprecationCandidates(rules: any[], supabase: any, orgId: str
     // Rule is old (30+ days) and hasn't been updated
     if (createdAt < thirtyDaysAgo && updatedAt < thirtyDaysAgo) {
       // Check if rule has been triggered recently
-      const triggerCount = await checkRuleTriggers(rule, supabase, orgId, thirtyDaysAgo);
+      const triggerCount = await checkRuleTriggers(rule, supabase, tenantId, thirtyDaysAgo);
 
       if (triggerCount === 0) {
         candidates.push({
@@ -414,12 +428,12 @@ async function findDeprecationCandidates(rules: any[], supabase: any, orgId: str
 /**
  * Check how many times a rule has been triggered
  */
-async function checkRuleTriggers(rule: any, supabase: any, orgId: string, since: Date) {
+async function checkRuleTriggers(rule: any, supabase: any, tenantId: string, since: Date) {
   // Look for feedback entries that reference this rule
   const { data: relatedFeedback } = await supabase
     .from('agent_memories')
     .select('id')
-    .eq('org_id', orgId)
+    .eq('tenant_id', tenantId)
     .eq('scope', 'card_feedback')
     .gte('created_at', since.toISOString())
     .filter('content->>rule', 'eq', rule.content?.rule);
@@ -430,7 +444,7 @@ async function checkRuleTriggers(rule: any, supabase: any, orgId: string, since:
 /**
  * Calculate effectiveness metrics for all rules
  */
-async function calculateEffectiveness(rules: any[], supabase: any, orgId: string) {
+async function calculateEffectiveness(rules: any[], supabase: any, tenantId: string) {
   const effectiveness: any[] = [];
 
   for (const rule of rules) {
@@ -438,7 +452,7 @@ async function calculateEffectiveness(rules: any[], supabase: any, orgId: string
     const { data: usageCount } = await supabase
       .from('agent_memories')
       .select('id', { count: 'exact' })
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .eq('scope', 'card_feedback')
       .filter('content->>rule', 'eq', rule.content?.rule);
 

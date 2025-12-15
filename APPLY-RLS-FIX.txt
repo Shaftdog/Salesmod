@@ -1,0 +1,63 @@
+========================================================================
+TASK LIBRARY RLS FIX - READY TO COPY AND PASTE
+========================================================================
+
+INSTRUCTIONS:
+1. Go to: https://supabase.com/dashboard/project/zqhenxhgcjxslpfezybm/sql
+2. Copy all the SQL below (from DROP POLICY to the last CREATE POLICY)
+3. Paste into the SQL Editor
+4. Click "RUN" button
+5. Verify all statements executed successfully
+
+========================================================================
+SQL TO EXECUTE:
+========================================================================
+
+DROP POLICY IF EXISTS task_library_org_isolation ON task_library;
+DROP POLICY IF EXISTS task_library_subtasks_via_task ON task_library_subtasks;
+DROP POLICY IF EXISTS template_library_tasks_via_template ON template_library_tasks;
+
+CREATE POLICY task_library_read ON task_library FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY task_library_create ON task_library FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY task_library_update ON task_library FOR UPDATE USING (created_by = auth.uid() OR org_id = auth.uid());
+CREATE POLICY task_library_delete ON task_library FOR DELETE USING (created_by = auth.uid() OR org_id = auth.uid());
+
+CREATE POLICY task_library_subtasks_read ON task_library_subtasks FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY task_library_subtasks_create ON task_library_subtasks FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM task_library WHERE task_library.id = task_library_subtasks.library_task_id AND auth.uid() IS NOT NULL));
+CREATE POLICY task_library_subtasks_update ON task_library_subtasks FOR UPDATE USING (EXISTS (SELECT 1 FROM task_library WHERE task_library.id = task_library_subtasks.library_task_id AND (task_library.created_by = auth.uid() OR task_library.org_id = auth.uid())));
+CREATE POLICY task_library_subtasks_delete ON task_library_subtasks FOR DELETE USING (EXISTS (SELECT 1 FROM task_library WHERE task_library.id = task_library_subtasks.library_task_id AND (task_library.created_by = auth.uid() OR task_library.org_id = auth.uid())));
+
+CREATE POLICY template_library_tasks_read ON template_library_tasks FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY template_library_tasks_create ON template_library_tasks FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY template_library_tasks_update ON template_library_tasks FOR UPDATE USING (auth.uid() IS NOT NULL);
+CREATE POLICY template_library_tasks_delete ON template_library_tasks FOR DELETE USING (auth.uid() IS NOT NULL);
+
+========================================================================
+VERIFICATION SQL (run this after to confirm):
+========================================================================
+
+SELECT tablename, policyname, cmd
+FROM pg_policies
+WHERE tablename IN ('task_library', 'task_library_subtasks', 'template_library_tasks')
+ORDER BY tablename, policyname;
+
+========================================================================
+EXPECTED RESULT: 15 policies
+========================================================================
+
+You should see:
+- 4 policies for task_library (read, create, update, delete)
+- 4 policies for task_library_subtasks (read, create, update, delete)
+- 4 policies for template_library_tasks (read, create, update, delete)
+- 3 old policies should be gone (org_isolation, subtasks_via_task, tasks_via_template)
+
+========================================================================
+WHAT THIS FIX DOES:
+========================================================================
+
+Makes task library shared across ALL authenticated users (like templates):
+- Before: Only org members could see tasks
+- After: All users can see all tasks (central repository)
+- Modifications still restricted to creator/org
+
+This aligns task library behavior with template library behavior.

@@ -75,6 +75,7 @@ export const TargetFilterSchema = z.object({
   has_email: z.boolean().default(true),         // Must have email
   last_contact_days_ago: z.number().optional(), // e.g., > 30 days
   custom_query: z.string().optional(),          // SQL WHERE clause
+  target_role_codes: z.array(z.string()).optional(), // Filter by contact roles (multi-select)
 });
 
 export type TargetFilter = z.infer<typeof TargetFilterSchema>;
@@ -119,6 +120,7 @@ export type JobParams = z.infer<typeof JobParamsSchema>;
 export interface Job {
   id: string;
   org_id: string;
+  tenant_id: string;
   name: string;
   description: string | null;
   status: JobStatus;

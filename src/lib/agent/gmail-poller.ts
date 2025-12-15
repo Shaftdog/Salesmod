@@ -28,12 +28,27 @@ export async function pollGmailInbox(orgId: string): Promise<PollResult> {
     console.log(`[Gmail Poller] Starting poll for org ${orgId}`);
     const supabase = await createClient();
 
+    // Get user's tenant_id and email for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id, email')
+      .eq('id', orgId)
+      .single();
+
+    const tenantId = profile?.tenant_id;
+    if (!tenantId) {
+      result.errors.push('User has no tenant_id assigned');
+      return result;
+    }
+
+    const userEmail = profile?.email?.toLowerCase();
+
     // Check if Gmail sync is enabled
     console.log(`[Gmail Poller] Checking sync state...`);
     const { data: syncState, error: syncStateError } = await supabase
       .from('gmail_sync_state')
       .select('*')
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (syncStateError) {
@@ -91,13 +106,29 @@ export async function pollGmailInbox(orgId: string): Promise<PollResult> {
       return result;
     }
 
-    console.log(`[Gmail Poller] Processing ${messages.length} new messages...`);
+    // Filter out emails from the user's own address (sent emails in threads)
+    const incomingMessages = userEmail
+      ? messages.filter(msg => msg.from.email.toLowerCase() !== userEmail)
+      : messages;
+
+    const skippedOwnEmails = messages.length - incomingMessages.length;
+    if (skippedOwnEmails > 0) {
+      console.log(`[Gmail Poller] Skipped ${skippedOwnEmails} emails from own address (${userEmail})`);
+    }
+
+    if (incomingMessages.length === 0) {
+      console.log('[Gmail Poller] No incoming messages to process (all were from own address)');
+      result.success = true;
+      return result;
+    }
+
+    console.log(`[Gmail Poller] Processing ${incomingMessages.length} incoming messages...`);
 
     // Build context map for classification (check if senders are existing clients)
     console.log('[Gmail Poller] Building context map...');
     let contextMap: Map<string, { isExistingClient?: boolean; hasActiveOrders?: boolean }>;
     try {
-      contextMap = await buildContextMap(orgId, messages);
+      contextMap = await buildContextMap(orgId, incomingMessages);
       console.log(`[Gmail Poller] Context map built for ${contextMap.size} senders`);
     } catch (error) {
       console.error('[Gmail Poller] Failed to build context map:', error);
@@ -109,7 +140,7 @@ export async function pollGmailInbox(orgId: string): Promise<PollResult> {
     let cardsCreatedCount = 0;
     const cardCreationErrors: Array<{ messageId: string; subject: string; error: string }> = [];
 
-    for (const message of messages) {
+    for (const message of incomingMessages) {
       try {
         console.log(`[Gmail Poller] Processing message ${message.id} from ${message.from.email}`);
         const cardCreated = await processMessage(orgId, message, contextMap, syncState.auto_process);
@@ -147,12 +178,12 @@ export async function pollGmailInbox(orgId: string): Promise<PollResult> {
         last_sync_at: new Date().toISOString(),
         total_messages_synced: (syncState.total_messages_synced || 0) + result.messagesProcessed,
         last_message_received_at:
-          messages.length > 0
-            ? messages[messages.length - 1].receivedAt.toISOString()
+          incomingMessages.length > 0
+            ? incomingMessages[incomingMessages.length - 1].receivedAt.toISOString()
             : syncState.last_message_received_at,
         updated_at: new Date().toISOString(),
       })
-      .eq('org_id', orgId);
+      .eq('tenant_id', tenantId);
 
     if (updateError) {
       console.error('[Gmail Poller] Failed to update sync state:', updateError);
@@ -162,7 +193,7 @@ export async function pollGmailInbox(orgId: string): Promise<PollResult> {
     const { count: autoExecuted } = await supabase
       .from('kanban_cards')
       .select('*', { count: 'exact', head: true })
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .in(
         'gmail_message_id',
         messages.map((m) => m.id)
@@ -209,11 +240,23 @@ async function processMessage(
 ): Promise<boolean> {
   const supabase = await createClient();
 
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+  if (!tenantId) {
+    throw new Error('User has no tenant_id assigned');
+  }
+
   // Check if message already processed
   const { data: existing } = await supabase
     .from('gmail_messages')
     .select('id')
-    .eq('org_id', orgId)
+    .eq('tenant_id', tenantId)
     .eq('gmail_message_id', message.id)
     .single();
 
@@ -227,6 +270,7 @@ async function processMessage(
   const { data: gmailMessage, error: insertError } = await supabase
     .from('gmail_messages')
     .insert({
+      tenant_id: tenantId,
       org_id: orgId,
       gmail_message_id: message.id,
       gmail_thread_id: message.threadId,
@@ -374,12 +418,24 @@ async function findCampaignContext(
   const supabase = await createClient();
 
   try {
+    // Get user's tenant_id for multi-tenant lookup
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', orgId)
+      .single();
+
+    const tenantId = profile?.tenant_id;
+    if (!tenantId) {
+      return null;
+    }
+
     // Look for cards with the same thread ID that sent emails
     // This indicates the thread was started by our agent
     const { data: originalCard } = await supabase
       .from('kanban_cards')
       .select('id, job_id, task_id, type, action_payload, gmail_thread_id')
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .eq('gmail_thread_id', message.threadId)
       .eq('type', 'send_email')
       .eq('state', 'done')
@@ -471,11 +527,24 @@ async function sendEscalationAutoReply(
   try {
     const supabase = await createClient();
 
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', orgId)
+      .single();
+
+    const tenantId = profile?.tenant_id;
+    if (!tenantId) {
+      console.error('[Gmail Poller] User has no tenant_id assigned');
+      return;
+    }
+
     // Check if we should send auto-reply
     const { data: syncState } = await supabase
       .from('gmail_sync_state')
       .select('*')
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .single();
 
     // For now, we'll skip auto-reply and let the human handle it
@@ -512,15 +581,25 @@ async function buildContextMap(
     { isExistingClient?: boolean; hasActiveOrders?: boolean }
   >();
 
+  // Get the user's tenant_id for multi-tenant lookups
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+
   // Get all unique sender emails
   const senderEmails = Array.from(new Set(messages.map((m) => m.from.email)));
 
   // Check if each sender is an existing contact/client
   for (const email of senderEmails) {
+    // Use tenant_id for multi-tenant lookup
     const { data: contact } = await supabase
       .from('contacts')
       .select('id, client_id')
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .eq('email', email)
       .single();
 

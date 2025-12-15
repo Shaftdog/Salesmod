@@ -53,19 +53,46 @@ export function useCurrentUser() {
     queryKey: ['current-user'],
     queryFn: async () => {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
-      
-      if (authError || !user) return null
+
+      if (authError) {
+        console.error('Auth error:', authError)
+        return null
+      }
+
+      if (!user) {
+        console.log('No authenticated user')
+        return null
+      }
+
+      console.log('Fetching profile for user:', user.id)
 
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single()
-      
-      if (error) throw error
+
+      if (error) {
+        console.error('Profile fetch error:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+          fullError: error
+        })
+        throw new Error(`Failed to load profile: ${error.message || 'Unknown error'}`)
+      }
+
+      if (!data) {
+        console.error('No profile data returned for user:', user.id)
+        throw new Error('Profile not found')
+      }
+
+      console.log('Profile loaded successfully:', data)
       return transformUser(data)
     },
     staleTime: 1000 * 60 * 5, // 5 minutes
+    retry: false, // Don't retry on failure to see errors faster
   })
 }
 

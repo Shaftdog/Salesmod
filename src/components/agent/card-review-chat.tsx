@@ -16,8 +16,19 @@ interface Message {
   toolInvocations?: any[];
 }
 
+interface EmailContent {
+  from_email: string;
+  from_name: string | null;
+  subject: string;
+  body_text: string | null;
+  body_html: string | null;
+  received_at: string;
+  category: string | null;
+}
+
 interface CardReviewChatProps {
   card: KanbanCard;
+  emailContent?: EmailContent | null;
   onCardRevised?: (newCard: any) => void;
   onFeedbackStored?: (feedback: any) => void;
   onClose?: () => void;
@@ -25,6 +36,7 @@ interface CardReviewChatProps {
 
 export function CardReviewChat({
   card,
+  emailContent,
   onCardRevised,
   onFeedbackStored,
   onClose
@@ -65,46 +77,64 @@ export function CardReviewChat({
     setError(null);
 
     try {
+      const requestBody = {
+        cardId: card.id || '',
+        contactId: card.contact_id || null,
+        clientId: card.client_id || '',
+        messages: [...messages, userMessage]
+          .filter(m => m && m.content && m.content.trim().length > 0) // Filter out empty messages
+          .map(m => ({
+            role: m.role || 'user',
+            content: m.content || '',
+          })),
+        context: {
+          card: {
+            id: card.id || '',
+            type: card.type || 'unknown',
+            title: card.title || 'Untitled',
+            rationale: card.rationale || '',
+            priority: card.priority || 'medium',
+            state: card.state || 'suggested',
+            action_payload: card.action_payload || {},
+          },
+          contact: (card.contact && typeof card.contact === 'object' && card.contact.id) ? {
+            id: card.contact.id,
+            name: card.contact.first_name && card.contact.last_name
+              ? `${card.contact.first_name} ${card.contact.last_name}`
+              : card.contact.first_name || card.contact.last_name || 'Unknown',
+            firstName: card.contact.first_name || '',
+            lastName: card.contact.last_name || '',
+            email: card.contact.email || '',
+          } : null,
+          client: (card.client && typeof card.client === 'object' && card.client.id) ? {
+            id: card.client.id,
+            name: card.client.company_name || card.client.name || 'Unknown',
+            email: card.client.email || '',
+          } : null,
+          // Include full email content for AI to reference when discussing/responding
+          email: emailContent ? {
+            from: emailContent.from_name
+              ? `${emailContent.from_name} <${emailContent.from_email}>`
+              : emailContent.from_email,
+            subject: emailContent.subject,
+            body: emailContent.body_text || '',
+            receivedAt: emailContent.received_at,
+            category: emailContent.category,
+          } : null,
+        },
+      };
+
       console.log('[CardReviewChat] Sending request to /api/agent/card-review');
+      console.log('[CardReviewChat] Request body:', JSON.stringify(requestBody, null, 2));
 
       const response = await fetch('/api/agent/card-review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cardId: card.id,
-          contactId: card.contact_id,
-          clientId: card.client_id,
-          messages: [...messages, userMessage].map(m => ({
-            role: m.role,
-            content: m.content,
-          })),
-          context: {
-            card: {
-              id: card.id,
-              type: card.type,
-              title: card.title,
-              rationale: card.rationale,
-              priority: card.priority,
-              state: card.state,
-              action_payload: card.action_payload,
-            },
-            contact: card.contact ? {
-              id: card.contact.id,
-              name: `${card.contact.first_name} ${card.contact.last_name}`,
-              firstName: card.contact.first_name,
-              lastName: card.contact.last_name,
-              email: card.contact.email,
-            } : null,
-            client: card.client ? {
-              id: card.client.id,
-              name: card.client.company_name,
-              email: card.client.email,
-            } : null,
-          },
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       console.log('[CardReviewChat] Response status:', response.status);
+      console.log('[CardReviewChat] Response headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -112,44 +142,82 @@ export function CardReviewChat({
         throw new Error(`Request failed: ${response.status}`);
       }
 
-      // Read streaming response
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let assistantContent = '';
-      let assistantMessageId = Date.now().toString();
+      // Read streaming response - try reading as text directly first
+      console.log('[CardReviewChat] Starting to read streaming response');
+      console.log('[CardReviewChat] Response body exists:', !!response.body);
+      console.log('[CardReviewChat] Response body type:', typeof response.body);
 
-      // Add initial empty assistant message
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: assistantMessageId,
-          role: 'assistant',
-          content: '',
-        },
-      ]);
+      // Try getting text directly to see if it's buffered
+      try {
+        const responseText = await response.text();
+        console.log('[CardReviewChat] Got response.text():', responseText.substring(0, 200));
+        console.log('[CardReviewChat] Total text length:', responseText.length);
 
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+        // Add assistant message with the text
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: responseText,
+          },
+        ]);
+      } catch (textError) {
+        console.error('[CardReviewChat] Error reading text:', textError);
 
-          const chunk = decoder.decode(value, { stream: true });
-          assistantContent += chunk;
+        // Fallback to stream reading
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let assistantContent = '';
+        let assistantMessageId = Date.now().toString();
 
-          // Update assistant message in real-time
-          setMessages((prev) => {
-            return prev.map(m =>
-              m.id === assistantMessageId
-                ? { ...m, content: assistantContent }
-                : m
-            );
-          });
+        console.log('[CardReviewChat] Fallback to stream, Reader exists:', !!reader);
+
+        // Add initial empty assistant message
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: assistantMessageId,
+            role: 'assistant',
+            content: '',
+          },
+        ]);
+
+        if (reader) {
+          let chunkCount = 0;
+          while (true) {
+            const { done, value } = await reader.read();
+            chunkCount++;
+            console.log(`[CardReviewChat] Chunk ${chunkCount}: done=${done}, valueLength=${value?.length || 0}`);
+
+            if (done) {
+              console.log('[CardReviewChat] Stream complete, total chunks:', chunkCount);
+              break;
+            }
+
+            const chunk = decoder.decode(value, { stream: true });
+            console.log(`[CardReviewChat] Decoded chunk ${chunkCount}:`, chunk.substring(0, 100));
+            assistantContent += chunk;
+
+            // Update assistant message in real-time
+            setMessages((prev) => {
+              return prev.map(m =>
+                m.id === assistantMessageId
+                  ? { ...m, content: assistantContent }
+                  : m
+              );
+            });
+          }
+          console.log('[CardReviewChat] Final content length:', assistantContent.length);
         }
       }
     } catch (err: any) {
-      console.error('[CardReviewChat] Error:', err);
+      console.error('[CardReviewChat] Caught error:', err);
+      console.error('[CardReviewChat] Error stack:', err.stack);
+      console.error('[CardReviewChat] Error name:', err.name);
+      console.error('[CardReviewChat] Error message:', err.message);
 
-      const errorMessage = `Sorry, I encountered an error: ${err.message}`;
+      const errorMessage = `Sorry, I encountered an error: ${err.message || 'Unknown error'}`;
       setError(errorMessage);
       setMessages((prev) => [
         ...prev,
@@ -160,6 +228,7 @@ export function CardReviewChat({
         },
       ]);
     } finally {
+      console.log('[CardReviewChat] Request completed, setting isLoading to false');
       setIsLoading(false);
     }
   };
@@ -217,18 +286,9 @@ export function CardReviewChat({
               {message.role === 'user' ? (
                 <div className="whitespace-pre-wrap">{message.content}</div>
               ) : (
-                <div className={cn(
-                  "prose prose-sm max-w-none",
-                  "prose-p:my-1 prose-p:leading-relaxed",
-                  "prose-ul:my-1 prose-ol:my-1",
-                  "prose-li:my-0.5",
-                  "prose-code:text-blue-600 prose-code:bg-blue-50 prose-code:px-1 prose-code:py-0.5 prose-code:rounded",
-                  "prose-strong:text-gray-900 prose-strong:font-semibold"
-                )}>
+                <div className="whitespace-pre-wrap">
                   {message.content ? (
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {message.content}
-                    </ReactMarkdown>
+                    message.content
                   ) : isLoading ? (
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Loader2 className="h-3 w-3 animate-spin" />

@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Contact } from "@/lib/types";
-import { Mail, Phone, Smartphone, Edit, Trash2, Star, AlertTriangle, AlertCircle } from "lucide-react";
+import { Mail, Phone, Smartphone, Edit, Trash2, Star, AlertTriangle, AlertCircle, BadgeCheck, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +21,8 @@ export function ContactCard({ contact, onEdit, onDelete }: ContactCardProps) {
   const fullName = `${contact.firstName} ${contact.lastName}`;
   const hasHardBounce = contact.tags?.includes('email_bounced_hard');
   const hasSoftBounce = contact.tags?.includes('email_bounced_soft');
+  const isApolloVerified = contact.tags?.includes('apollo-verified');
+  const isResearchFound = contact.tags?.includes('research-found');
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -45,6 +47,18 @@ export function ContactCard({ contact, onEdit, onDelete }: ContactCardProps) {
                 <Badge variant="outline" className="gap-1 text-orange-600 border-orange-600">
                   <AlertTriangle className="h-3 w-3" />
                   Soft Bounce
+                </Badge>
+              )}
+              {isApolloVerified && (
+                <Badge variant="outline" className="gap-1 text-green-600 border-green-600">
+                  <BadgeCheck className="h-3 w-3" />
+                  Verified
+                </Badge>
+              )}
+              {isResearchFound && !isApolloVerified && (
+                <Badge variant="outline" className="gap-1 text-cyan-600 border-cyan-600">
+                  <Search className="h-3 w-3" />
+                  Research
                 </Badge>
               )}
             </div>
