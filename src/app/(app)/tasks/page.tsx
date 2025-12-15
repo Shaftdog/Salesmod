@@ -4,15 +4,17 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TaskCard } from "@/components/tasks/task-card";
+import { TaskKanbanBoard } from "@/components/tasks/task-kanban-board";
 import { TaskForm } from "@/components/tasks/task-form";
 import { TaskDetailSheet } from "@/components/tasks/task-detail-sheet";
 import { useTasks, useCreateTask, useUpdateTask, useCompleteTask, useDeleteTask } from "@/hooks/use-tasks";
 import { useAppraisers, useCurrentUser } from "@/hooks/use-appraisers";
 import { useClients } from "@/hooks/use-clients";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PlusCircle, CheckCircle } from "lucide-react";
+import { PlusCircle, CheckCircle, LayoutList, Kanban } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Task } from "@/lib/types";
 
 export default function TasksPage() {
@@ -21,6 +23,7 @@ export default function TasksPage() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [showDetailSheet, setShowDetailSheet] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("active");
+  const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
   
   const { data: allTasks = [], isLoading } = useTasks();
   const { appraisers } = useAppraisers();
@@ -108,50 +111,76 @@ export default function TasksPage() {
                 Manage and track tasks across your team
               </CardDescription>
             </div>
-            <Button onClick={handleAdd}>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              New Task
-            </Button>
+            <div className="flex items-center gap-3">
+              <ToggleGroup
+                type="single"
+                value={viewMode}
+                onValueChange={(value) => value && setViewMode(value as "list" | "kanban")}
+                className="border rounded-md"
+              >
+                <ToggleGroupItem value="list" aria-label="List view" className="px-3">
+                  <LayoutList className="h-4 w-4" />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="kanban" aria-label="Kanban view" className="px-3">
+                  <Kanban className="h-4 w-4" />
+                </ToggleGroupItem>
+              </ToggleGroup>
+              <Button onClick={handleAdd}>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                New Task
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          <Tabs value={statusFilter} onValueChange={setStatusFilter} className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="active">Active</TabsTrigger>
-              <TabsTrigger value="my-tasks">My Tasks</TabsTrigger>
-              <TabsTrigger value="completed">Completed</TabsTrigger>
-              <TabsTrigger value="all">All</TabsTrigger>
-            </TabsList>
+          {viewMode === "list" ? (
+            <Tabs value={statusFilter} onValueChange={setStatusFilter} className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="active">Active</TabsTrigger>
+                <TabsTrigger value="my-tasks">My Tasks</TabsTrigger>
+                <TabsTrigger value="completed">Completed</TabsTrigger>
+                <TabsTrigger value="all">All</TabsTrigger>
+              </TabsList>
 
-            <div className="space-y-3">
-              {isLoading ? (
-                <>
-                  <Skeleton className="h-24 w-full" />
-                  <Skeleton className="h-24 w-full" />
-                  <Skeleton className="h-24 w-full" />
-                </>
-              ) : filteredTasks.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <CheckCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>No tasks found</p>
-                  <Button onClick={handleAdd} variant="outline" className="mt-4">
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Create Task
-                  </Button>
-                </div>
-              ) : (
-                filteredTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onComplete={handleComplete}
-                    onEdit={handleView}
-                    onDelete={handleDelete}
-                  />
-                ))
-              )}
-            </div>
-          </Tabs>
+              <div className="space-y-3">
+                {isLoading ? (
+                  <>
+                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-24 w-full" />
+                  </>
+                ) : filteredTasks.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <CheckCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p>No tasks found</p>
+                    <Button onClick={handleAdd} variant="outline" className="mt-4">
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Create Task
+                    </Button>
+                  </div>
+                ) : (
+                  filteredTasks.map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      onComplete={handleComplete}
+                      onEdit={handleView}
+                      onDelete={handleDelete}
+                    />
+                  ))
+                )}
+              </div>
+            </Tabs>
+          ) : (
+            <TaskKanbanBoard
+              tasks={allTasks}
+              isLoading={isLoading}
+              onTaskClick={handleView}
+              onTaskComplete={handleComplete}
+              onTaskDelete={handleDelete}
+              currentUserId={currentUser?.id}
+            />
+          )}
         </CardContent>
       </Card>
 
