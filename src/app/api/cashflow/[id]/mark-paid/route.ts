@@ -19,17 +19,18 @@ import {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
     const { tenantId } = await getAuthenticatedContext(supabase);
+    const { id } = await params;
 
     // Check transaction exists and belongs to org
     const { data: existing, error: fetchError } = await supabase
       .from('cashflow_transactions')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('tenant_id', tenantId)
       .single();
 
@@ -67,7 +68,7 @@ export async function POST(
         actual_date,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('tenant_id', tenantId)
       .select(`
         *,

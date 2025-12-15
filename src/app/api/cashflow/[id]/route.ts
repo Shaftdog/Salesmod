@@ -26,16 +26,17 @@ import {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
     const { tenantId } = await getAuthenticatedContext(supabase);
+    const { id } = await params;
 
     const { data, error } = await supabase
       .from('cashflow_board')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('tenant_id', tenantId)
       .single();
 
@@ -55,11 +56,12 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
     const { tenantId } = await getAuthenticatedContext(supabase);
+    const { id } = await params;
 
     // Get authenticated user ID
     const { data: { user } } = await supabase.auth.getUser();
@@ -71,7 +73,7 @@ export async function PATCH(
     const { data: existing, error: fetchError } = await supabase
       .from('cashflow_transactions')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('tenant_id', tenantId)
       .single();
 
@@ -119,7 +121,7 @@ export async function PATCH(
         ...updates,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('tenant_id', tenantId)
       .select(`
         *,
@@ -146,17 +148,18 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient();
     const { tenantId } = await getAuthenticatedContext(supabase);
+    const { id } = await params;
 
     // Check transaction exists and belongs to org
     const { data: existing, error: fetchError } = await supabase
       .from('cashflow_transactions')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('tenant_id', tenantId)
       .single();
 
@@ -175,7 +178,7 @@ export async function DELETE(
     const { count } = await supabase
       .from('cashflow_transactions')
       .select('id', { count: 'exact', head: true })
-      .eq('parent_transaction_id', params.id);
+      .eq('parent_transaction_id', id);
 
     if (count && count > 0) {
       return badRequestError(
@@ -187,7 +190,7 @@ export async function DELETE(
     const { error } = await supabase
       .from('cashflow_transactions')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('tenant_id', tenantId);
 
     if (error) {
