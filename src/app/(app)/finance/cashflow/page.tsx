@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { CashflowBoardComponent } from '@/components/cashflow/cashflow-board';
+import { AddExpenseDialog } from '@/components/cashflow/add-expense-dialog';
 import {
   useCashflowBoard,
   useMarkTransactionPaid,
@@ -26,6 +27,7 @@ export default function CashflowPage() {
   const { toast } = useToast();
   const [transactionTypeFilter, setTransactionTypeFilter] = useState<TransactionType | 'all'>('all');
   const [includeCollected, setIncludeCollected] = useState(false);
+  const [showAddExpense, setShowAddExpense] = useState(false);
 
   // Fetch cashflow board
   const {
@@ -161,12 +163,15 @@ export default function CashflowPage() {
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
-          <Button>
+          <Button onClick={() => setShowAddExpense(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Expense
           </Button>
         </div>
       </div>
+
+      {/* Add Expense Dialog */}
+      <AddExpenseDialog open={showAddExpense} onOpenChange={setShowAddExpense} />
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

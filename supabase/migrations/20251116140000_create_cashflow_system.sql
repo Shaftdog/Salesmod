@@ -51,7 +51,7 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS public.cashflow_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
 
   -- Transaction classification
@@ -110,17 +110,17 @@ COMMENT ON COLUMN public.cashflow_transactions.recurrence_pattern IS 'JSON patte
 -- 3. INDEXES FOR PERFORMANCE
 -- =============================================
 
-CREATE INDEX IF NOT EXISTS idx_cashflow_org_user ON public.cashflow_transactions(org_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_cashflow_tenant_user ON public.cashflow_transactions(tenant_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_cashflow_invoice ON public.cashflow_transactions(invoice_id) WHERE invoice_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_cashflow_board ON public.cashflow_transactions(org_id, board_column, board_position);
-CREATE INDEX IF NOT EXISTS idx_cashflow_dates ON public.cashflow_transactions(org_id, due_date, status);
+CREATE INDEX IF NOT EXISTS idx_cashflow_board ON public.cashflow_transactions(tenant_id, board_column, board_position);
+CREATE INDEX IF NOT EXISTS idx_cashflow_dates ON public.cashflow_transactions(tenant_id, due_date, status);
 CREATE INDEX IF NOT EXISTS idx_cashflow_status ON public.cashflow_transactions(status);
 CREATE INDEX IF NOT EXISTS idx_cashflow_client ON public.cashflow_transactions(client_id) WHERE client_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_cashflow_category ON public.cashflow_transactions(category) WHERE category IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_cashflow_recurring ON public.cashflow_transactions(parent_transaction_id) WHERE parent_transaction_id IS NOT NULL;
 
 -- Composite index for common board queries
-CREATE INDEX IF NOT EXISTS idx_cashflow_board_query ON public.cashflow_transactions(org_id, status, board_column, board_position);
+CREATE INDEX IF NOT EXISTS idx_cashflow_board_query ON public.cashflow_transactions(tenant_id, status, board_column, board_position);
 
 -- =============================================
 -- 4. HELPER FUNCTIONS
@@ -226,7 +226,7 @@ BEGIN
 
   -- Insert or update cashflow transaction
   INSERT INTO public.cashflow_transactions (
-    org_id,
+    tenant_id,
     user_id,
     transaction_type,
     category,
@@ -242,8 +242,8 @@ BEGIN
     board_column,
     ai_extracted
   ) VALUES (
-    NEW.org_id,
-    COALESCE(NEW.created_by, NEW.org_id),
+    NEW.tenant_id,
+    COALESCE(NEW.created_by, NEW.tenant_id),
     'income'::transaction_type,
     'invoice_payment',
     NEW.id,
@@ -323,7 +323,7 @@ CREATE TRIGGER update_cashflow_transactions_updated_at
 CREATE OR REPLACE VIEW public.cashflow_board AS
 SELECT
   ct.id,
-  ct.org_id,
+  ct.tenant_id,
   ct.user_id,
   ct.transaction_type,
   ct.category,
@@ -369,7 +369,7 @@ COMMENT ON VIEW public.cashflow_board IS 'Cashflow board view with joined client
 -- Cashflow summary by column
 CREATE OR REPLACE VIEW public.cashflow_summary AS
 SELECT
-  org_id,
+  tenant_id,
   board_column,
   transaction_type,
   COUNT(*) AS transaction_count,
@@ -379,15 +379,15 @@ SELECT
   SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END) AS net_amount
 FROM public.cashflow_transactions
 WHERE status != 'cancelled'
-GROUP BY org_id, board_column, transaction_type
-ORDER BY org_id, board_column, transaction_type;
+GROUP BY tenant_id, board_column, transaction_type
+ORDER BY tenant_id, board_column, transaction_type;
 
 COMMENT ON VIEW public.cashflow_summary IS 'Summary statistics by board column and transaction type';
 
 -- Cashflow forecast (next 90 days)
 CREATE OR REPLACE VIEW public.cashflow_forecast AS
 SELECT
-  org_id,
+  tenant_id,
   date_trunc('week', due_date)::DATE AS week_start,
   COUNT(*) AS transaction_count,
   SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS expected_income,
@@ -397,8 +397,8 @@ FROM public.cashflow_transactions
 WHERE status IN ('pending', 'scheduled', 'overdue')
   AND due_date >= CURRENT_DATE
   AND due_date <= CURRENT_DATE + INTERVAL '90 days'
-GROUP BY org_id, date_trunc('week', due_date)::DATE
-ORDER BY org_id, week_start;
+GROUP BY tenant_id, date_trunc('week', due_date)::DATE
+ORDER BY tenant_id, week_start;
 
 COMMENT ON VIEW public.cashflow_forecast IS 'Weekly cashflow forecast for next 90 days';
 
@@ -429,7 +429,7 @@ ALTER TABLE public.cashflow_transactions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY cashflow_transactions_select_policy ON public.cashflow_transactions
   FOR SELECT
   USING (
-    org_id IN (
+    tenant_id IN (
       SELECT id FROM public.profiles WHERE id = auth.uid()
     )
   );
@@ -438,7 +438,7 @@ CREATE POLICY cashflow_transactions_select_policy ON public.cashflow_transaction
 CREATE POLICY cashflow_transactions_insert_policy ON public.cashflow_transactions
   FOR INSERT
   WITH CHECK (
-    org_id IN (
+    tenant_id IN (
       SELECT id FROM public.profiles WHERE id = auth.uid()
     )
   );
@@ -447,12 +447,12 @@ CREATE POLICY cashflow_transactions_insert_policy ON public.cashflow_transaction
 CREATE POLICY cashflow_transactions_update_policy ON public.cashflow_transactions
   FOR UPDATE
   USING (
-    org_id IN (
+    tenant_id IN (
       SELECT id FROM public.profiles WHERE id = auth.uid()
     )
   )
   WITH CHECK (
-    org_id IN (
+    tenant_id IN (
       SELECT id FROM public.profiles WHERE id = auth.uid()
     )
   );
@@ -461,7 +461,7 @@ CREATE POLICY cashflow_transactions_update_policy ON public.cashflow_transaction
 CREATE POLICY cashflow_transactions_delete_policy ON public.cashflow_transactions
   FOR DELETE
   USING (
-    org_id IN (
+    tenant_id IN (
       SELECT id FROM public.profiles WHERE id = auth.uid()
     )
   );
@@ -473,7 +473,7 @@ CREATE POLICY cashflow_transactions_delete_policy ON public.cashflow_transaction
 -- Backfill existing invoices into cashflow system
 -- This will run once to sync all existing invoices
 INSERT INTO public.cashflow_transactions (
-  org_id,
+  tenant_id,
   user_id,
   transaction_type,
   category,
@@ -489,8 +489,8 @@ INSERT INTO public.cashflow_transactions (
   ai_extracted
 )
 SELECT
-  i.org_id,
-  COALESCE(i.created_by, i.org_id),
+  i.tenant_id,
+  COALESCE(i.created_by, i.tenant_id),
   'income'::transaction_type,
   'invoice_payment',
   i.id,

@@ -11,7 +11,7 @@ import {
 import {
   handleApiError,
   validateRequestBody,
-  getAuthenticatedOrgId,
+  getAuthenticatedContext,
   successResponse,
   notFoundError,
   badRequestError,
@@ -23,14 +23,14 @@ export async function POST(
 ) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { tenantId } = await getAuthenticatedContext(supabase);
 
     // Check transaction exists and belongs to org
     const { data: existing, error: fetchError } = await supabase
       .from('cashflow_transactions')
       .select('*')
       .eq('id', params.id)
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (fetchError || !existing) {
@@ -68,7 +68,7 @@ export async function POST(
         updated_at: new Date().toISOString(),
       })
       .eq('id', params.id)
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .select(`
         *,
         client:clients(id, name, email),

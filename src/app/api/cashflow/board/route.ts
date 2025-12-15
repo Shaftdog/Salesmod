@@ -12,7 +12,7 @@ import {
 import {
   handleApiError,
   validateQueryParams,
-  getAuthenticatedOrgId,
+  getAuthenticatedContext,
   successResponse,
 } from '@/lib/errors/api-errors';
 import type { CashflowBoard, CashflowBoardItem, BoardColumn } from '@/types/cashflow';
@@ -24,7 +24,7 @@ import type { CashflowBoard, CashflowBoardItem, BoardColumn } from '@/types/cash
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { tenantId } = await getAuthenticatedContext(supabase);
 
     // Parse and validate query parameters
     const url = new URL(request.url);
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     let supabaseQuery = supabase
       .from('cashflow_board')
       .select('*')
-      .eq('org_id', orgId);
+      .eq('tenant_id', tenantId);
 
     // Apply filters
     if (query.transaction_type) {

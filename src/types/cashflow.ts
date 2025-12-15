@@ -69,7 +69,7 @@ export interface AIMetadata {
 
 export interface CashflowTransaction {
   id: string;
-  org_id: string;
+  tenant_id: string;
   user_id: string;
 
   // Classification
@@ -130,7 +130,7 @@ export interface CashflowBoardItem extends CashflowTransaction {
 }
 
 export interface CashflowSummary {
-  org_id: string;
+  tenant_id: string;
   board_column: BoardColumn;
   transaction_type: TransactionType;
   transaction_count: number;
@@ -141,7 +141,7 @@ export interface CashflowSummary {
 }
 
 export interface CashflowForecast {
-  org_id: string;
+  tenant_id: string;
   week_start: string; // ISO date string
   transaction_count: number;
   expected_income: number;

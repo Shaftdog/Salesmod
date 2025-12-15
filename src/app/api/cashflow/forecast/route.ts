@@ -12,14 +12,14 @@ import {
 import {
   handleApiError,
   validateQueryParams,
-  getAuthenticatedOrgId,
+  getAuthenticatedContext,
   successResponse,
 } from '@/lib/errors/api-errors';
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { tenantId } = await getAuthenticatedContext(supabase);
 
     // Parse and validate query parameters
     const url = new URL(request.url);
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     let supabaseQuery = supabase
       .from('cashflow_transactions')
       .select('*')
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .in('status', ['pending', 'scheduled', 'overdue'])
       .gte('due_date', startDate)
       .lte('due_date', endDateStr);

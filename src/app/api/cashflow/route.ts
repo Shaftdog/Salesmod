@@ -16,7 +16,7 @@ import {
   handleApiError,
   validateRequestBody,
   validateQueryParams,
-  getAuthenticatedOrgId,
+  getAuthenticatedContext,
   successResponse,
   createdResponse,
 } from '@/lib/errors/api-errors';
@@ -29,13 +29,7 @@ import type { CashflowTransaction } from '@/types/cashflow';
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
-
-    // Get authenticated user ID
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { tenantId } = await getAuthenticatedContext(supabase);
 
     // Parse and validate query parameters
     const url = new URL(request.url);
@@ -45,7 +39,7 @@ export async function GET(request: NextRequest) {
     let supabaseQuery = supabase
       .from('cashflow_board')
       .select('*', { count: 'exact' })
-      .eq('org_id', orgId);
+      .eq('tenant_id', tenantId);
 
     // Apply filters
     if (query.transaction_type) {
@@ -137,7 +131,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { tenantId } = await getAuthenticatedContext(supabase);
 
     // Get authenticated user ID
     const { data: { user } } = await supabase.auth.getUser();
@@ -161,7 +155,7 @@ export async function POST(request: NextRequest) {
 
     // Prepare transaction data
     const transactionData = {
-      org_id: orgId,
+      tenant_id: tenantId,
       user_id: user.id,
       transaction_type: body.transaction_type,
       category: body.category || null,

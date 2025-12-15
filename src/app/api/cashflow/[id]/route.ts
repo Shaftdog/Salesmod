@@ -14,7 +14,7 @@ import {
 import {
   handleApiError,
   validateRequestBody,
-  getAuthenticatedOrgId,
+  getAuthenticatedContext,
   successResponse,
   notFoundError,
   badRequestError,
@@ -30,13 +30,13 @@ export async function GET(
 ) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { tenantId } = await getAuthenticatedContext(supabase);
 
     const { data, error } = await supabase
       .from('cashflow_board')
       .select('*')
       .eq('id', params.id)
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (error || !data) {
@@ -59,7 +59,7 @@ export async function PATCH(
 ) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { tenantId } = await getAuthenticatedContext(supabase);
 
     // Get authenticated user ID
     const { data: { user } } = await supabase.auth.getUser();
@@ -72,7 +72,7 @@ export async function PATCH(
       .from('cashflow_transactions')
       .select('*')
       .eq('id', params.id)
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (fetchError || !existing) {
@@ -120,7 +120,7 @@ export async function PATCH(
         updated_at: new Date().toISOString(),
       })
       .eq('id', params.id)
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .select(`
         *,
         client:clients(id, name, email),
@@ -150,14 +150,14 @@ export async function DELETE(
 ) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { tenantId } = await getAuthenticatedContext(supabase);
 
     // Check transaction exists and belongs to org
     const { data: existing, error: fetchError } = await supabase
       .from('cashflow_transactions')
       .select('*')
       .eq('id', params.id)
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (fetchError || !existing) {
@@ -188,7 +188,7 @@ export async function DELETE(
       .from('cashflow_transactions')
       .delete()
       .eq('id', params.id)
-      .eq('org_id', orgId);
+      .eq('tenant_id', tenantId);
 
     if (error) {
       console.error('Failed to delete cashflow transaction:', error);
