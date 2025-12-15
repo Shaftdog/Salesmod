@@ -284,6 +284,37 @@ export function notFoundResponse(message: string = 'Resource not found'): NextRe
   );
 }
 
+/**
+ * Create a not found error response (alias for notFoundResponse)
+ */
+export function notFoundError(resource: string = 'Resource'): NextResponse<ErrorResponse> {
+  return notFoundResponse(`${resource} not found`);
+}
+
+/**
+ * Create a bad request (400) response
+ */
+export function badRequestResponse(message: string, details?: any): NextResponse<ErrorResponse> {
+  return NextResponse.json(
+    {
+      error: {
+        message,
+        code: 'BAD_REQUEST',
+        details,
+        statusCode: 400,
+      },
+    },
+    { status: 400 }
+  );
+}
+
+/**
+ * Create a bad request error response (alias for badRequestResponse)
+ */
+export function badRequestError(message: string, details?: any): NextResponse<ErrorResponse> {
+  return badRequestResponse(message, details);
+}
+
 // =============================================
 // VALIDATION HELPERS
 // =============================================

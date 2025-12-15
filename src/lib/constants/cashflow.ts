@@ -31,6 +31,14 @@ export const BOARD_COLUMN_ORDER: BoardColumn[] = [
   'collected',
 ];
 
+export const BOARD_COLUMNS: Record<BoardColumn, string> = {
+  overdue: 'Overdue',
+  current_week: 'This Week',
+  next_week: 'Next Week',
+  later: 'Later',
+  collected: 'Collected',
+};
+
 export const BOARD_COLUMN_LIMITS = {
   overdue: 100,
   current_week: 50,
