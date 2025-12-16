@@ -50,7 +50,11 @@ export function transformClient(dbClient: any): Client {
     feeSchedule: dbClient.fee_schedule,
     preferredTurnaround: dbClient.preferred_turnaround,
     specialRequirements: dbClient.special_requirements,
+    // Billing contact fields
+    billingContactId: dbClient.billing_contact_id,
+    billingEmailConfirmed: dbClient.billing_email_confirmed ?? false,
     role: dbClient.party_roles ? transformPartyRole(dbClient.party_roles) : undefined,
+    billingContact: dbClient.billing_contact ? transformContact(dbClient.billing_contact) : undefined,
   }
 }
 

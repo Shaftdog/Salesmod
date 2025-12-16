@@ -14,7 +14,7 @@ export function useClients() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
-        .select('*, party_roles(*)')
+        .select('*, party_roles(*), billing_contact:contacts!billing_contact_id(*)')
         .order('company_name')
 
       if (error) throw error
@@ -46,7 +46,7 @@ export function useClients() {
           org_id: user.id,
           tenant_id: profile.tenant_id,
         })
-        .select('*, party_roles(*)')
+        .select('*, party_roles(*), billing_contact:contacts!billing_contact_id(*)')
         .single()
 
       if (error) throw error
@@ -81,7 +81,7 @@ export function useClients() {
         .from('clients')
         .update(updates)
         .eq('id', id)
-        .select('*, party_roles(*)')
+        .select('*, party_roles(*), billing_contact:contacts!billing_contact_id(*)')
         .single()
       
       if (error) throw error
@@ -151,7 +151,7 @@ export function useClient(id: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
-        .select('*, party_roles(*)')
+        .select('*, party_roles(*), billing_contact:contacts!billing_contact_id(*)')
         .eq('id', id)
         .single()
       

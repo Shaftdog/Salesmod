@@ -15,7 +15,8 @@ import { ActivityTimeline } from "@/components/activities/activity-timeline";
 import { TagSelector } from "@/components/tags/tag-selector";
 import { OrdersList } from "@/components/orders/orders-list";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Briefcase, DollarSign, FileText, Mail, Phone, Sparkles } from "lucide-react";
+import { ArrowLeft, Briefcase, DollarSign, FileText, Mail, Phone, Sparkles, Receipt } from "lucide-react";
+import { BillingContactSelector } from "@/components/shared/billing-contact-selector";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { useMemo, useState } from "react";
@@ -94,6 +95,48 @@ export default function ClientDetailPage() {
       toast({
         title: "Error",
         description: "Failed to update role.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleBillingContactChange = async (contactId: string | null) => {
+    try {
+      await updateClient({
+        id: clientId,
+        billing_contact_id: contactId,
+        billing_email_confirmed: false,
+      });
+      toast({
+        title: "Billing Contact Updated",
+        description: contactId ? "Billing contact has been set." : "Billing contact has been cleared.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update billing contact.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleBillingEmailConfirmedChange = async (confirmed: boolean) => {
+    try {
+      await updateClient({
+        id: clientId,
+        billing_email_confirmed: confirmed,
+        billing_contact_id: confirmed ? null : client?.billingContactId,
+      });
+      toast({
+        title: confirmed ? "Using Company Email" : "Billing Setting Cleared",
+        description: confirmed
+          ? "Invoices will be sent to the company email."
+          : "Please select a billing contact or confirm the company email.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update billing settings.",
         variant: "destructive",
       });
     }
@@ -256,6 +299,29 @@ export default function ClientDetailPage() {
               onRemoveTag={handleRemoveTag}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Billing Contact Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Receipt className="h-5 w-5 text-muted-foreground" />
+            <CardTitle>Billing Contact</CardTitle>
+          </div>
+          <CardDescription>
+            Set who receives invoices for this client
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BillingContactSelector
+            clientId={clientId}
+            clientEmail={client.email}
+            billingContactId={client.billingContactId}
+            billingEmailConfirmed={client.billingEmailConfirmed}
+            onBillingContactChange={handleBillingContactChange}
+            onBillingEmailConfirmedChange={handleBillingEmailConfirmedChange}
+          />
         </CardContent>
       </Card>
 

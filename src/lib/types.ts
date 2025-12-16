@@ -78,8 +78,13 @@ export interface Client {
   preferredTurnaround?: number;
   specialRequirements?: string;
 
+  // Billing contact fields
+  billingContactId?: string | null;
+  billingEmailConfirmed: boolean;
+
   // Relations
   role?: PartyRole;
+  billingContact?: Contact;
 }
 
 export interface Order {

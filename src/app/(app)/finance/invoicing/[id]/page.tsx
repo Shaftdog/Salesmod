@@ -23,7 +23,12 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, CreditCard, DollarSign, ExternalLink, Ban, FileText } from 'lucide-react';
+import { ArrowLeft, CreditCard, DollarSign, ExternalLink, Ban, FileText, Send, ChevronDown, Pencil, AlertTriangle, Copy, Check, Link2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { EditInvoiceDialog } from '@/components/invoicing/edit-invoice-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { INVOICE_STATUS_TRANSITIONS, type InvoiceStatus } from '@/lib/constants/invoicing';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils/currency';
 import { useForm } from 'react-hook-form';
@@ -56,10 +61,17 @@ export default function InvoiceDetailPage() {
   const generateStripeLink = useGenerateStripeLink();
   const markAsPaid = useMarkInvoicePaid();
   const cancelInvoice = useCancelInvoice();
+  const { toast } = useToast();
 
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [stripeLink, setStripeLink] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [isChangingStatus, setIsChangingStatus] = useState(false);
+  const [invoiceViewUrl, setInvoiceViewUrl] = useState<string | null>(null);
+  const [urlCopied, setUrlCopied] = useState(false);
 
   const paymentForm = useForm<RecordPaymentInput>({
     resolver: zodResolver(RecordPaymentSchema),
@@ -128,6 +140,117 @@ export default function InvoiceDetailPage() {
     }
   };
 
+  const handleSendInvoice = async () => {
+    setIsSending(true);
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Show user-friendly error message
+        toast({
+          title: 'Failed to send invoice',
+          description: data.error || 'An unexpected error occurred. Please try again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      setIsSendDialogOpen(false);
+
+      // Store the view URL for display
+      if (data.data?.view_url) {
+        setInvoiceViewUrl(data.data.view_url);
+      }
+
+      // Show appropriate toast based on email status
+      if (data.data?.email_simulated) {
+        toast({
+          title: 'Invoice ready to send',
+          description: 'Email service not configured. Copy the invoice link below to share manually.',
+        });
+      } else if (data.data?.email_sent === false) {
+        toast({
+          title: 'Invoice link generated',
+          description: data.message || 'Email delivery failed. Copy the link below to share manually.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Invoice sent',
+          description: data.message || `Invoice sent successfully!`,
+        });
+      }
+
+      // Refresh the page to show updated status
+      router.refresh();
+      // Don't do full reload - keep the view URL visible
+      // window.location.reload();
+    } catch (error) {
+      console.error('Failed to send invoice:', error);
+      toast({
+        title: 'Failed to send invoice',
+        description: 'A network error occurred. Please check your connection and try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleCopyUrl = async () => {
+    if (invoiceViewUrl) {
+      await navigator.clipboard.writeText(invoiceViewUrl);
+      setUrlCopied(true);
+      toast({
+        title: 'Link copied',
+        description: 'Invoice link copied to clipboard.',
+      });
+      setTimeout(() => setUrlCopied(false), 2000);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    setIsChangingStatus(true);
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update status');
+      }
+      // Refresh to show updated status
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to change status:', error);
+      alert(error instanceof Error ? error.message : 'Failed to change status');
+    } finally {
+      setIsChangingStatus(false);
+    }
+  };
+
+  // Get valid status transitions for current invoice status
+  const getValidTransitions = (): string[] => {
+    if (!invoice) return [];
+    const currentStatus = invoice.status as InvoiceStatus;
+    return [...(INVOICE_STATUS_TRANSITIONS[currentStatus] || [])];
+  };
+
+  const formatStatusLabel = (status: string): string => {
+    return status
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
   if (isLoading) {
     return (
       <div className="container mx-auto py-6">
@@ -146,8 +269,82 @@ export default function InvoiceDetailPage() {
 
   const balance = invoice.total_amount - invoice.amount_paid;
 
+  // Check if client has billing contact configured
+  const hasBillingContact = invoice.client?.billing_contact_id && invoice.client?.billing_contact?.email;
+  const hasBillingEmailConfirmed = invoice.client?.billing_email_confirmed && invoice.client?.email;
+  const isBillingConfigured = hasBillingContact || hasBillingEmailConfirmed;
+
+  // Determine the billing email that will be used
+  const billingEmail = hasBillingContact
+    ? invoice.client?.billing_contact?.email
+    : (hasBillingEmailConfirmed ? invoice.client?.email : null);
+
   return (
     <div className="container mx-auto py-6 space-y-6">
+      {/* Invoice View URL Card - shown after sending */}
+      {invoiceViewUrl && (
+        <Card className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Link2 className="h-5 w-5 text-green-600" />
+              <CardTitle className="text-green-900 dark:text-green-100">Invoice Link</CardTitle>
+            </div>
+            <CardDescription className="text-green-700 dark:text-green-300">
+              Share this link with your client to view and pay the invoice
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <Input
+                value={invoiceViewUrl}
+                readOnly
+                className="bg-white dark:bg-green-900 font-mono text-sm"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleCopyUrl}
+                className="shrink-0"
+              >
+                {urlCopied ? (
+                  <Check className="h-4 w-4 text-green-600" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                asChild
+                className="shrink-0"
+              >
+                <a href={invoiceViewUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Billing Contact Warning Banner */}
+      {invoice.status === 'draft' && !isBillingConfigured && (
+        <Alert variant="destructive" className="border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100 [&>svg]:text-amber-600">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Billing Contact Required</AlertTitle>
+          <AlertDescription className="flex flex-col gap-2">
+            <span>
+              This client has no billing contact configured. You must set up a billing contact before sending this invoice.
+            </span>
+            <Button variant="outline" size="sm" className="w-fit" asChild>
+              <Link href={`/clients/${invoice.client?.id}`}>
+                Configure Billing Contact
+              </Link>
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -165,7 +362,102 @@ export default function InvoiceDetailPage() {
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {/* Edit Button - only for editable statuses */}
+          {['draft', 'sent', 'viewed', 'overdue'].includes(invoice.status) && (
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+          )}
+
+          {/* Send Invoice Button - only for draft invoices */}
+          {invoice.status === 'draft' && (
+            <Dialog open={isSendDialogOpen} onOpenChange={setIsSendDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="default">
+                  <Send className="mr-2 h-4 w-4" />
+                  Send Invoice
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Send Invoice</DialogTitle>
+                  <DialogDescription>
+                    {isBillingConfigured
+                      ? `Send this invoice to ${billingEmail}. The invoice status will change from Draft to Sent.`
+                      : 'Configure a billing contact before sending this invoice.'
+                    }
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4">
+                  {!isBillingConfigured ? (
+                    <Alert variant="destructive" className="border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100 [&>svg]:text-amber-600">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle>No Billing Contact</AlertTitle>
+                      <AlertDescription>
+                        This client has no billing contact configured. Please{' '}
+                        <Link href={`/clients/${invoice.client?.id}`} className="font-medium underline">
+                          configure a billing contact
+                        </Link>{' '}
+                        before sending this invoice.
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Invoice <span className="font-medium text-foreground">{invoice.invoice_number}</span> for{' '}
+                        <span className="font-medium text-foreground">{formatCurrency(invoice.total_amount)}</span>
+                      </p>
+                      <p className="text-sm">
+                        <span className="text-muted-foreground">Recipient: </span>
+                        <span className="font-medium">{billingEmail}</span>
+                        {hasBillingContact && invoice.client?.billing_contact && (
+                          <span className="text-muted-foreground">
+                            {' '}({invoice.client.billing_contact.first_name} {invoice.client.billing_contact.last_name})
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsSendDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSendInvoice}
+                    disabled={isSending || !isBillingConfigured}
+                  >
+                    {isSending ? 'Sending...' : 'Send Invoice'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {/* Status Change Dropdown */}
+          {getValidTransitions().length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" disabled={isChangingStatus}>
+                  {isChangingStatus ? 'Updating...' : 'Change Status'}
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {getValidTransitions().map((status) => (
+                  <DropdownMenuItem
+                    key={status}
+                    onClick={() => handleStatusChange(status)}
+                  >
+                    {formatStatusLabel(status)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
           {invoice.status !== 'paid' && invoice.status !== 'cancelled' && invoice.status !== 'void' && (
             <>
               {invoice.payment_method === 'stripe' && (
@@ -511,6 +803,30 @@ export default function InvoiceDetailPage() {
             </Card>
           )}
         </div>
+      )}
+
+      {/* Edit Invoice Dialog */}
+      {invoice && (
+        <EditInvoiceDialog
+          invoice={{
+            id: invoice.id,
+            invoice_number: invoice.invoice_number,
+            invoice_date: invoice.invoice_date,
+            due_date: invoice.due_date,
+            status: invoice.status,
+            payment_method: invoice.payment_method,
+            notes: invoice.notes,
+            terms_and_conditions: invoice.terms,
+            line_items: invoice.line_items,
+          }}
+          open={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          onSuccess={() => {
+            setIsEditDialogOpen(false);
+            router.refresh();
+            window.location.reload();
+          }}
+        />
       )}
     </div>
   );
