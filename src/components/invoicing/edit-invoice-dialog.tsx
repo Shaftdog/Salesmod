@@ -166,7 +166,14 @@ export function EditInvoiceDialog({
         throw new Error(error.error || 'Failed to update invoice');
       }
 
-      // Invalidate queries to refresh data
+      // Parse the response and immediately update the cache with fresh data
+      // This fixes the race condition where dialog closes before refetch completes
+      const result = await response.json();
+      if (result.data) {
+        queryClient.setQueryData(['invoice', invoice.id], result.data);
+      }
+
+      // Invalidate all invoice queries to ensure fresh data
       queryClient.invalidateQueries({ queryKey: ['invoice', invoice.id] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       if (orderId) {

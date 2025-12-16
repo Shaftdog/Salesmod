@@ -134,6 +134,16 @@ export const CreateInvoiceSchema = z.object({
   }
 });
 
+// Schema for line items in update operations (allows id for existing items)
+export const UpdateInvoiceLineItemSchema = z.object({
+  id: z.string().uuid().optional(), // Optional - only present for existing items
+  description: z.string().min(1, 'Description is required').max(500).transform(sanitizeText),
+  quantity: z.number().positive('Quantity must be positive'),
+  unit_price: z.number().nonnegative('Unit price must be non-negative'),
+  tax_rate: z.number().min(0).max(1).optional().default(0),
+  line_order: z.number().int().nonnegative().optional(),
+});
+
 export const UpdateInvoiceSchema = z.object({
   status: InvoiceStatusSchema.optional(),
   due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
@@ -142,6 +152,10 @@ export const UpdateInvoiceSchema = z.object({
   notes: z.string().max(2000).transform(sanitizeText).optional(),
   terms_and_conditions: z.string().max(5000).transform(sanitizeText).optional(),
   footer_text: z.string().max(500).transform(sanitizeText).optional(),
+  payment_method: PaymentMethodSchema.optional(),
+
+  // Line items for updating invoice items
+  line_items: z.array(UpdateInvoiceLineItemSchema).min(1).optional(),
 
   // Stripe updates
   stripe_invoice_id: z.string().optional(),
