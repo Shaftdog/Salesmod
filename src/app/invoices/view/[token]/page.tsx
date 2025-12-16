@@ -168,6 +168,13 @@ export default function PublicInvoiceViewPage() {
   const isOverdue = invoice.status === 'overdue';
   const canPay = !isPaid && invoice.amount_due > 0;
 
+  // Company information
+  const companyInfo = {
+    name: 'ROI Home Services',
+    address: '522 S. Hunt Club Blvd, Suite 166',
+    cityStateZip: 'Apopka, FL 32703',
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-4xl mx-auto">
@@ -177,10 +184,12 @@ export default function PublicInvoiceViewPage() {
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">
-                  {invoice.org?.name || 'Invoice'}
+                  {companyInfo.name}
                 </h1>
+                <p className="text-muted-foreground">{companyInfo.address}</p>
+                <p className="text-muted-foreground">{companyInfo.cityStateZip}</p>
                 {invoice.org?.email && (
-                  <p className="text-muted-foreground">{invoice.org.email}</p>
+                  <p className="text-muted-foreground mt-1">{invoice.org.email}</p>
                 )}
               </div>
               <div className="text-right">
@@ -392,7 +401,8 @@ export default function PublicInvoiceViewPage() {
 
         {/* Footer */}
         <div className="mt-6 text-center text-sm text-muted-foreground">
-          <p>Questions about this invoice? Contact us at {invoice.org?.email}</p>
+          <p>Thank you for your business!</p>
+          <p className="mt-1">{companyInfo.name} | {companyInfo.address}, {companyInfo.cityStateZip}</p>
         </div>
       </div>
     </div>

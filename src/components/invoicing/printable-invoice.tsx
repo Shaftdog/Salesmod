@@ -61,11 +61,11 @@ export const PrintableInvoice = forwardRef<HTMLDivElement, PrintableInvoiceProps
   ({ invoice, companyInfo }, ref) => {
     // Default company info if not provided
     const company = companyInfo || {
-      name: 'My ROI Home',
-      address: '',
-      city: '',
+      name: 'ROI Home Services',
+      address: '522 S. Hunt Club Blvd, Suite 166',
+      city: 'Apopka',
       state: 'FL',
-      zip: '',
+      zip: '32703',
       phone: '',
       email: '',
       website: '',
