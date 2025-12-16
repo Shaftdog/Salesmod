@@ -39,6 +39,11 @@
     "node_modules",
     "scripts/**/*",
     "tests/**/*",
-    "e2e/**/*"
+    "e2e/**/*",
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
   ]
 }
