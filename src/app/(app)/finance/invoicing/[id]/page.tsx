@@ -23,10 +23,11 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, CreditCard, DollarSign, ExternalLink, Ban, FileText, Send, ChevronDown, Pencil, AlertTriangle, Copy, Check, Link2 } from 'lucide-react';
+import { ArrowLeft, CreditCard, DollarSign, ExternalLink, Ban, FileText, Send, ChevronDown, Pencil, AlertTriangle, Copy, Check, Link2, Printer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { EditInvoiceDialog } from '@/components/invoicing/edit-invoice-dialog';
+import { PrintInvoiceDialog } from '@/components/invoicing/print-invoice-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { INVOICE_STATUS_TRANSITIONS, type InvoiceStatus } from '@/lib/constants/invoicing';
 import Link from 'next/link';
@@ -67,6 +68,7 @@ export default function InvoiceDetailPage() {
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
   const [stripeLink, setStripeLink] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
@@ -363,6 +365,12 @@ export default function InvoiceDetailPage() {
         </div>
 
         <div className="flex gap-2 flex-wrap">
+          {/* Print Button - always visible */}
+          <Button variant="outline" onClick={() => setIsPrintDialogOpen(true)}>
+            <Printer className="mr-2 h-4 w-4" />
+            Print
+          </Button>
+
           {/* Edit Button - only for editable statuses */}
           {['draft', 'sent', 'viewed', 'overdue'].includes(invoice.status) && (
             <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
@@ -826,6 +834,46 @@ export default function InvoiceDetailPage() {
             router.refresh();
             window.location.reload();
           }}
+        />
+      )}
+
+      {/* Print Invoice Dialog */}
+      {invoice && (
+        <PrintInvoiceDialog
+          invoice={{
+            id: invoice.id,
+            invoice_number: invoice.invoice_number,
+            invoice_date: invoice.invoice_date,
+            due_date: invoice.due_date,
+            status: invoice.status,
+            subtotal: invoice.subtotal || 0,
+            tax_rate: invoice.tax_rate,
+            tax_amount: invoice.tax_amount || 0,
+            discount_amount: invoice.discount_amount,
+            total_amount: invoice.total_amount,
+            amount_paid: invoice.amount_paid,
+            amount_due: invoice.amount_due || (invoice.total_amount - invoice.amount_paid),
+            notes: invoice.notes,
+            terms_and_conditions: invoice.terms,
+            payment_method: invoice.payment_method,
+            client: invoice.client ? {
+              id: invoice.client.id,
+              company_name: invoice.client.company_name,
+              email: invoice.client.email,
+              phone: invoice.client.phone,
+              address: invoice.client.address,
+            } : undefined,
+            line_items: invoice.line_items?.map((item: any) => ({
+              id: item.id,
+              description: item.description,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              amount: item.amount || item.quantity * item.unit_price,
+              tax_rate: item.tax_rate,
+            })),
+          }}
+          open={isPrintDialogOpen}
+          onOpenChange={setIsPrintDialogOpen}
         />
       )}
     </div>

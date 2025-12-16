@@ -16,7 +16,6 @@ import {
   handleApiError,
   validateRequestBody,
   validateQueryParams,
-  getAuthenticatedOrgId,
   getAuthenticatedContext,
   successResponse,
   createdResponse,
@@ -30,13 +29,13 @@ import type { Invoice, InvoiceWithDetails } from '@/types/invoicing';
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { tenantId } = await getAuthenticatedContext(supabase);
 
     // Parse and validate query parameters
     const url = new URL(request.url);
     const query = validateQueryParams<InvoiceListQueryInput>(url, InvoiceListQuerySchema);
 
-    // Build the base query
+    // Build the base query - filter by tenant_id for multi-tenant access
     let supabaseQuery = supabase
       .from('invoices')
       .select(`
@@ -48,7 +47,7 @@ export async function GET(request: NextRequest) {
         ),
         payments(*)
       `, { count: 'exact' })
-      .eq('org_id', orgId);
+      .eq('tenant_id', tenantId);
 
     // Apply filters
     if (query.client_id) {
@@ -86,12 +85,9 @@ export async function GET(request: NextRequest) {
     }
 
     if (query.search) {
-      // Search in invoice number or client name using safe parameterized queries
-      // Use separate ilike filters instead of string interpolation to prevent injection
+      // Search in invoice number (client name search requires a separate query approach)
       const searchPattern = `%${query.search}%`;
-      supabaseQuery = supabaseQuery.or(
-        `invoice_number.ilike.${searchPattern},client.company_name.ilike.${searchPattern}`
-      );
+      supabaseQuery = supabaseQuery.ilike('invoice_number', searchPattern);
     }
 
     // Apply sorting

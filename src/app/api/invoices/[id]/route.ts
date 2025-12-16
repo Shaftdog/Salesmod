@@ -14,12 +14,12 @@ import {
 import {
   handleApiError,
   validateRequestBody,
-  getAuthenticatedOrgId,
+  getAuthenticatedContext,
   successResponse,
   noContentResponse,
   NotFoundError,
   BadRequestError,
-  verifyResourceOwnership,
+  verifyTenantResourceOwnership,
 } from '@/lib/errors/api-errors';
 import type { InvoiceWithDetails } from '@/types/invoicing';
 import { isValidStatusTransition, InvoiceStatus } from '@/lib/constants/invoicing';
@@ -34,10 +34,10 @@ export async function GET(
 ) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { tenantId } = await getAuthenticatedContext(supabase);
     const { id } = await params;
 
-    // Fetch invoice with all relations
+    // Fetch invoice with all relations - filter by tenant_id for multi-tenant access
     const { data: invoice, error } = await supabase
       .from('invoices')
       .select(`
@@ -61,7 +61,7 @@ export async function GET(
         payments(*)
       `)
       .eq('id', id)
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (error) {
@@ -88,7 +88,7 @@ export async function PATCH(
 ) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
     const { id } = await params;
 
     // Validate request body
@@ -97,8 +97,8 @@ export async function PATCH(
       UpdateInvoiceSchema
     );
 
-    // Verify invoice exists and belongs to org
-    await verifyResourceOwnership(supabase, 'invoices', id, orgId);
+    // Verify invoice exists and belongs to tenant
+    await verifyTenantResourceOwnership(supabase, 'invoices', id, tenantId);
 
     // Check if invoice can be edited
     const { data: currentInvoice, error: fetchError } = await supabase
@@ -298,11 +298,11 @@ export async function DELETE(
 ) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
     const { id } = await params;
 
-    // Verify invoice exists and belongs to org
-    await verifyResourceOwnership(supabase, 'invoices', id, orgId);
+    // Verify invoice exists and belongs to tenant
+    await verifyTenantResourceOwnership(supabase, 'invoices', id, tenantId);
 
     // Fetch invoice to check if it can be deleted
     const { data: invoice, error: fetchError } = await supabase

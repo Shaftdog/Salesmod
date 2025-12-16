@@ -13,10 +13,10 @@ import {
 import {
   handleApiError,
   validateRequestBody,
-  getAuthenticatedOrgId,
+  getAuthenticatedContext,
   successResponse,
   BadRequestError,
-  verifyResourceOwnership,
+  verifyTenantResourceOwnership,
 } from '@/lib/errors/api-errors';
 import { sendEmail } from '@/lib/campaigns/email-sender';
 import {
@@ -39,7 +39,7 @@ export async function POST(
 ) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
     const { id } = await params;
 
     // Validate request body
@@ -48,8 +48,8 @@ export async function POST(
       SendInvoiceSchema
     );
 
-    // Verify invoice exists and belongs to org
-    await verifyResourceOwnership(supabase, 'invoices', id, orgId);
+    // Verify invoice exists and belongs to tenant
+    await verifyTenantResourceOwnership(supabase, 'invoices', id, tenantId);
 
     // Fetch invoice with client and billing contact info
     const { data: invoice, error: fetchError } = await supabase

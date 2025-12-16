@@ -395,6 +395,17 @@ const TABLES_WITH_ORG_ID = [
   'comparables',
 ] as const;
 
+// Valid tables for tenant-based ownership verification (must have tenant_id column)
+const TABLES_WITH_TENANT_ID = [
+  'invoices',
+  'payments',
+  'clients',
+  'orders',
+  'properties',
+  'comparables',
+  'invoice_line_items',
+] as const;
+
 export async function verifyResourceOwnership(
   supabase: SupabaseClient,
   table: string,
@@ -437,6 +448,58 @@ export async function verifyResourceOwnership(
       resourceId,
       attemptedBy: orgId,
       actualOwner: data?.org_id || 'unknown',
+      timestamp: new Date().toISOString(),
+    });
+    throw new ForbiddenError('You do not have access to this resource');
+  }
+}
+
+/**
+ * Verify that a resource belongs to the authenticated user's tenant
+ * This is used for multi-tenant resources where all users in a tenant can access
+ */
+export async function verifyTenantResourceOwnership(
+  supabase: SupabaseClient,
+  table: string,
+  resourceId: string,
+  tenantId: string
+): Promise<void> {
+  // Validate table name to prevent potential misuse
+  if (!TABLES_WITH_TENANT_ID.includes(table as any)) {
+    console.error('SECURITY: Invalid table for tenant ownership verification', {
+      table,
+      resourceId,
+      tenantId,
+    });
+    throw new Error(`Invalid table for tenant ownership verification: ${table}`);
+  }
+
+  const { data, error } = await supabase
+    .from(table)
+    .select('tenant_id')
+    .eq('id', resourceId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      throw new NotFoundError('Resource');
+    }
+    console.error('Tenant ownership verification error', {
+      table,
+      resourceId,
+      error: error.message,
+      code: error.code,
+    });
+    throw error;
+  }
+
+  if (!data || data.tenant_id !== tenantId) {
+    // Log potential unauthorized access attempts
+    console.warn('SECURITY: Unauthorized tenant resource access attempt', {
+      table,
+      resourceId,
+      attemptedBy: tenantId,
+      actualTenant: data?.tenant_id || 'unknown',
       timestamp: new Date().toISOString(),
     });
     throw new ForbiddenError('You do not have access to this resource');
