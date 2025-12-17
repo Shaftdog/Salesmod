@@ -47,6 +47,7 @@ import {
 } from '@/types/production';
 import { format, formatDistanceToNow } from 'date-fns';
 import { CorrectionDialog } from './correction-dialog';
+import { TaskAssigneePopover } from './task-assignee-popover';
 
 interface ProductionCardModalProps {
   cardId: string;
@@ -374,12 +375,12 @@ function TaskItem({
 
           {/* Task Meta */}
           <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-muted-foreground">
-            {task.assigned_user && (
-              <div className="flex items-center gap-1">
-                <User className="h-3 w-3" />
-                <span>{task.assigned_user.name || task.assigned_user.email}</span>
-              </div>
-            )}
+            {/* Assignee - clickable to reassign */}
+            <TaskAssigneePopover
+              taskId={task.id}
+              currentAssignee={task.assigned_user}
+              disabled={isCompleted}
+            />
             {task.due_date && (
               <div className={cn('flex items-center gap-1', overdue && !isCompleted && 'text-red-600')}>
                 <Calendar className="h-3 w-3" />
