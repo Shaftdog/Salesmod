@@ -2,17 +2,39 @@
 status: current
 last_verified: 2025-12-17
 updated_by: Claude Code
+last_updated: 2025-12-17
 ---
 
 # vNext Autonomous Agent - Implementation Progress
 
 ## Overview
 
-This document tracks the implementation progress of the vNext Autonomous Agent System, which transforms the current manual-trigger agent into a fully autonomous, always-on AI Account Manager operating on an hourly Plan → Act → React → Reflect cycle.
+This document tracks the implementation progress of the vNext Autonomous Agent System, operating on an hourly **Plan → Act → React → Reflect** cycle. The system is designed to relentlessly pursue **Order + Revenue goals**, maintain **21-day engagement compliance**, process **new orders correctly** (pricing + credit approval + requirements), aggressively work **Deals/Opportunities** and **Quotes/Bids**, and remain "information hungry" (Gmail + documents ingestion, contact enrichment, and pattern discovery).
 
 ---
 
-## Phase 0 (P0): Core Autonomous Infrastructure ✅ COMPLETE
+### Hard Guardrails (Prohibited Behaviors)
+
+1. **Do not create human tasks unless client explicitly requested it.**
+   - Allowed: "Can you call me Thursday?" → create_task
+   - Blocked: "We should call them" (no explicit request)
+
+2. **Do not run research until the current engagement/follow-up list is exhausted.**
+   - Research is allowed only when engagement compliance is met and goals/pipeline conditions require it.
+
+3. **No spam behaviors.**
+   - Rate limits + suppression/bounce checks + opt-out compliance are mandatory.
+
+### Operating Loop (Hourly)
+
+- **Plan**: Pull goals, new orders, order exceptions, deals/opps, bids/quotes, engagement compliance, quarterly compliance due, Gmail updates, broadcast triggers.
+- **Act**: Execute only policy-allowed actions (system actions default; human actions rare).
+- **React**: Ingest outcomes (replies, bounces, order updates, credit failures, bid outcomes).
+- **Reflect**: Write run record (what changed, what moved metrics, blocks, next-hour hints).
+
+---
+
+## Phase 0 (P0): Core Autonomous Infrastructure ✅ IMPLEMENTED (Needs Validation)
 
 **Status**: Implemented and pushed to `claude/autonomous-agent-loop-fJMWb`
 
@@ -48,6 +70,12 @@ This document tracks the implementation progress of the vNext Autonomous Agent S
 - [x] Email classification and routing
 
 **Cron Schedule**: `*/5 * * * *` (every 5 minutes)
+
+**Enhancements Needed (vNext)**:
+- [ ] Extract and persist all contact info from email headers/signatures
+- [ ] Infer/store roles/titles where possible
+- [ ] Link messages to Accounts/Deals/Orders (best-effort)
+- [ ] Enforce message-id dedupe + idempotency
 
 ### P0.3: Policy Enforcement Engine ✅
 
@@ -161,6 +189,17 @@ This document tracks the implementation progress of the vNext Autonomous Agent S
 CRON_SECRET=your-secret-here  # For authenticating cron requests
 ```
 
+### P0.6: Hardening & Proof (Before "True Autonomy") 🔲 REQUIRED
+
+Before enabling autonomous operation in production, these safety measures must be implemented:
+
+- [ ] Idempotency + dedupe guarantees (emails processed once; cards created once per source)
+- [ ] Global kill switch + per-tenant disable flag
+- [ ] Centralized rate limits (email sends, research runs, sandbox runs)
+- [ ] RLS + tenant isolation verification across new tables
+- [ ] Serverless resilience (checkpointing + avoid long single-run work)
+- [ ] Observability wired to real alerts/dashboards
+
 ---
 
 ## Phase 1 (P1): Scale the Intelligence 🔲 NOT STARTED
@@ -190,6 +229,8 @@ CRON_SECRET=your-secret-here  # For authenticating cron requests
 - [ ] Embedding generation
 - [ ] Semantic search
 - [ ] Source attribution
+
+**Implementation Note**: Heavy parsing (PDF/DOCX extraction) should run via **P2.2 Utility Sandbox (Script Runner)** to avoid cron/API timeouts and to keep isolation.
 
 ### P1.2: Broadcast Audiences & Templates
 
@@ -246,6 +287,55 @@ CRON_SECRET=your-secret-here  # For authenticating cron requests
 - [ ] Automatic case creation
 - [ ] Service recovery workflow
 
+### P1.4: Deals / Opportunities Engine
+
+**Goal**: Aggressively work deals to close (stalled detection, next-step follow-ups, stage progression).
+
+**Rules**:
+- `send_email` / `follow_up` actions allowed autonomously
+- `create_task` only when client explicitly requests
+
+**Required Components**:
+- [ ] `src/lib/agent/deals-engine.ts` - Deal progression logic
+- [ ] Stalled deal detection (no movement in X days)
+- [ ] Automatic follow-up scheduling
+- [ ] Stage advancement triggers
+- [ ] Win/loss tracking
+
+### P1.5: Quotes / Bids Engine
+
+**Goal**: Follow bid process end-to-end (intel request, competitive bid, follow-up until win/loss, reason capture).
+
+**Required Components**:
+- [ ] `src/lib/agent/bids-engine.ts` - Bid workflow automation
+- [ ] Bid submission confirmation
+- [ ] Intel gathering from submitter
+- [ ] Competitive bid generation
+- [ ] Follow-up until outcome
+- [ ] Win/loss reason capture + pattern storage
+
+### P1.6: "Information Hungry" Contact Enrichment
+
+**Goal**: Save all contact info from emails, enrich contacts with roles, detect opportunities to serve (complaints/urgency/renewal/upsell).
+
+**Required Components**:
+- [ ] `src/lib/agent/contact-enricher.ts` - Contact data enhancement
+- [ ] Email signature parsing
+- [ ] Role/title inference
+- [ ] Opportunity signal detection
+- [ ] Complaint/urgency flagging
+
+### P1.7: Account/Vendor Compliance (Quarterly)
+
+**Goal**: Quarterly vendor manager profile check + update workflow, with escalation if access/data missing.
+
+**Required Components**:
+- [ ] `src/lib/agent/compliance-engine.ts` - Quarterly compliance checks
+- [ ] Vendor manager status field verification
+- [ ] Missing data detection
+- [ ] Reminder/notification triggers
+- [ ] Escalation workflow
+
 ---
 
 ## Phase 2 (P2): Compound Advantage 🔲 NOT STARTED
@@ -280,30 +370,48 @@ CRON_SECRET=your-secret-here  # For authenticating cron requests
 - [ ] Success Strategy recommendations
 - [ ] Anomaly alerts
 
-### P2.2: Sandbox Code Execution
+### P2.2: Utility Sandbox (Script Runner)
 
-**Goal**: Agent can prototype solutions safely
+**Goal**: Give the agent a safe coding tool to run scripts for everyday tasks (parsing, data transforms, document processing).
+
+**Non-goals**: Not for deploying production applications.
+
+#### P2.2.1: MVP (Template-based Scripts Only) 🔲
 
 **Required Components**:
-- [ ] Sandbox execution environment
-- [ ] Code validation and sanitization
-- [ ] Resource limits (time, memory)
-- [ ] Audit logging
+- [ ] `sandbox_jobs` table (tenant_id, script_name, params, input_file_ids, status, logs, created_at, completed_at)
+- [ ] `sandbox_artifacts` table (job_id, artifact_type, file_id/path, metadata)
+- [ ] `src/lib/sandbox/script-registry.ts` (allowlisted scripts + schemas)
+- [ ] `src/lib/sandbox/sandbox-service.ts` (submit job → run → return artifacts)
+- [ ] API route: `/api/sandbox/run` (or worker) to execute a job
 
-**Security Requirements**:
-- [ ] Isolated container/sandbox
-- [ ] 30-second timeout
-- [ ] 512MB memory limit
-- [ ] No secrets exposure
-- [ ] Whitelisted libraries only
-- [ ] Input/output audit trail
+**V1 Script Templates**:
+- [ ] `parse_pdf_to_text`
+- [ ] `parse_docx_to_text`
+- [ ] `extract_contacts_from_text_or_email`
+- [ ] `clean_csv_dedupe_contacts`
+- [ ] `normalize_orders_export`
+- [ ] `bid_comparison_table`
+- [ ] `engagement_compliance_report`
+- [ ] `invoice_line_item_extractor`
 
-**Use Cases**:
-- Data transforms
-- Report generation
-- Export creation
-- Validation scripts
-- Quick utilities
+#### P2.2.2: Constrained Custom Code (Python recommended) 🔲
+
+**Guardrails**:
+- [ ] No network by default (or strict allowlist only)
+- [ ] No secrets mounted/exposed
+- [ ] Workspace-only file access (explicit inputs)
+- [ ] Library allowlist (pandas/openpyxl/python-docx/PDF parser)
+- [ ] Block dangerous ops (subprocess/shell/env reads/out-of-workspace writes)
+- [ ] Hard limits (timeout/memory/CPU)
+- [ ] Full audit log (stdout/stderr/exit code + artifact refs)
+
+#### P2.2.3: Integration into Hourly Loop 🔲
+
+- [ ] New action/card type: `sandbox_job` / `run_script`
+- [ ] Policy checks + per-tenant rate limits
+- [ ] Store structured outputs to `warehouse_events` when relevant
+- [ ] Attach artifacts back to Documents Library (once P1.1 exists)
 
 ### P2.3: Browser Automation for Order Acceptance
 
@@ -330,35 +438,58 @@ CRON_SECRET=your-secret-here  # For authenticating cron requests
 6. [ ] Store receipt/trace
 7. [ ] Update order status
 
+### P2.4: Credential / Password Manager Integration 🔲
+
+**Goal**: Support vendor portal automation without plaintext credentials.
+
+**Requirements**:
+- [ ] Least-privilege access (only what's needed for each workflow)
+- [ ] Audit logs for credential use (who/when/what)
+- [ ] Rotate/revoke support
+- [ ] No credentials exposed to LLM context
+- [ ] Integration with secrets manager (e.g., Vault, AWS Secrets Manager)
+
 ---
 
 ## Implementation Timeline (Suggested)
 
-### Week 1-2: Complete P1.1 (Documents Library)
+### Week 0: P0.6 Hardening & Proof (REQUIRED FIRST)
+- Implement idempotency/dedupe guarantees
+- Add global kill switch + per-tenant disable
+- Set up centralized rate limits
+- Verify RLS/tenant isolation
+- Configure observability + alerts
+
+### Week 1-2: P1.1 (Documents Library) + P2.2.1 (Sandbox MVP)
 - Set up document ingestion pipeline
-- Implement text extraction
+- Implement text extraction via sandbox scripts
 - Add embedding generation
 - Create retrieval API
+- Build sandbox job runner with V1 templates
 
-### Week 3-4: Complete P1.2 (Broadcasts)
+### Week 3-4: Complete P1.2 (Broadcasts) + P1.4-P1.5 (Deals/Bids)
 - Build audience segmentation
 - Create template system
 - Implement broadcast executor
 - Add compliance features
+- Wire up deals/bids engines
 
-### Week 5: Complete P1.3 (Feedback)
+### Week 5: Complete P1.3 (Feedback) + P1.6-P1.7 (Enrichment/Compliance)
 - Implement feedback triggers
 - Add sentiment analysis
 - Create service recovery workflow
+- Build contact enrichment pipeline
+- Add quarterly compliance checks
 
 ### Week 6-7: Complete P2.1 (Insights)
 - Set up warehouse events
 - Implement pattern detection
 - Build recommendation engine
 
-### Week 8+: P2.2 and P2.3 (Advanced)
-- Sandbox execution
-- Browser automation
+### Week 8+: P2.2.2 + P2.3 + P2.4 (Advanced)
+- Constrained custom code execution
+- Browser automation for vendor portals
+- Credential manager integration
 
 ---
 
@@ -375,6 +506,15 @@ CRON_SECRET=your-secret-here  # For authenticating cron requests
 - [ ] Test engagement clock updates
 - [ ] Verify order processing validation
 - [ ] Test Gmail polling cron
+
+### P0.6 Hardening Tests (Required for Production)
+
+- [ ] Verify email dedupe/idempotency (message-id checkpointing)
+- [ ] Verify kill switch disables autonomous actions
+- [ ] Verify centralized rate limits are enforced
+- [ ] Verify RLS/tenant isolation for new tables
+- [ ] Confirm no cross-tenant data leakage
+- [ ] Test serverless checkpointing on timeout
 
 ### Integration Testing
 
@@ -402,6 +542,8 @@ CRON_SECRET=your-secret-here  # For authenticating cron requests
 | `agent.orders.exceptions` | Order validation failures |
 | `gmail.messages.processed` | Emails processed |
 | `gmail.cards.created` | Cards created from emails |
+| `agent.sandbox.jobs_count` | Sandbox jobs executed |
+| `agent.sandbox.fail_rate` | Sandbox job failure rate |
 
 ### Alerts to Configure
 
