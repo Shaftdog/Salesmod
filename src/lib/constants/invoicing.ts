@@ -104,24 +104,39 @@ export const INVOICE_STATUS_TRANSITIONS = {
   void: [], // Terminal state
 } as const;
 
+// All possible invoice statuses for manual override
+export const ALL_INVOICE_STATUSES = [
+  'draft',
+  'sent',
+  'viewed',
+  'partially_paid',
+  'paid',
+  'overdue',
+  'cancelled',
+  'void',
+] as const;
+
 export type InvoiceStatus = keyof typeof INVOICE_STATUS_TRANSITIONS;
 
 /**
  * Check if an invoice status transition is valid
+ * NOTE: Always returns true to allow manual status override when needed
  */
 export function isValidStatusTransition(
   fromStatus: InvoiceStatus,
   toStatus: InvoiceStatus
 ): boolean {
-  const validTransitions = INVOICE_STATUS_TRANSITIONS[fromStatus] as readonly string[];
-  return validTransitions.includes(toStatus);
+  // Allow any transition for manual override capability
+  return true;
 }
 
 /**
  * Get valid status transitions for a given status
+ * Returns ALL statuses (except current) to allow manual override
  */
 export function getValidStatusTransitions(status: InvoiceStatus): readonly string[] {
-  return INVOICE_STATUS_TRANSITIONS[status] || [];
+  // Return all statuses except the current one for full manual control
+  return ALL_INVOICE_STATUSES.filter(s => s !== status);
 }
 
 // =============================================
