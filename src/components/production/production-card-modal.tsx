@@ -23,6 +23,7 @@ import {
   Clock,
   AlertTriangle,
   AlertCircle,
+  Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -48,6 +49,7 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { CorrectionDialog } from './correction-dialog';
 import { TaskAssigneePopover } from './task-assignee-popover';
+import { EditTeamDialog } from './edit-team-dialog';
 
 interface ProductionCardModalProps {
   cardId: string;
@@ -64,6 +66,7 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
   const [expandedStages, setExpandedStages] = useState<Set<ProductionStage>>(new Set());
   const [correctionDialogOpen, setCorrectionDialogOpen] = useState(false);
   const [selectedTaskForCorrection, setSelectedTaskForCorrection] = useState<any>(null);
+  const [editTeamDialogOpen, setEditTeamDialogOpen] = useState(false);
 
   const card = data?.card;
   const canMoveToNextStage = data?.can_move_to_next_stage;
@@ -183,7 +186,7 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
               </div>
 
               {/* Meta Info */}
-              <div className="flex flex-wrap gap-4 text-sm">
+              <div className="flex flex-wrap items-center gap-4 text-sm">
                 {card.due_date && (
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <Calendar className="h-4 w-4" />
@@ -196,6 +199,15 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
                     <span>{card.assigned_appraiser.name || card.assigned_appraiser.email}</span>
                   </div>
                 )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditTeamDialogOpen(true)}
+                  className="ml-auto"
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Edit Team
+                </Button>
               </div>
 
               {/* Move to Next Stage Button */}
@@ -308,6 +320,25 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
             order: card.order,
           }}
           assignedProfile={selectedTaskForCorrection.assigned_user}
+        />
+      )}
+
+      {/* Edit Team Dialog */}
+      {card && (
+        <EditTeamDialog
+          cardId={card.id}
+          currentAssignments={{
+            assigned_appraiser_id: card.assigned_appraiser_id,
+            assigned_reviewer_id: card.assigned_reviewer_id,
+            assigned_admin_id: card.assigned_admin_id,
+            assigned_trainee_id: card.assigned_trainee_id,
+            assigned_researcher_level_1_id: card.assigned_researcher_level_1_id,
+            assigned_researcher_level_2_id: card.assigned_researcher_level_2_id,
+            assigned_researcher_level_3_id: card.assigned_researcher_level_3_id,
+            assigned_inspector_id: card.assigned_inspector_id,
+          }}
+          open={editTeamDialogOpen}
+          onOpenChange={setEditTeamDialogOpen}
         />
       )}
     </Sheet>

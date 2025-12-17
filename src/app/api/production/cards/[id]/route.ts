@@ -48,7 +48,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
     }
 
-    // Get card with order and template (filtered by tenant_id)
+    // Get card with order, template, and all role assignments (filtered by tenant_id)
     const { data: card, error: cardError } = await supabase
       .from('production_cards')
       .select(
@@ -56,7 +56,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         *,
         order:orders(id, order_number, status, property_address),
         template:production_templates(id, name),
-        assigned_appraiser:profiles!production_cards_assigned_appraiser_id_fkey(id, name, email)
+        assigned_appraiser:profiles!production_cards_assigned_appraiser_id_fkey(id, name, email),
+        assigned_reviewer:profiles!production_cards_assigned_reviewer_id_fkey(id, name, email),
+        assigned_admin:profiles!production_cards_assigned_admin_id_fkey(id, name, email),
+        assigned_trainee:profiles!production_cards_assigned_trainee_id_fkey(id, name, email),
+        assigned_researcher_level_1:profiles!production_cards_assigned_researcher_level_1_id_fkey(id, name, email),
+        assigned_researcher_level_2:profiles!production_cards_assigned_researcher_level_2_id_fkey(id, name, email),
+        assigned_researcher_level_3:profiles!production_cards_assigned_researcher_level_3_id_fkey(id, name, email),
+        assigned_inspector:profiles!production_cards_assigned_inspector_id_fkey(id, name, email)
       `
       )
       .eq('id', id)
@@ -233,7 +240,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const updates: Record<string, any> = {};
     if (body.due_date !== undefined) updates.due_date = body.due_date;
     if (body.priority !== undefined) updates.priority = body.priority;
+    // Role assignments - all 8 roles
     if (body.assigned_appraiser_id !== undefined) updates.assigned_appraiser_id = body.assigned_appraiser_id;
+    if (body.assigned_reviewer_id !== undefined) updates.assigned_reviewer_id = body.assigned_reviewer_id;
+    if (body.assigned_admin_id !== undefined) updates.assigned_admin_id = body.assigned_admin_id;
+    if (body.assigned_trainee_id !== undefined) updates.assigned_trainee_id = body.assigned_trainee_id;
+    if (body.assigned_researcher_level_1_id !== undefined) updates.assigned_researcher_level_1_id = body.assigned_researcher_level_1_id;
+    if (body.assigned_researcher_level_2_id !== undefined) updates.assigned_researcher_level_2_id = body.assigned_researcher_level_2_id;
+    if (body.assigned_researcher_level_3_id !== undefined) updates.assigned_researcher_level_3_id = body.assigned_researcher_level_3_id;
+    if (body.assigned_inspector_id !== undefined) updates.assigned_inspector_id = body.assigned_inspector_id;
 
     const { data: card, error: updateError } = await supabase
       .from('production_cards')
