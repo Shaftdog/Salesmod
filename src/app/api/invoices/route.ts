@@ -162,12 +162,12 @@ export async function POST(request: NextRequest) {
       CreateInvoiceSchema
     );
 
-    // Verify client exists and belongs to org
+    // Verify client exists and belongs to tenant
     const { data: client, error: clientError } = await supabase
       .from('clients')
       .select('id, payment_terms')
       .eq('id', body.client_id)
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (clientError || !client) {

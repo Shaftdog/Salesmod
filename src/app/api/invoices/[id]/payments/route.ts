@@ -13,11 +13,11 @@ import {
 import {
   handleApiError,
   validateRequestBody,
-  getAuthenticatedOrgId,
+  getAuthenticatedContext,
   successResponse,
   createdResponse,
   BadRequestError,
-  verifyResourceOwnership,
+  verifyTenantResourceOwnership,
 } from '@/lib/errors/api-errors';
 import type { Payment } from '@/types/invoicing';
 
@@ -31,18 +31,18 @@ export async function GET(
 ) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { tenantId } = await getAuthenticatedContext(supabase);
     const { id } = await params;
 
-    // Verify invoice exists and belongs to org
-    await verifyResourceOwnership(supabase, 'invoices', id, orgId);
+    // Verify invoice exists and belongs to tenant
+    await verifyTenantResourceOwnership(supabase, 'invoices', id, tenantId);
 
     // Fetch payments for invoice
     const { data: payments, error } = await supabase
       .from('payments')
       .select('*')
       .eq('invoice_id', id)
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .order('payment_date', { ascending: false });
 
     if (error) {
@@ -66,7 +66,7 @@ export async function POST(
 ) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
     const { id } = await params;
 
     // Validate request body
@@ -75,8 +75,8 @@ export async function POST(
       CreatePaymentSchema
     );
 
-    // Verify invoice exists and belongs to org
-    await verifyResourceOwnership(supabase, 'invoices', id, orgId);
+    // Verify invoice exists and belongs to tenant
+    await verifyTenantResourceOwnership(supabase, 'invoices', id, tenantId);
 
     // Fetch invoice to validate payment
     const { data: invoice, error: fetchError } = await supabase
@@ -108,6 +108,7 @@ export async function POST(
       .from('payments')
       .insert({
         invoice_id: id,
+        tenant_id: tenantId,
         org_id: orgId,
         amount: body.amount,
         payment_method: body.payment_method,

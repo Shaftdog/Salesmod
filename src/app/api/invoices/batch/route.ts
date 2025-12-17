@@ -70,12 +70,12 @@ export async function POST(request: NextRequest) {
       const invoiceData = body.invoices[i];
 
       try {
-        // Verify client exists and belongs to org
+        // Verify client exists and belongs to tenant
         const { data: client, error: clientError } = await supabase
           .from('clients')
           .select('id, payment_terms')
           .eq('id', invoiceData.client_id)
-          .eq('org_id', orgId)
+          .eq('tenant_id', tenantId)
           .single();
 
         if (clientError || !client) {

@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       BatchSendInvoicesSchema
     );
 
-    // Verify all invoices exist and belong to org
+    // Verify all invoices exist and belong to tenant
     const { data: invoices, error: fetchError } = await supabase
       .from('invoices')
       .select(`
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
         client:clients(id, company_name, email)
       `)
       .in('id', body.invoice_ids)
-      .eq('org_id', orgId);
+      .eq('tenant_id', tenantId);
 
     if (fetchError) {
       console.error('Error fetching invoices:', fetchError);
