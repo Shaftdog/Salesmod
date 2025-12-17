@@ -350,11 +350,15 @@ async function validatePricing(order: any, tenantId: string): Promise<PricingVal
   const suggestedCorrections: PricingCorrection[] = [];
 
   // Get products for this order type
-  const { data: products } = await supabase
+  const { data: products, error: productsError } = await supabase
     .from('products')
     .select('*')
     .eq('tenant_id', tenantId)
     .eq('is_active', true);
+
+  if (productsError) {
+    console.error('[OrderProcessor] Error fetching products:', productsError);
+  }
 
   // Check if fee amount is reasonable
   const feeAmount = parseFloat(order.fee_amount || 0);
@@ -462,13 +466,22 @@ async function checkCreditApproval(order: any, tenantId: string): Promise<Credit
     const supabase = createServiceRoleClient();
 
     // Get current outstanding balance
-    const { data: outstandingOrders } = await supabase
+    const { data: outstandingOrders, error: balanceError } = await supabase
       .from('orders')
       .select('total_amount')
       .eq('client_id', client.id)
       .eq('tenant_id', tenantId)
       .in('status', ['DELIVERED', 'WORKFILE', 'FINALIZATION'])
       .is('invoiced_at', null);
+
+    if (balanceError) {
+      console.error('[OrderProcessor] Error fetching outstanding orders:', balanceError);
+      return {
+        approved: false,
+        status: 'unknown',
+        reason: 'Could not verify credit balance',
+      };
+    }
 
     const currentBalance = (outstandingOrders || []).reduce(
       (sum, o) => sum + parseFloat(o.total_amount || 0),

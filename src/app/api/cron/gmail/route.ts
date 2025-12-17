@@ -4,7 +4,7 @@
  * This endpoint is called by Vercel Cron every 5 minutes to poll Gmail
  * for all tenants with Gmail sync enabled.
  *
- * Schedule: */5 * * * * (every 5 minutes)
+ * Schedule: every 5 minutes
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -21,7 +21,12 @@ export async function GET(request: NextRequest) {
   // Verify cron authorization
   const authHeader = request.headers.get('authorization');
 
-  if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+  if (!CRON_SECRET) {
+    console.error('[Cron Gmail] CRON_SECRET not configured');
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+  }
+
+  if (authHeader !== `Bearer ${CRON_SECRET}`) {
     console.error('[Cron Gmail] Unauthorized request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -176,16 +181,22 @@ export async function POST(request: NextRequest) {
 
   const authHeader = request.headers.get('authorization');
 
-  // Allow cron secret
-  if (CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`) {
-    // Authorized via cron secret
-  } else {
-    // Check if user is authenticated
-    const { data: session } = await supabase.auth.getUser(
-      authHeader?.replace('Bearer ', '')
-    );
+  // Allow cron secret or authenticated user
+  if (!CRON_SECRET) {
+    console.error('[Cron Gmail] CRON_SECRET not configured');
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+  }
 
-    if (!session?.user) {
+  if (authHeader !== `Bearer ${CRON_SECRET}`) {
+    // Check if user is authenticated
+    const token = authHeader?.replace('Bearer ', '');
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: session, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
   }

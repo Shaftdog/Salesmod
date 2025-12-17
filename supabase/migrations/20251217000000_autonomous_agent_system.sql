@@ -385,13 +385,15 @@ CREATE OR REPLACE FUNCTION release_tenant_lock(
 )
 RETURNS BOOLEAN AS $$
 DECLARE
+  v_row_count INTEGER;
   v_released BOOLEAN := false;
 BEGIN
   DELETE FROM agent_tenant_locks
   WHERE tenant_id = p_tenant_id
   AND locked_by = p_locked_by;
 
-  GET DIAGNOSTICS v_released = ROW_COUNT > 0;
+  GET DIAGNOSTICS v_row_count = ROW_COUNT;
+  v_released := v_row_count > 0;
   RETURN v_released;
 END;
 $$ LANGUAGE plpgsql;

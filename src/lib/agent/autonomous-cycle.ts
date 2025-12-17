@@ -229,15 +229,15 @@ async function executeAutonomousCycle(tenantId: string): Promise<WorkBlock> {
 
   try {
     // Get org_id for this tenant
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id')
       .eq('tenant_id', tenantId)
       .limit(1)
       .single();
 
-    if (!profile) {
-      throw new Error(`No profile found for tenant ${tenantId}`);
+    if (profileError || !profile) {
+      throw new Error(`No profile found for tenant ${tenantId}: ${profileError?.message || 'Unknown error'}`);
     }
 
     const orgId = profile.id;
@@ -576,13 +576,18 @@ async function reactPhase(tenantId: string, actOutput: ActOutput): Promise<React
   // Update engagement clocks for successful touches
   for (const result of actOutput.results) {
     if (result.success && result.action.contactId) {
-      await supabase.rpc('update_engagement_clock', {
+      const { error: clockError } = await supabase.rpc('update_engagement_clock', {
         p_tenant_id: tenantId,
         p_entity_type: 'contact',
         p_entity_id: result.action.contactId,
         p_touch_type: result.action.type,
         p_touch_by: 'agent',
       });
+
+      if (clockError) {
+        console.error('[React] Failed to update engagement clock:', clockError);
+        continue;
+      }
 
       statusUpdates.push({
         entityType: 'contact',
@@ -728,13 +733,18 @@ ${actOutput.blockers.length > 0 ? `Encountered ${actOutput.blockers.length} bloc
 async function getNextCycleNumber(tenantId: string): Promise<number> {
   const supabase = createServiceRoleClient();
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('agent_autonomous_runs')
     .select('cycle_number')
     .eq('tenant_id', tenantId)
     .order('cycle_number', { ascending: false })
     .limit(1)
     .single();
+
+  // If no previous runs exist, error is expected
+  if (error && error.code !== 'PGRST116') {
+    console.error('[Cycle] Error fetching cycle number:', error);
+  }
 
   return (data?.cycle_number || 0) + 1;
 }

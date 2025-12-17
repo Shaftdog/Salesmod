@@ -22,7 +22,12 @@ export async function GET(request: NextRequest) {
   // Verify cron authorization
   const authHeader = request.headers.get('authorization');
 
-  if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+  if (!CRON_SECRET) {
+    console.error('[Cron Agent] CRON_SECRET not configured');
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+  }
+
+  if (authHeader !== `Bearer ${CRON_SECRET}`) {
     console.error('[Cron Agent] Unauthorized request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -142,25 +147,33 @@ export async function POST(request: NextRequest) {
 
   const authHeader = request.headers.get('authorization');
 
-  // Allow cron secret or service role
-  if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
-    // Check if user is authenticated and is admin
-    const { data: session } = await supabase.auth.getUser(
-      authHeader?.replace('Bearer ', '')
-    );
+  // Allow cron secret or admin user
+  if (!CRON_SECRET) {
+    console.error('[Cron Agent] CRON_SECRET not configured');
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+  }
 
-    if (!session?.user) {
+  if (authHeader !== `Bearer ${CRON_SECRET}`) {
+    // Check if user is authenticated and is admin
+    const token = authHeader?.replace('Bearer ', '');
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: session, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Check if user is admin
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', session.user.id)
       .single();
 
-    if (profile?.role !== 'admin') {
+    if (profileError || profile?.role !== 'admin') {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
   }

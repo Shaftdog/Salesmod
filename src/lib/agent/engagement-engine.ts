@@ -106,6 +106,7 @@ export async function getEngagementViolations(
 
   if (untrackedError) {
     console.error('[Engagement] Error fetching untracked contacts:', untrackedError);
+    // Continue with just clock violations if untracked fetch fails
   }
 
   // Find contacts without engagement clocks
@@ -363,11 +364,15 @@ export async function getEngagementStats(tenantId: string): Promise<EngagementSt
     .eq('is_compliant', false);
 
   // Get average days between touches
-  const { data: avgData } = await supabase
+  const { data: avgData, error: avgError } = await supabase
     .from('engagement_clocks')
     .select('touch_frequency_days')
     .eq('tenant_id', tenantId)
     .eq('entity_type', 'contact');
+
+  if (avgError) {
+    console.error('[Engagement] Error fetching average days:', avgError);
+  }
 
   const avgDays = avgData && avgData.length > 0
     ? avgData.reduce((sum, c) => sum + (c.touch_frequency_days || 21), 0) / avgData.length
