@@ -91,13 +91,27 @@ export default function ClientDashboard() {
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { icon: any; color: string; label: string }> = {
+      // New production stages
+      INTAKE: { icon: Clock, color: "text-yellow-600", label: "Intake" },
+      SCHEDULING: { icon: Clock, color: "text-yellow-500", label: "Scheduling" },
+      SCHEDULED: { icon: Clock, color: "text-blue-500", label: "Scheduled" },
+      INSPECTED: { icon: AlertCircle, color: "text-blue-600", label: "Inspected" },
+      FINALIZATION: { icon: AlertCircle, color: "text-blue-700", label: "In Review" },
+      READY_FOR_DELIVERY: { icon: CheckCircle2, color: "text-green-500", label: "Ready" },
+      DELIVERED: { icon: CheckCircle2, color: "text-green-700", label: "Delivered" },
+      CORRECTION: { icon: AlertCircle, color: "text-orange-600", label: "Correction" },
+      REVISION: { icon: AlertCircle, color: "text-orange-500", label: "Revision" },
+      WORKFILE: { icon: CheckCircle2, color: "text-gray-600", label: "Complete" },
+      cancelled: { icon: AlertCircle, color: "text-red-600", label: "Cancelled" },
+      on_hold: { icon: Clock, color: "text-gray-500", label: "On Hold" },
+      // Legacy statuses (fallback)
       pending: { icon: Clock, color: "text-yellow-600", label: "Pending" },
       in_progress: { icon: AlertCircle, color: "text-blue-600", label: "In Progress" },
       completed: { icon: CheckCircle2, color: "text-green-600", label: "Completed" },
       delivered: { icon: CheckCircle2, color: "text-green-700", label: "Delivered" },
     };
 
-    const config = statusConfig[status] || statusConfig.pending;
+    const config = statusConfig[status] || statusConfig.INTAKE;
     const Icon = config.icon;
 
     return (
@@ -110,9 +124,9 @@ export default function ClientDashboard() {
 
   const stats = {
     total: orders.length,
-    pending: orders.filter(o => o.status === "pending").length,
-    inProgress: orders.filter(o => o.status === "in_progress" || o.status === "scheduled").length,
-    completed: orders.filter(o => o.status === "completed" || o.status === "delivered").length,
+    pending: orders.filter(o => ["INTAKE", "SCHEDULING", "pending"].includes(o.status)).length,
+    inProgress: orders.filter(o => ["SCHEDULED", "INSPECTED", "FINALIZATION", "READY_FOR_DELIVERY", "CORRECTION", "REVISION", "in_progress", "scheduled"].includes(o.status)).length,
+    completed: orders.filter(o => ["DELIVERED", "WORKFILE", "completed", "delivered"].includes(o.status)).length,
   };
 
   if (isLoading) {
