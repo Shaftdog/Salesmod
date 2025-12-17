@@ -125,10 +125,48 @@
       "name": "Multi-Tenant Migration Checklist",
       "description": "When migrating org_id to tenant_id: 1) Update TypeScript interfaces, 2) Update all function signatures, 3) Remove profile-based tenant lookups, 4) Consolidate fragmented records, 5) Verify memory/rule associations",
       "files": ["src/types/*.ts", "src/lib/agent/*.ts"]
+    },
+    {
+      "name": "Race-Safe Lock Acquisition (ROW_COUNT Pattern)",
+      "description": "For database locks using INSERT ON CONFLICT DO NOTHING: don't use SELECT EXISTS to check if you got the lock. Instead use GET DIAGNOSTICS v_count = ROW_COUNT after INSERT. ROW_COUNT=1 means YOU inserted (got lock), ROW_COUNT=0 means conflict (someone else has lock). This eliminates TOCTOU race conditions.",
+      "files": ["supabase/migrations/20251217000000_autonomous_agent_system.sql"]
+    },
+    {
+      "name": "Idempotent State Transitions (Atomic UPDATE)",
+      "description": "For operations that must only execute once (e.g., card execution): use atomic UPDATE ... WHERE current_state = 'expected' instead of check-then-update. Only the caller who successfully transitions the state can proceed. Others get no rows affected.",
+      "files": ["src/lib/agent/executor.ts"]
+    },
+    {
+      "name": "Cron Timeout Protection",
+      "description": "For cron jobs processing multiple items: 1) Calculate deadline = startTime + maxDuration - buffer, 2) Check remaining time before each item, 3) Use Promise.race with timeout for per-item execution, 4) Skip remaining items when approaching deadline, 5) Return metrics including skipped count.",
+      "files": ["src/app/api/cron/agent/route.ts"]
+    },
+    {
+      "name": "Fail-Closed Security Checks",
+      "description": "Security checks should fail-closed. If checking `if (SECRET && header !== SECRET)`, an undefined SECRET bypasses the check. Instead: first check if SECRET exists (return 500 if not), then validate header separately.",
+      "files": ["src/app/api/cron/agent/route.ts", "src/app/api/cron/gmail/route.ts"]
     }
   ],
-  "last_updated": "2025-12-14",
+  "last_updated": "2025-12-17",
   "critical_bugs": [
+    {
+      "date": "2025-12-17",
+      "bug": "CRON_SECRET validation bypass",
+      "symptom": "Cron endpoints allowed unauthenticated access when CRON_SECRET env var was missing",
+      "root_cause": "Code checked `if (CRON_SECRET && authHeader !== ...)` which allowed bypass when CRON_SECRET was undefined",
+      "fix": "Check for missing CRON_SECRET first and return 500, then validate auth header separately",
+      "lesson": "Security checks should fail-closed. If a required secret is missing, deny access (500), don't allow bypass.",
+      "files": ["src/app/api/cron/agent/route.ts", "src/app/api/cron/gmail/route.ts"]
+    },
+    {
+      "date": "2025-12-17",
+      "bug": "PostgreSQL GET DIAGNOSTICS syntax error",
+      "symptom": "Migration failed with syntax error in release_tenant_lock() function",
+      "root_cause": "`GET DIAGNOSTICS v_released = ROW_COUNT > 0` is invalid PostgreSQL syntax",
+      "fix": "Use intermediate variable: `GET DIAGNOSTICS v_row_count = ROW_COUNT; v_released := v_row_count > 0;`",
+      "lesson": "GET DIAGNOSTICS only assigns special variables (ROW_COUNT, etc.) to regular variables. Boolean expressions must be done separately.",
+      "files": ["supabase/migrations/20251217000000_autonomous_agent_system.sql"]
+    },
     {
       "date": "2025-12-14",
       "bug": "React Query hook bypassing API endpoint",
