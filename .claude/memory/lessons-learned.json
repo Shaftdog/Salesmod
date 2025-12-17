@@ -39,6 +39,24 @@
   ],
   "improvements": [
     {
+      "date": "2025-12-16",
+      "area": "Production Board",
+      "change": "Added Edit Team dialog to production card modal for editing role assignments post-creation",
+      "impact": "Users can now reassign Appraiser, Reviewer, Admin, Trainee, Researchers, Inspector after card is created"
+    },
+    {
+      "date": "2025-12-16",
+      "area": "My Tasks Page",
+      "change": "Added order_number and property_address display to task cards",
+      "impact": "Users can see which property/order each task belongs to without opening the card"
+    },
+    {
+      "date": "2025-12-16",
+      "area": "Task Assignment",
+      "change": "Added TaskAssigneePopover to production card modal for reassigning individual tasks",
+      "impact": "Tasks can be reassigned to different team members directly from the Kanban board"
+    },
+    {
       "date": "2025-12-10",
       "area": "Contact Enrichment",
       "change": "Added Apollo.io integration for verified email addresses during research",
@@ -125,10 +143,48 @@
       "name": "Multi-Tenant Migration Checklist",
       "description": "When migrating org_id to tenant_id: 1) Update TypeScript interfaces, 2) Update all function signatures, 3) Remove profile-based tenant lookups, 4) Consolidate fragmented records, 5) Verify memory/rule associations",
       "files": ["src/types/*.ts", "src/lib/agent/*.ts"]
+    },
+    {
+      "name": "Child Records Need tenant_id",
+      "description": "When database functions create child records (tasks from cards, line items from invoices), they MUST copy tenant_id from parent. RLS policies silently filter records without tenant_id, causing 'invisible data' bugs.",
+      "files": ["supabase/migrations/*"]
+    },
+    {
+      "name": "PostgreSQL Function Updates",
+      "description": "When updating PostgreSQL functions, you may need DROP FUNCTION first if changing return type. Use: DROP FUNCTION IF EXISTS function_name(param_types); before CREATE OR REPLACE.",
+      "files": ["scripts/fix-generate-stage-tasks.js"]
+    },
+    {
+      "name": "Database Credentials Location",
+      "description": "Database connection strings are in .env.local (DATABASE_URL, DIRECT_DATABASE_URL). Don't hardcode credentials. Session pooler (port 5432) works for migrations, transaction pooler (port 6543) requires tenant info.",
+      "files": [".env.local"]
+    },
+    {
+      "name": "Creation-Only vs Editable Fields",
+      "description": "When adding fields that users set at creation time (like role assignments), ALSO add edit functionality. Users need to modify these after creation. Check: does the API PUT endpoint support updating this field?",
+      "files": ["src/app/api/production/cards/[id]/route.ts"]
     }
   ],
-  "last_updated": "2025-12-14",
+  "last_updated": "2025-12-16",
   "critical_bugs": [
+    {
+      "date": "2025-12-16",
+      "bug": "Production tasks not showing in Kanban board modal",
+      "symptom": "Cards showed '0 of 4 tasks' but task list was empty when clicking on card",
+      "root_cause": "generate_stage_tasks function created tasks WITHOUT tenant_id. RLS policy production_tasks_tenant_isolation filtered them out.",
+      "fix": "1) Backfill existing tasks with UPDATE...FROM production_cards, 2) Update generate_stage_tasks to include tenant_id in INSERT, 3) Add trigger auto_set_production_task_tenant_id as fallback",
+      "lesson": "When creating child records (tasks) from parent records (cards), ALWAYS copy tenant_id. RLS policies silently filter records without proper tenant_id.",
+      "files": ["supabase/migrations/20251216000000_fix_production_tasks_tenant_id.sql"]
+    },
+    {
+      "date": "2025-12-16",
+      "bug": "Order creation failing with constraint violation",
+      "symptom": "Error: 'new row for relation orders violates check constraint orders_status_check'",
+      "root_cause": "Order forms used legacy status values ('new', 'pending') but database constraint only allows production stages (INTAKE, SCHEDULING, etc.)",
+      "fix": "Changed all order creation forms to use status: 'INTAKE' instead of 'new' or 'pending'",
+      "lesson": "When database constraints are updated (like orders_status_check), search entire codebase for hardcoded status values that may now be invalid.",
+      "files": ["src/components/orders/order-form.tsx", "src/app/client-portal/orders/new/page.tsx"]
+    },
     {
       "date": "2025-12-14",
       "bug": "React Query hook bypassing API endpoint",
