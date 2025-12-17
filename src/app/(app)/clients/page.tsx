@@ -7,6 +7,7 @@ import Link from "next/link";
 import { ClientsList } from "@/components/clients/clients-list";
 import { MergeClientsDialog } from "@/components/clients/merge-clients-dialog";
 import { Input } from "@/components/ui/input";
+import { Kbd } from "@/components/ui/kbd";
 import { useSearch } from "@/contexts/search-context";
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useClients } from "@/hooks/use-clients";
@@ -51,13 +52,18 @@ export default function ClientsPage() {
                     </CardDescription>
                 </div>
                  <div className="flex items-center gap-2">
-                    <Input
-                      ref={searchInputRef}
-                      placeholder="Search clients (⌘K)..."
-                      className="w-full md:w-[200px] lg:w-[336px]"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+                    <div className="relative w-full md:w-[200px] lg:w-[336px]">
+                        <Input
+                          ref={searchInputRef}
+                          placeholder="Search clients..."
+                          className="w-full pr-12"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden md:block">
+                            <Kbd>⌘K</Kbd>
+                        </div>
+                    </div>
                     <RoleFilter
                       selectedRoles={selectedRoles}
                       onChange={setSelectedRoles}
