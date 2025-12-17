@@ -341,7 +341,8 @@ CREATE POLICY "tenant_isolation" ON agent_hourly_reflections
 -- Helper Functions
 -- ============================================================================
 
--- Function to acquire tenant lock
+-- Function to acquire tenant lock (race-condition safe)
+-- Uses ROW_COUNT to accurately detect if WE acquired the lock
 CREATE OR REPLACE FUNCTION acquire_tenant_lock(
   p_tenant_id UUID,
   p_locked_by TEXT,
@@ -350,31 +351,26 @@ CREATE OR REPLACE FUNCTION acquire_tenant_lock(
 )
 RETURNS BOOLEAN AS $$
 DECLARE
-  v_acquired BOOLEAN := false;
+  v_rows_affected INTEGER;
+  v_now TIMESTAMPTZ := NOW();
+  v_expires TIMESTAMPTZ := v_now + (p_lock_duration_minutes || ' minutes')::INTERVAL;
 BEGIN
-  -- First, clean up expired locks
-  DELETE FROM agent_tenant_locks WHERE expires_at < NOW();
+  -- Step 1: Delete expired lock for this specific tenant (atomic per-tenant cleanup)
+  DELETE FROM agent_tenant_locks
+  WHERE tenant_id = p_tenant_id AND expires_at < v_now;
 
-  -- Try to insert a new lock
+  -- Step 2: Try to insert a new lock
+  -- ON CONFLICT DO NOTHING means ROW_COUNT = 0 if lock already exists
+  -- This is race-safe: multiple processes may try, only one succeeds
   INSERT INTO agent_tenant_locks (tenant_id, locked_at, locked_by, lock_type, expires_at)
-  VALUES (
-    p_tenant_id,
-    NOW(),
-    p_locked_by,
-    p_lock_type,
-    NOW() + (p_lock_duration_minutes || ' minutes')::INTERVAL
-  )
+  VALUES (p_tenant_id, v_now, p_locked_by, p_lock_type, v_expires)
   ON CONFLICT (tenant_id) DO NOTHING;
 
-  -- Check if we got the lock
-  SELECT EXISTS(
-    SELECT 1 FROM agent_tenant_locks
-    WHERE tenant_id = p_tenant_id
-    AND locked_by = p_locked_by
-    AND lock_type = p_lock_type
-  ) INTO v_acquired;
+  -- Step 3: Check if WE inserted (ROW_COUNT = 1) or conflict occurred (ROW_COUNT = 0)
+  GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
 
-  RETURN v_acquired;
+  -- Only return true if WE inserted the lock (not if it already existed)
+  RETURN v_rows_affected > 0;
 END;
 $$ LANGUAGE plpgsql;
 

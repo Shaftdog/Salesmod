@@ -30,41 +30,53 @@ export interface ExecutionResult {
 
 /**
  * Execute an approved kanban card
+ * Uses atomic state transition to prevent duplicate execution
  */
 export async function executeCard(cardId: string): Promise<ExecutionResult> {
   const supabase = await createClient();
 
-  // Fetch the card
-  const { data: card, error: fetchError } = await supabase
+  // Atomically transition from 'approved' to 'executing'
+  // This prevents race conditions: only one caller can successfully transition
+  const { data: transitioned, error: transitionError } = await supabase
     .from('kanban_cards')
-    .select('*')
+    .update({
+      state: 'executing',
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', cardId)
+    .eq('state', 'approved') // Only update if STILL approved (idempotency check)
+    .select('*')
     .single();
 
-  if (fetchError || !card) {
+  // If no row was updated, either card doesn't exist, or it's not in 'approved' state
+  if (transitionError || !transitioned) {
+    // Fetch current state to provide better error message
+    const { data: currentCard } = await supabase
+      .from('kanban_cards')
+      .select('id, state')
+      .eq('id', cardId)
+      .single();
+
+    if (!currentCard) {
+      return {
+        success: false,
+        cardId,
+        message: 'Card not found',
+        error: 'Card does not exist',
+      };
+    }
+
+    // Card exists but wasn't in 'approved' state
     return {
       success: false,
       cardId,
-      message: 'Card not found',
-      error: fetchError?.message || 'Card does not exist',
+      message: 'Card is not approved or already executing',
+      error: `Card state is '${currentCard.state}', must be 'approved' to execute. This may indicate concurrent execution was prevented.`,
     };
   }
 
-  // Check card is approved
-  if (card.state !== 'approved') {
-    return {
-      success: false,
-      cardId,
-      message: 'Card is not approved',
-      error: `Card state is '${card.state}', must be 'approved' to execute`,
-    };
-  }
-
-  // Update to executing state
-  await supabase
-    .from('kanban_cards')
-    .update({ state: 'executing' })
-    .eq('id', cardId);
+  // We successfully transitioned the card - we own it now
+  const card = transitioned;
 
   try {
     let result: ExecutionResult;

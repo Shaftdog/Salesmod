@@ -18,6 +18,31 @@ const CRON_SECRET = process.env.CRON_SECRET;
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes max
 
+// Timeout constants
+const MAX_DURATION_MS = 300 * 1000; // 5 minutes in ms
+const DEADLINE_BUFFER_MS = 30 * 1000; // 30 second buffer before deadline
+const PER_TENANT_TIMEOUT_MS = 60 * 1000; // 60 seconds per tenant max
+
+/**
+ * Run a function with a timeout
+ * Returns { success: true, result } or { success: false, error: 'timeout' }
+ */
+async function withTimeout<T>(
+  fn: () => Promise<T>,
+  timeoutMs: number,
+  label: string
+): Promise<{ success: true; result: T } | { success: false; error: string }> {
+  return Promise.race([
+    fn().then((result) => ({ success: true as const, result })),
+    new Promise<{ success: false; error: string }>((resolve) =>
+      setTimeout(
+        () => resolve({ success: false, error: `Timeout after ${timeoutMs}ms` }),
+        timeoutMs
+      )
+    ),
+  ]);
+}
+
 export async function GET(request: NextRequest) {
   // Verify cron authorization
   const authHeader = request.headers.get('authorization');
@@ -67,6 +92,9 @@ export async function GET(request: NextRequest) {
 
     console.log(`[Cron Agent] Processing ${tenants.length} active tenants`);
 
+    // Calculate deadline (leave buffer for cleanup)
+    const deadline = startTime + MAX_DURATION_MS - DEADLINE_BUFFER_MS;
+
     // Process each tenant
     const results: Array<{
       tenantId: string;
@@ -77,16 +105,43 @@ export async function GET(request: NextRequest) {
       actionsExecuted?: number;
       error?: string;
       duration: number;
+      skipped?: boolean;
     }> = [];
 
     for (const tenant of tenants) {
+      // Check if we're approaching the deadline
+      const remainingTime = deadline - Date.now();
+      if (remainingTime < PER_TENANT_TIMEOUT_MS) {
+        console.log(`[Cron Agent] Approaching deadline, skipping remaining ${tenants.length - results.length} tenants`);
+        // Record skipped tenants
+        const remaining = tenants.slice(results.length);
+        for (const skippedTenant of remaining) {
+          results.push({
+            tenantId: skippedTenant.id,
+            tenantName: skippedTenant.name,
+            success: false,
+            error: 'Skipped due to deadline',
+            duration: 0,
+            skipped: true,
+          });
+        }
+        break;
+      }
+
       const tenantStart = Date.now();
+      // Use the lesser of remaining time or per-tenant timeout
+      const tenantTimeout = Math.min(remainingTime, PER_TENANT_TIMEOUT_MS);
 
-      try {
-        console.log(`[Cron Agent] Processing tenant: ${tenant.name} (${tenant.id})`);
+      console.log(`[Cron Agent] Processing tenant: ${tenant.name} (${tenant.id}) [timeout: ${Math.round(tenantTimeout / 1000)}s]`);
 
-        const workBlock = await runAutonomousCycle(tenant.id);
+      const timeoutResult = await withTimeout(
+        () => runAutonomousCycle(tenant.id),
+        tenantTimeout,
+        `tenant-${tenant.id}`
+      );
 
+      if (timeoutResult.success) {
+        const workBlock = timeoutResult.result;
         results.push({
           tenantId: tenant.id,
           tenantName: tenant.name,
@@ -98,30 +153,32 @@ export async function GET(request: NextRequest) {
         });
 
         console.log(`[Cron Agent] Completed tenant ${tenant.name}: Cycle ${workBlock.cycleNumber}, ${workBlock.metrics.actionsExecuted}/${workBlock.metrics.actionsPlanned} actions`);
-      } catch (error: any) {
-        console.error(`[Cron Agent] Error processing tenant ${tenant.name}:`, error);
+      } else {
+        console.error(`[Cron Agent] Tenant ${tenant.name} failed:`, timeoutResult.error);
 
         results.push({
           tenantId: tenant.id,
           tenantName: tenant.name,
           success: false,
-          error: error.message,
+          error: timeoutResult.error,
           duration: Date.now() - tenantStart,
         });
       }
     }
 
     const successCount = results.filter((r) => r.success).length;
-    const failCount = results.filter((r) => !r.success).length;
+    const failCount = results.filter((r) => !r.success && !r.skipped).length;
+    const skippedCount = results.filter((r) => r.skipped).length;
     const totalDuration = Date.now() - startTime;
 
-    console.log(`[Cron Agent] Completed: ${successCount} success, ${failCount} failed, ${totalDuration}ms total`);
+    console.log(`[Cron Agent] Completed: ${successCount} success, ${failCount} failed, ${skippedCount} skipped, ${totalDuration}ms total`);
 
     return NextResponse.json({
       success: true,
       tenantsProcessed: tenants.length,
       successCount,
       failCount,
+      skippedCount,
       duration: totalDuration,
       results,
     });
