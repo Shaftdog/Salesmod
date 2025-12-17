@@ -186,24 +186,92 @@ This document tracks the implementation progress of the vNext Autonomous Agent S
 ### Environment Variables Required
 
 ```bash
-CRON_SECRET=your-secret-here  # For authenticating cron requests
+CRON_SECRET=your-secret-here           # For authenticating cron requests
+AGENT_KILL_SWITCH=false                # Set to 'true' to disable all agent activity instantly
+AGENT_KILL_SWITCH_REASON=""            # Optional reason message when kill switch is active
 ```
 
-### P0.6: Hardening & Proof (Before "True Autonomy") 🔲 PARTIAL
+### P0.6: Hardening & Proof (Before "True Autonomy") ✅ COMPLETE
 
-Before enabling autonomous operation in production, these safety measures must be implemented:
+All safety measures required before autonomous operation are now implemented:
 
-**Completed:**
+**Previously Completed:**
 - [x] Idempotency in `executeCard()` - atomic state transition prevents duplicate execution
 - [x] Timeout protection in cron handlers - per-tenant + deadline checking
 - [x] Race-safe lock acquisition - `ROW_COUNT` pattern eliminates TOCTOU bugs
 
-**Remaining:**
-- [ ] Global kill switch + per-tenant disable flag
-- [ ] Centralized rate limits (email sends, research runs, sandbox runs)
-- [ ] RLS + tenant isolation verification across new tables
-- [ ] Email dedupe (message-id checkpointing)
-- [ ] Observability wired to real alerts/dashboards
+**Completed Dec 17, 2025:**
+- [x] Global kill switch + per-tenant disable flag
+  - `AGENT_KILL_SWITCH` environment variable for instant disable
+  - Database-level kill switch via `system_config` table
+  - Per-tenant `agent_enabled` column with disable/enable functions
+  - Admin API at `/api/admin/agent` for managing kill switch
+- [x] Centralized rate limits (email sends, research runs, sandbox runs)
+  - `agent_rate_limits` table with hourly windows
+  - `check_and_increment_rate_limit()` database function
+  - Rate limit checks integrated into `executeCard()`
+  - Actions are deferred (not dropped) when rate limited
+- [x] RLS + tenant isolation verification
+  - All new tables have RLS enabled
+  - `tenant_isolation` policy on all agent tables
+  - `system_config` excluded from RLS (global only)
+- [x] Email dedupe (message-id checkpointing)
+  - Unique constraint on `gmail_messages(tenant_id, gmail_message_id)`
+  - Fast lookup cache via `gmail_message_ids_cache` table
+  - `is_gmail_message_processed()` and `mark_gmail_message_processed()` functions
+  - Race-safe processing prevents duplicate card creation
+- [x] Observability wired to alerts/dashboards
+  - `src/lib/agent/observability.ts` - metrics collection and alert evaluation
+  - Health check API at `/api/admin/agent/health`
+  - Default alerts for failure rate, kill switch, lock contention, compliance
+  - Structured logging helpers for consistent log format
+
+### P0.7: OAuth & Provider Validation 🔲 NOT STARTED
+
+Before enabling autonomous email sending in production, complete the following:
+
+#### P0.7.1 Gmail OAuth Setup (tenant-scoped)
+
+- [ ] Create/confirm Google Cloud project + OAuth consent screen
+- [ ] Configure required Gmail scopes and redirect URIs
+- [ ] Verify secure storage of refresh tokens per tenant (no tokens in LLM context)
+- [ ] Add "Gmail connection status" check per tenant (connected / needs auth / revoked)
+- [ ] Validate real inbox ingest end-to-end:
+  - [ ] New email → ingested → deduped → stored
+  - [ ] Attachments captured and associated to tenant
+  - [ ] No cross-tenant leakage in processing/logging
+
+#### P0.7.2 Email Provider Setup (Resend/SMTP/etc.)
+
+- [ ] Configure provider keys in production environment (no hardcoding)
+- [ ] Domain verification + DKIM/SPF/DMARC (as applicable)
+- [ ] Verify suppression/bounce/opt-out behavior end-to-end
+- [ ] Add sending modes + rollout gates:
+  - [ ] Dry-run (log only; no send)
+  - [ ] Internal-only allowlist (send only to approved domains/emails)
+  - [ ] Limited live (strict per-tenant caps + monitoring)
+- [ ] Validate executor send end-to-end in prod (single tenant first)
+
+#### P0.7.3 Safe Rollout Controls (must be enforced)
+
+- [ ] Global kill switch remains the top-level stop (`system_config.global_enabled`)
+- [ ] Per-tenant enable flag gates autonomy (`agent_enabled`)
+- [ ] Per-tenant caps enforced:
+  - [ ] max_emails_per_hour
+  - [ ] max_research_per_hour
+  - [ ] max_sandbox_jobs_per_hour (when P2.2 exists)
+- [ ] Alerting for:
+  - [ ] unusual send volume
+  - [ ] repeated provider failures (5xx/auth)
+  - [ ] Gmail quota/rate-limit errors
+  - [ ] policy block spikes
+
+#### P0.7 Exit Criteria
+
+- [ ] Gmail OAuth configured and verified on at least 1 tenant inbox
+- [ ] Email sending verified in prod: dry-run → internal-only → limited live (1 tenant)
+- [ ] Monitoring/alerts confirm no runaway behavior
+- [ ] Setup + troubleshooting steps documented (connect, revoke, rotate credentials)
 
 ---
 
@@ -506,32 +574,48 @@ Before enabling autonomous operation in production, these safety measures must b
 - [x] Verify cron endpoints respond correctly (CRON_SECRET auth)
 - [x] Test tenant locking mechanism
 - [x] Verify autonomous cycle completes for single tenant
-- [ ] Test multi-tenant concurrent execution
+- [x] Test multi-tenant concurrent execution
 - [x] Verify policy enforcement blocks violations
 - [x] Test engagement clock updates
-- [ ] Verify order processing validation
+- [x] Verify order processing validation
 - [x] Test Gmail polling cron
 
-**Test Results**: 19/21 tests passing (90.5%) - See `tests/reports/P0-AUTONOMOUS-AGENT-SYSTEM-TEST-REPORT.md`
+**Test Results**: 21/21 tests passing (100%) - See `P0_AGENT_SYSTEM_TEST_REPORT.md`
 
 ### P0.6 Hardening Tests (Required for Production)
 
 - [x] Verify card execution idempotency (atomic state transition)
 - [x] Verify cron timeout protection (per-tenant + deadline)
 - [x] Verify lock race condition fix (ROW_COUNT pattern)
-- [ ] Verify email dedupe/idempotency (message-id checkpointing)
-- [ ] Verify kill switch disables autonomous actions
-- [ ] Verify centralized rate limits are enforced
-- [ ] Verify RLS/tenant isolation for new tables
-- [ ] Confirm no cross-tenant data leakage
+- [x] Verify email dedupe/idempotency (message-id checkpointing)
+- [x] Verify kill switch disables autonomous actions
+- [x] Verify centralized rate limits are enforced
+- [x] Verify RLS/tenant isolation for new tables
+- [x] Confirm no cross-tenant data leakage (integration tested 2025-12-17)
 
 ### Integration Testing
 
-- [ ] Full hourly cycle with real tenant data
-- [ ] Gmail integration with actual inbox
-- [ ] Email sending via executor
-- [ ] Reflection record creation
-- [ ] Policy violation logging
+- [x] Full hourly cycle with real tenant data (Cycle #8 completed in 4.9s)
+- [ ] Gmail integration with actual inbox (requires OAuth setup)
+- [ ] Email sending via executor (requires Gmail OAuth)
+- [x] Reflection record creation (verified in agent_hourly_reflections)
+- [x] Policy violation logging (table accessible, logging works)
+
+### P0.7 OAuth/Provider Validation
+
+- [ ] Gmail OAuth configured on test tenant
+- [ ] Gmail connection status check working (connected / needs auth / revoked)
+- [ ] Real inbox ingest: new email → ingested → deduped → stored
+- [ ] Attachments captured and associated to tenant
+- [ ] No cross-tenant leakage in Gmail processing/logging
+- [ ] Email provider keys configured in prod (no hardcoding)
+- [ ] Domain verified with DKIM/SPF/DMARC
+- [ ] Suppression/bounce/opt-out behavior verified
+- [ ] Dry-run mode tested (log only; no send)
+- [ ] Internal-only allowlist tested (send only to approved domains)
+- [ ] Limited live mode tested (strict per-tenant caps)
+- [ ] Executor send verified end-to-end in prod (1 tenant)
+- [ ] Alerts firing for: unusual volume, provider failures, quota errors, policy spikes
 
 ---
 
@@ -573,14 +657,22 @@ src/lib/agent/
 ├── policy-engine.ts         # Action validation guardrails
 ├── engagement-engine.ts     # 21-day compliance tracking
 ├── order-processor.ts       # Order validation workflow
+├── agent-config.ts          # Kill switch + rate limit service (P0.6)
+├── observability.ts         # Metrics + alerts + health checks (P0.6)
 ├── (existing files...)
 
 src/app/api/cron/
 ├── agent/route.ts           # Hourly autonomous cycle
 ├── gmail/route.ts           # 5-minute Gmail polling
 
+src/app/api/admin/agent/
+├── route.ts                 # Kill switch management API (P0.6)
+├── health/route.ts          # Health check + metrics API (P0.6)
+
 supabase/migrations/
 ├── 20251217000000_autonomous_agent_system.sql
+├── 20251217100000_agent_kill_switch.sql        # Kill switch + rate limits (P0.6)
+├── 20251217110000_email_dedupe_enhancement.sql # Email dedupe (P0.6)
 
 docs/features/agents/
 ├── vnext-autonomous-agent-spec.md
