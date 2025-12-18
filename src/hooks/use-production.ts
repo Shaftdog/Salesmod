@@ -946,6 +946,40 @@ export function useCompleteProductionTask() {
   })
 }
 
+export function useDeleteProductionTask() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const supabase = createClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      // Delete the task (also cascades to subtasks via FK)
+      const { error } = await supabase
+        .from('production_tasks')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['production-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['production-cards'] })
+      queryClient.invalidateQueries({ queryKey: ['production-board'] })
+      toast({
+        title: 'Task Deleted',
+        description: 'Task has been removed.',
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to delete task.',
+      })
+    },
+  })
+}
+
 // ============================================================================
 // TIME TRACKING
 // ============================================================================
@@ -1345,6 +1379,150 @@ export function useResolveAlert() {
 }
 
 // ============================================================================
+// ADD TASKS FROM LIBRARY TO CARD
+// ============================================================================
+
+export function useAddTasksToCard() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+
+  return useMutation({
+    mutationFn: async ({ cardId, libraryTaskIds }: { cardId: string; libraryTaskIds: string[] }) => {
+      const response = await fetch(`/api/production/cards/${cardId}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ libraryTaskIds }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to add tasks')
+      }
+
+      return response.json()
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['production-cards'] })
+      queryClient.invalidateQueries({ queryKey: ['production-cards', variables.cardId] })
+      queryClient.invalidateQueries({ queryKey: ['production-board'] })
+      toast({
+        title: 'Tasks Added',
+        description: data.message || `${data.tasks_created} task(s) added to the card.`,
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to add tasks to card.',
+      })
+    },
+  })
+}
+
+// ============================================================================
+// HOLD / CANCEL / RESUME WORKFLOWS
+// ============================================================================
+
+export function useHoldProductionCard() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const supabase = createClient()
+
+  return useMutation({
+    mutationFn: async ({ cardId, holdReason }: { cardId: string; holdReason?: string }) => {
+      const { error } = await supabase.rpc('hold_production_card', {
+        p_card_id: cardId,
+        p_hold_reason: holdReason || null,
+      })
+
+      if (error) throw error
+      return { cardId }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['production-cards'] })
+      queryClient.invalidateQueries({ queryKey: ['production-board'] })
+      toast({
+        title: 'Order On Hold',
+        description: 'Production card has been put on hold.',
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot Put On Hold',
+        description: error.message || 'Failed to put card on hold.',
+      })
+    },
+  })
+}
+
+export function useResumeProductionCard() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const supabase = createClient()
+
+  return useMutation({
+    mutationFn: async ({ cardId }: { cardId: string }) => {
+      const { data, error } = await supabase.rpc('resume_production_card', {
+        p_card_id: cardId,
+      })
+
+      if (error) throw error
+      return { cardId, resumedToStage: data }
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['production-cards'] })
+      queryClient.invalidateQueries({ queryKey: ['production-board'] })
+      toast({
+        title: 'Order Resumed',
+        description: `Production card has been resumed to ${data.resumedToStage} stage.`,
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot Resume',
+        description: error.message || 'Failed to resume card.',
+      })
+    },
+  })
+}
+
+export function useCancelProductionCard() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const supabase = createClient()
+
+  return useMutation({
+    mutationFn: async ({ cardId, cancelReason }: { cardId: string; cancelReason?: string }) => {
+      const { error } = await supabase.rpc('cancel_production_card', {
+        p_card_id: cardId,
+        p_cancel_reason: cancelReason || null,
+      })
+
+      if (error) throw error
+      return { cardId }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['production-cards'] })
+      queryClient.invalidateQueries({ queryKey: ['production-board'] })
+      toast({
+        title: 'Order Cancelled',
+        description: 'Production card has been cancelled.',
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot Cancel',
+        description: error.message || 'Failed to cancel card.',
+      })
+    },
+  })
+}
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
@@ -1360,6 +1538,8 @@ function getStageColor(stage: ProductionStage): string {
     CORRECTION: 'bg-red-50 border-red-200',
     REVISION: 'bg-pink-50 border-pink-200',
     WORKFILE: 'bg-gray-50 border-gray-200',
+    ON_HOLD: 'bg-amber-50 border-amber-300',
+    CANCELLED: 'bg-red-100 border-red-300',
   }
   return colors[stage]
 }

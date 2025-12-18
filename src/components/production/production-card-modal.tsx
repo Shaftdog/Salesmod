@@ -24,14 +24,24 @@ import {
   AlertTriangle,
   AlertCircle,
   Users,
+  FileText,
+  Home,
+  PauseCircle,
+  XCircle,
+  PlayCircle,
+  Plus,
+  Trash2,
 } from 'lucide-react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import {
   useProductionCard,
   useMoveProductionCard,
   useCompleteProductionTask,
+  useDeleteProductionTask,
   useStartTimer,
   useStopTimer,
+  useResumeProductionCard,
 } from '@/hooks/use-production';
 import {
   ProductionStage,
@@ -50,6 +60,10 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { CorrectionDialog } from './correction-dialog';
 import { TaskAssigneePopover } from './task-assignee-popover';
 import { EditTeamDialog } from './edit-team-dialog';
+import { HoldOrderDialog } from './hold-order-dialog';
+import { CancelOrderDialog } from './cancel-order-dialog';
+import { AddTasksDialog } from './add-tasks-dialog';
+import { TaskDetailDialog } from './task-detail-dialog';
 
 interface ProductionCardModalProps {
   cardId: string;
@@ -61,12 +75,19 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
   const { data, isLoading, error } = useProductionCard(cardId);
   const moveCard = useMoveProductionCard();
   const completeTask = useCompleteProductionTask();
+  const deleteTask = useDeleteProductionTask();
   const startTimer = useStartTimer();
   const stopTimer = useStopTimer();
+  const resumeCard = useResumeProductionCard();
   const [expandedStages, setExpandedStages] = useState<Set<ProductionStage>>(new Set());
   const [correctionDialogOpen, setCorrectionDialogOpen] = useState(false);
   const [selectedTaskForCorrection, setSelectedTaskForCorrection] = useState<any>(null);
   const [editTeamDialogOpen, setEditTeamDialogOpen] = useState(false);
+  const [holdDialogOpen, setHoldDialogOpen] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [addTasksDialogOpen, setAddTasksDialogOpen] = useState(false);
+  const [taskDetailDialogOpen, setTaskDetailDialogOpen] = useState(false);
+  const [selectedTaskForDetail, setSelectedTaskForDetail] = useState<any>(null);
 
   const card = data?.card;
   const canMoveToNextStage = data?.can_move_to_next_stage;
@@ -101,6 +122,14 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
     }
   };
 
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await deleteTask.mutateAsync(taskId);
+    } catch (error) {
+      // Error handled by hook
+    }
+  };
+
   const handleStartTimer = async (taskId: string) => {
     try {
       await startTimer.mutateAsync(taskId);
@@ -120,6 +149,11 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
   const handleRequestCorrection = (task: any) => {
     setSelectedTaskForCorrection(task);
     setCorrectionDialogOpen(true);
+  };
+
+  const handleTaskClick = (task: any) => {
+    setSelectedTaskForDetail(task);
+    setTaskDetailDialogOpen(true);
   };
 
   // Group tasks by stage
@@ -168,6 +202,24 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
                 </Badge>
               </div>
 
+              {/* Order and Property Links */}
+              <div className="flex flex-wrap gap-2">
+                <Link href={`/orders/${card.order_id}`}>
+                  <Badge variant="outline" className="cursor-pointer hover:bg-muted">
+                    <FileText className="h-3 w-3 mr-1" />
+                    Order: {card.order?.order_number || card.order_id.slice(0, 8)}
+                  </Badge>
+                </Link>
+                {card.order?.property_id && (
+                  <Link href={`/properties/${card.order.property_id}`}>
+                    <Badge variant="outline" className="cursor-pointer hover:bg-muted">
+                      <Home className="h-3 w-3 mr-1" />
+                      Property
+                    </Badge>
+                  </Link>
+                )}
+              </div>
+
               {/* Progress */}
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
@@ -210,26 +262,88 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
                 </Button>
               </div>
 
-              {/* Move to Next Stage Button */}
-              {nextStage && (
+              {/* Action Buttons */}
+              {card.current_stage === 'ON_HOLD' ? (
+                /* Resume from Hold */
                 <div className="flex items-center gap-2">
                   <Button
-                    onClick={handleMoveToNextStage}
-                    disabled={!canMoveToNextStage || moveCard.isPending}
-                    className="flex-1"
+                    onClick={() => resumeCard.mutate({ cardId: card.id })}
+                    disabled={resumeCard.isPending}
+                    className="flex-1 bg-green-600 hover:bg-green-700"
                   >
-                    {moveCard.isPending ? (
+                    {resumeCard.isPending ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     ) : (
-                      <ChevronRight className="h-4 w-4 mr-2" />
+                      <PlayCircle className="h-4 w-4 mr-2" />
                     )}
-                    Move to {PRODUCTION_STAGE_LABELS[nextStage]}
+                    Resume Order
                   </Button>
-                  {!canMoveToNextStage && (
-                    <p className="text-xs text-amber-600">
-                      Complete all required tasks first
+                  {card.hold_reason && (
+                    <p className="text-xs text-muted-foreground">
+                      Reason: {card.hold_reason}
                     </p>
                   )}
+                </div>
+              ) : card.current_stage === 'CANCELLED' ? (
+                /* Cancelled - show reason if any */
+                <div className="flex items-center gap-2 p-3 bg-red-50 rounded-lg border border-red-200">
+                  <XCircle className="h-5 w-5 text-red-600 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-red-800">Order Cancelled</p>
+                    {card.cancelled_reason && (
+                      <p className="text-xs text-red-600">Reason: {card.cancelled_reason}</p>
+                    )}
+                    {card.cancelled_at && (
+                      <p className="text-xs text-red-600">
+                        Cancelled {format(new Date(card.cancelled_at), 'MMM d, yyyy')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* Normal workflow - Move, Hold, Cancel buttons */
+                <div className="space-y-2">
+                  {nextStage && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={handleMoveToNextStage}
+                        disabled={!canMoveToNextStage || moveCard.isPending}
+                        className="flex-1"
+                      >
+                        {moveCard.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 mr-2" />
+                        )}
+                        Move to {PRODUCTION_STAGE_LABELS[nextStage]}
+                      </Button>
+                      {!canMoveToNextStage && (
+                        <p className="text-xs text-amber-600">
+                          Complete all required tasks first
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setHoldDialogOpen(true)}
+                      className="flex-1 border-amber-300 text-amber-700 hover:bg-amber-50"
+                    >
+                      <PauseCircle className="h-4 w-4 mr-2" />
+                      Hold
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCancelDialogOpen(true)}
+                      className="flex-1 border-red-300 text-red-700 hover:bg-red-50"
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               )}
             </SheetHeader>
@@ -280,11 +394,14 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
                             <TaskItem
                               key={task.id}
                               task={task}
+                              onClick={() => handleTaskClick(task)}
                               onComplete={() => handleCompleteTask(task.id)}
+                              onDelete={() => handleDeleteTask(task.id)}
                               onStartTimer={() => handleStartTimer(task.id)}
                               onStopTimer={() => task.active_timer && handleStopTimer(task.active_timer.id)}
                               onRequestCorrection={() => handleRequestCorrection(task)}
                               isCompletingTask={completeTask.isPending}
+                              isDeletingTask={deleteTask.isPending}
                               isStartingTimer={startTimer.isPending}
                               isStoppingTimer={stopTimer.isPending}
                             />
@@ -294,6 +411,18 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
                     </div>
                   );
                 })}
+
+                {/* Add Tasks Button */}
+                {card.current_stage !== 'CANCELLED' && (
+                  <Button
+                    variant="outline"
+                    className="w-full border-dashed"
+                    onClick={() => setAddTasksDialogOpen(true)}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Tasks from Library
+                  </Button>
+                )}
               </div>
             </ScrollArea>
           </>
@@ -341,28 +470,76 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
           onOpenChange={setEditTeamDialogOpen}
         />
       )}
+
+      {/* Hold Order Dialog */}
+      {card && (
+        <HoldOrderDialog
+          cardId={card.id}
+          orderNumber={card.order?.order_number || null}
+          open={holdDialogOpen}
+          onOpenChange={setHoldDialogOpen}
+        />
+      )}
+
+      {/* Cancel Order Dialog */}
+      {card && (
+        <CancelOrderDialog
+          cardId={card.id}
+          orderNumber={card.order?.order_number || null}
+          open={cancelDialogOpen}
+          onOpenChange={setCancelDialogOpen}
+        />
+      )}
+
+      {/* Add Tasks Dialog */}
+      {card && (
+        <AddTasksDialog
+          cardId={card.id}
+          currentStage={card.current_stage}
+          open={addTasksDialogOpen}
+          onOpenChange={setAddTasksDialogOpen}
+        />
+      )}
+
+      {/* Task Detail Dialog */}
+      {selectedTaskForDetail && (
+        <TaskDetailDialog
+          task={selectedTaskForDetail}
+          open={taskDetailDialogOpen}
+          onOpenChange={(open) => {
+            setTaskDetailDialogOpen(open);
+            if (!open) setSelectedTaskForDetail(null);
+          }}
+        />
+      )}
     </Sheet>
   );
 }
 
 interface TaskItemProps {
   task: any; // ProductionTask with subtasks and time_entries
+  onClick?: () => void;
   onComplete: () => void;
+  onDelete: () => void;
   onStartTimer: () => void;
   onStopTimer: () => void;
   onRequestCorrection: () => void;
   isCompletingTask: boolean;
+  isDeletingTask: boolean;
   isStartingTimer: boolean;
   isStoppingTimer: boolean;
 }
 
 function TaskItem({
   task,
+  onClick,
   onComplete,
+  onDelete,
   onStartTimer,
   onStopTimer,
   onRequestCorrection,
   isCompletingTask,
+  isDeletingTask,
   isStartingTimer,
   isStoppingTimer,
 }: TaskItemProps) {
@@ -371,15 +548,18 @@ function TaskItem({
   const overdue = isTaskOverdue(task);
 
   return (
-    <div className={cn(
-      'p-3 rounded border bg-white',
-      isCompleted && 'opacity-60',
-      overdue && !isCompleted && 'border-red-300'
-    )}>
+    <div
+      className={cn(
+        'p-3 rounded border bg-white cursor-pointer hover:bg-gray-50 transition-colors',
+        isCompleted && 'opacity-60',
+        overdue && !isCompleted && 'border-red-300'
+      )}
+      onClick={onClick}
+    >
       <div className="flex items-start gap-3">
         {/* Checkbox */}
         <button
-          onClick={onComplete}
+          onClick={(e) => { e.stopPropagation(); onComplete(); }}
           disabled={isCompleted || isCompletingTask}
           className={cn(
             'mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors',
@@ -395,9 +575,23 @@ function TaskItem({
             <p className={cn('text-sm font-medium', isCompleted && 'line-through')}>
               {task.title}
             </p>
-            <Badge variant="outline" className="text-xs shrink-0">
-              {PRODUCTION_ROLE_LABELS[task.role as keyof typeof PRODUCTION_ROLE_LABELS]}
-            </Badge>
+            <div className="flex items-center gap-1 shrink-0">
+              <Badge variant="outline" className="text-xs">
+                {PRODUCTION_ROLE_LABELS[task.role as keyof typeof PRODUCTION_ROLE_LABELS]}
+              </Badge>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                disabled={isDeletingTask}
+                className="p-1 text-muted-foreground hover:text-red-500 transition-colors"
+                title="Delete task"
+              >
+                {isDeletingTask ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </div>
           </div>
 
           {task.description && (
@@ -428,7 +622,7 @@ function TaskItem({
 
           {/* Timer Controls & Correction Button */}
           {!isCompleted && (
-            <div className="mt-2 flex items-center gap-2">
+            <div className="mt-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
               {hasActiveTimer ? (
                 <Button
                   size="sm"

@@ -20,6 +20,8 @@ export const PRODUCTION_STAGES = [
   'CORRECTION',
   'REVISION',
   'WORKFILE',
+  'ON_HOLD',
+  'CANCELLED',
 ] as const;
 
 export const PRODUCTION_STAGE_LABELS: Record<ProductionStage, string> = {
@@ -33,6 +35,8 @@ export const PRODUCTION_STAGE_LABELS: Record<ProductionStage, string> = {
   CORRECTION: 'Correction',
   REVISION: 'Revision',
   WORKFILE: 'Workfile',
+  ON_HOLD: 'On Hold',
+  CANCELLED: 'Cancelled',
 };
 
 export const PRODUCTION_STAGE_COLORS: Record<ProductionStage, string> = {
@@ -46,6 +50,8 @@ export const PRODUCTION_STAGE_COLORS: Record<ProductionStage, string> = {
   CORRECTION: 'bg-red-50 border-red-200 text-red-700',
   REVISION: 'bg-pink-50 border-pink-200 text-pink-700',
   WORKFILE: 'bg-gray-50 border-gray-200 text-gray-700',
+  ON_HOLD: 'bg-amber-50 border-amber-300 text-amber-700',
+  CANCELLED: 'bg-red-100 border-red-300 text-red-800',
 };
 
 export const PRODUCTION_ROLES = [
@@ -354,6 +360,12 @@ export interface ProductionCard {
   assigned_researcher_level_2_id: string | null;
   assigned_researcher_level_3_id: string | null;
   assigned_inspector_id: string | null;
+  // Hold/Cancel tracking
+  hold_reason: string | null;
+  cancelled_reason: string | null;
+  previous_stage: ProductionStage | null;
+  held_at: string | null;
+  cancelled_at: string | null;
   // Timestamps
   started_at: string | null;
   completed_at: string | null;
@@ -469,7 +481,7 @@ export interface ProductionCardWithOrder extends ProductionCard {
     order_number: string | null;
     status: string;
     property_address: string | null;
-    // Add more order fields as needed
+    property_id: string | null;
   };
   template: {
     id: string;

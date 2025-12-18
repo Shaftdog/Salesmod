@@ -57,12 +57,25 @@ Use specialized sub-agents via the Task tool for focused expertise:
 - **database-architect**: For Prisma schema changes, query optimization, data modeling
 - **playwright-tester**: For automated browser testing after feature completion, never ask user to manually test
 - **debugger-specialist**: For bug reproduction, root cause analysis, and surgical fixes when tests fail
+- **system-architect**: For architecture plan reviews, multi-tenant invariant enforcement, and preventing drift from documented patterns
 
 ### Agent Usage Guidelines
 - Use agents proactively when their expertise matches the task
 - Delegate to specialists rather than handling complex domain logic directly
 - For multi-faceted tasks, use multiple agents in sequence or parallel
 - Always use appraisal-expert when working on valuation or USPAP-related features
+
+### Phase Review Workflow
+
+Use `/phase-review` for comprehensive phase validation:
+- Architecture governance (system-architect)
+- Code review with fix loops (code-reviewer, debugger-specialist)
+- Database migrations (database-architect)
+- Unit/integration tests (testing-specialist)
+- E2E browser tests (playwright-tester)
+- Security audit with re-loop if needed (security-auditor)
+
+Only declares "PHASE COMPLETE" when all gates pass.
 
 ## Three-Agent Development Workflow
 
@@ -148,7 +161,7 @@ Prompt: "Test user registration:
 - Duplicate email handling
 - Success redirect
 
-App running at http://localhost:3000"
+App running at http://localhost:9002"
 ```
 
 #### Step 3: Bug Resolution (if needed)

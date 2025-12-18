@@ -6,7 +6,7 @@ Delegate to the playwright-tester agent for automated browser testing:
 
 Test the following: $ARGUMENTS
 
-The application is running at http://localhost:3000
+The application is running at http://localhost:9002
 
 Execute comprehensive automated tests covering:
 - All user workflows and interactions

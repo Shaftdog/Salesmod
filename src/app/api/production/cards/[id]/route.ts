@@ -54,7 +54,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .select(
         `
         *,
-        order:orders(id, order_number, status, property_address),
+        order:orders(id, order_number, status, property_address, property_id),
         template:production_templates(id, name),
         assigned_appraiser:profiles!production_cards_assigned_appraiser_id_fkey(id, name, email),
         assigned_reviewer:profiles!production_cards_assigned_reviewer_id_fkey(id, name, email),
@@ -221,7 +221,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         .select(
           `
           *,
-          order:orders(id, order_number, status, property_address),
+          order:orders(id, order_number, status, property_address, property_id),
           template:production_templates(id, name),
           assigned_appraiser:profiles!production_cards_assigned_appraiser_id_fkey(id, name, email)
         `
@@ -257,7 +257,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       .select(
         `
         *,
-        order:orders(id, order_number, status, property_address),
+        order:orders(id, order_number, status, property_address, property_id),
         template:production_templates(id, name),
         assigned_appraiser:profiles!production_cards_assigned_appraiser_id_fkey(id, name, email)
       `

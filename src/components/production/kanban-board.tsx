@@ -47,9 +47,32 @@ export function ProductionKanbanBoard({ onCardClick }: ProductionKanbanBoardProp
       return;
     }
 
-    // Get adjacent stages for validation
-    const currentIndex = PRODUCTION_STAGES.indexOf(draggedCard.current_stage);
-    const targetIndex = PRODUCTION_STAGES.indexOf(targetStage);
+    // Don't allow dragging from ON_HOLD or CANCELLED
+    if (draggedCard.current_stage === 'ON_HOLD' || draggedCard.current_stage === 'CANCELLED') {
+      toast({
+        title: 'Cannot Move',
+        description: 'Use the detail panel to resume or restore this order.',
+        variant: 'destructive',
+      });
+      setDraggedCard(null);
+      return;
+    }
+
+    // Don't allow dropping into ON_HOLD or CANCELLED via drag
+    if (targetStage === 'ON_HOLD' || targetStage === 'CANCELLED') {
+      toast({
+        title: 'Cannot Move',
+        description: 'Use the detail panel to hold or cancel this order.',
+        variant: 'destructive',
+      });
+      setDraggedCard(null);
+      return;
+    }
+
+    // Get adjacent stages for validation (excluding ON_HOLD and CANCELLED from index calculation)
+    const workflowStages = PRODUCTION_STAGES.filter(s => s !== 'ON_HOLD' && s !== 'CANCELLED');
+    const currentIndex = workflowStages.indexOf(draggedCard.current_stage);
+    const targetIndex = workflowStages.indexOf(targetStage);
 
     // For now, only allow moving to adjacent stages
     // In the future, could allow skipping with confirmation
