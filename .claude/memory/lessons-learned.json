@@ -39,6 +39,12 @@
   ],
   "improvements": [
     {
+      "date": "2025-12-18",
+      "area": "Order Detail Page",
+      "change": "Added property relation to order queries, display property with PropertyChip, use same PropertyMap as Property page",
+      "impact": "Order detail page now shows linked property with address, verification badge, and interactive map with satellite toggle"
+    },
+    {
       "date": "2025-12-16",
       "area": "Production Board",
       "change": "Added Edit Team dialog to production card modal for editing role assignments post-creation",
@@ -183,6 +189,21 @@
       "name": "Universal Date Parsing Pattern",
       "description": "Date parsing must handle multiple formats: 1) Date-only strings (YYYY-MM-DD) from DATE columns - append T00:00:00 for local interpretation, 2) Full ISO timestamps from TIMESTAMPTZ columns - parse and extract UTC components. Check for 'T' in string to determine format.",
       "files": ["src/components/production/production-card-modal.tsx", "src/components/production/kanban-board.tsx", "src/components/production/task-detail-dialog.tsx"]
+    },
+    {
+      "name": "Google Maps with @vis.gl/react-google-maps",
+      "description": "1) Use AdvancedMarker, not Marker (deprecated since Feb 2024). 2) mapId can be any string like 'property-map' - doesn't need Google Cloud Console ID for basic use. 3) Map components MUST have explicit height (minHeight or fixed px) - h-full alone won't work if parent height is undefined. 4) Use mapTypeId for roadmap/satellite toggle. 5) gestureHandling='greedy' for full control.",
+      "files": ["src/components/properties/property-map.tsx", "src/components/orders/order-map.tsx"]
+    },
+    {
+      "name": "Nested Link Hydration Error",
+      "description": "HTML forbids <a> inside <a>. When a component with Link is used inside another Link wrapper (like a card), add disableLink prop to render <span> instead. Error shows as 'In HTML, <a> cannot be a descendant of <a>. This will cause a hydration error.'",
+      "files": ["src/components/orders/property-chip.tsx", "src/components/orders/order-card.tsx"]
+    },
+    {
+      "name": "Supabase Relations Must Be Explicitly Selected",
+      "description": "Having a foreign key (property_id) does NOT auto-load the relation. Must: 1) Add 'property:properties(*)' to select query, 2) Add transform function (transformProperty), 3) Update parent transform to call it (transformOrder). Check: if order.propertyId exists but order.property is undefined, the relation isn't being fetched.",
+      "files": ["src/hooks/use-orders.ts", "src/lib/supabase/transforms.ts"]
     }
   ],
   "last_updated": "2025-12-18",
