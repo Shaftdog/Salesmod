@@ -409,10 +409,13 @@ async function planPhase(orgId: string, tenantId: string): Promise<PlanOutput> {
     // Determine goal link
     const goalLink = determineGoalLink(action, goalStatus);
 
-    // Validate against policy
+    // Validate against policy - transform violations to match policy-engine interface
     const policyValidation = await validateActionPolicy(action, {
       tenantId,
-      engagementViolations,
+      engagementViolations: engagementViolations.map(v => ({
+        ...v,
+        lastTouchType: v.lastTouchType || undefined, // Convert null to undefined
+      })),
       goalStatus,
     });
 
@@ -472,7 +475,7 @@ async function planPhase(orgId: string, tenantId: string): Promise<PlanOutput> {
       entityId: v.entityId,
       entityName: v.entityName || 'Unknown',
       daysSinceLastTouch: v.daysOverdue + 21,
-      lastTouchType: v.lastTouchType,
+      lastTouchType: v.lastTouchType || undefined,
       priority: v.priority,
     })),
     contextSnapshot: {
@@ -482,7 +485,7 @@ async function planPhase(orgId: string, tenantId: string): Promise<PlanOutput> {
         (sum, c) => sum + (c.recentActivities?.filter((a: any) => a.activityType === 'deal').length || 0),
         0
       ),
-      pendingOrdersCount: context.allOrders.filter((o) => o.status === 'pending').length,
+      pendingOrdersCount: context.allOrders.filter((o) => o.status === 'INTAKE').length,
       openCasesCount: context.cases.filter((c) => ['new', 'open', 'in_progress'].includes(c.status)).length,
     },
     planRationale: plan.summary,

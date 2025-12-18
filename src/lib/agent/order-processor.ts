@@ -96,7 +96,6 @@ export async function processNewOrder(
         clients!orders_client_id_fkey(
           id,
           company_name,
-          credit_limit,
           payment_terms,
           is_active
         )
@@ -458,63 +457,12 @@ async function checkCreditApproval(order: any, tenantId: string): Promise<Credit
     };
   }
 
-  // Check credit limit if set
-  const creditLimit = parseFloat(client.credit_limit || 0);
-  const orderAmount = parseFloat(order.total_amount || 0);
-
-  if (creditLimit > 0) {
-    const supabase = createServiceRoleClient();
-
-    // Get current outstanding balance
-    const { data: outstandingOrders, error: balanceError } = await supabase
-      .from('orders')
-      .select('total_amount')
-      .eq('client_id', client.id)
-      .eq('tenant_id', tenantId)
-      .in('status', ['DELIVERED', 'WORKFILE', 'FINALIZATION'])
-      .is('invoiced_at', null);
-
-    if (balanceError) {
-      console.error('[OrderProcessor] Error fetching outstanding orders:', balanceError);
-      return {
-        approved: false,
-        status: 'unknown',
-        reason: 'Could not verify credit balance',
-      };
-    }
-
-    const currentBalance = (outstandingOrders || []).reduce(
-      (sum, o) => sum + parseFloat(o.total_amount || 0),
-      0
-    );
-
-    const availableCredit = creditLimit - currentBalance;
-
-    if (orderAmount > availableCredit) {
-      return {
-        approved: false,
-        status: 'hold',
-        creditLimit,
-        currentBalance,
-        availableCredit,
-        reason: `Order amount ($${orderAmount.toFixed(2)}) exceeds available credit ($${availableCredit.toFixed(2)})`,
-      };
-    }
-
-    return {
-      approved: true,
-      status: 'approved',
-      creditLimit,
-      currentBalance,
-      availableCredit,
-    };
-  }
-
-  // No credit limit set - approved by default
+  // Note: Credit limit feature not currently implemented in database schema
+  // For now, approve all orders from active clients
   return {
     approved: true,
     status: 'approved',
-    reason: 'No credit limit configured',
+    reason: 'Client is active (credit limit feature not implemented)',
   };
 }
 
@@ -616,10 +564,22 @@ async function attemptPricingAutoFix(
 
 function isBillOrder(order: any): boolean {
   // Determine if order is a bill (to be invoiced) vs pre-paid
-  const paymentTerms = order.clients?.payment_terms?.toLowerCase() || '';
+  const paymentTerms = order.clients?.payment_terms;
 
-  // If client has net terms, it's a bill order
-  return paymentTerms.includes('net') ||
-         paymentTerms.includes('invoice') ||
-         paymentTerms.includes('bill');
+  // payment_terms is a number representing days (e.g., 30 for Net 30)
+  // If payment terms are set (> 0), it's a bill order
+  if (typeof paymentTerms === 'number' && paymentTerms > 0) {
+    return true;
+  }
+
+  // If payment terms is a string, check for bill-related keywords
+  if (typeof paymentTerms === 'string') {
+    const termsLower = paymentTerms.toLowerCase();
+    return termsLower.includes('net') ||
+           termsLower.includes('invoice') ||
+           termsLower.includes('bill');
+  }
+
+  // Default to false (pre-paid)
+  return false;
 }

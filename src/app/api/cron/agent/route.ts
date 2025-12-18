@@ -11,6 +11,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { runAutonomousCycle } from '@/lib/agent/autonomous-cycle';
 import { cleanupExpiredLocks } from '@/lib/agent/tenant-lock';
+import {
+  isAgentGloballyEnabled,
+  isAgentEnabledForTenant,
+  cleanupOldRateLimits,
+} from '@/lib/agent/agent-config';
 
 // Vercel cron authorization header
 const CRON_SECRET = process.env.CRON_SECRET;
@@ -61,16 +66,33 @@ export async function GET(request: NextRequest) {
   console.log('[Cron Agent] Starting hourly autonomous agent cycle');
 
   try {
+    // Check global kill switch FIRST
+    const globalStatus = await isAgentGloballyEnabled();
+    if (!globalStatus.enabled) {
+      console.log(`[Cron Agent] KILL SWITCH ACTIVE: ${globalStatus.reason}`);
+      return NextResponse.json({
+        success: false,
+        killSwitchActive: true,
+        reason: globalStatus.reason,
+        source: globalStatus.source,
+        duration: Date.now() - startTime,
+      });
+    }
+
     const supabase = createServiceRoleClient();
 
-    // Clean up any expired locks first
-    await cleanupExpiredLocks();
+    // Clean up any expired locks and old rate limits
+    await Promise.all([
+      cleanupExpiredLocks(),
+      cleanupOldRateLimits(),
+    ]);
 
-    // Get all active tenants
+    // Get all active tenants with agent enabled
     const { data: tenants, error: tenantsError } = await supabase
       .from('tenants')
-      .select('id, name')
-      .eq('is_active', true);
+      .select('id, name, agent_enabled')
+      .eq('is_active', true)
+      .eq('agent_enabled', true);
 
     if (tenantsError) {
       console.error('[Cron Agent] Failed to fetch tenants:', tenantsError);
@@ -126,6 +148,40 @@ export async function GET(request: NextRequest) {
           });
         }
         break;
+      }
+
+      // Re-check global kill switch before each tenant (may have been activated mid-cycle)
+      const midCycleGlobalStatus = await isAgentGloballyEnabled();
+      if (!midCycleGlobalStatus.enabled) {
+        console.log(`[Cron Agent] KILL SWITCH ACTIVATED mid-cycle: ${midCycleGlobalStatus.reason}`);
+        // Mark remaining tenants as skipped
+        const remainingTenants = tenants.slice(results.length);
+        for (const skippedTenant of remainingTenants) {
+          results.push({
+            tenantId: skippedTenant.id,
+            tenantName: skippedTenant.name,
+            success: false,
+            error: `Kill switch activated: ${midCycleGlobalStatus.reason}`,
+            duration: 0,
+            skipped: true,
+          });
+        }
+        break;
+      }
+
+      // Double-check tenant is still enabled (settings may have changed)
+      const tenantStatus = await isAgentEnabledForTenant(tenant.id);
+      if (!tenantStatus.enabled) {
+        console.log(`[Cron Agent] Skipping tenant ${tenant.name}: ${tenantStatus.reason}`);
+        results.push({
+          tenantId: tenant.id,
+          tenantName: tenant.name,
+          success: false,
+          error: tenantStatus.reason || 'Agent disabled for tenant',
+          duration: 0,
+          skipped: true,
+        });
+        continue;
       }
 
       const tenantStart = Date.now();
@@ -248,10 +304,23 @@ export async function POST(request: NextRequest) {
   console.log('[Cron Agent] Manual trigger initiated');
 
   try {
+    // Check global kill switch FIRST
+    const globalStatus = await isAgentGloballyEnabled();
+    if (!globalStatus.enabled) {
+      console.log(`[Cron Agent] KILL SWITCH ACTIVE: ${globalStatus.reason}`);
+      return NextResponse.json({
+        success: false,
+        killSwitchActive: true,
+        reason: globalStatus.reason,
+        source: globalStatus.source,
+        duration: Date.now() - startTime,
+      });
+    }
+
     const supabase = createServiceRoleClient();
 
-    // Build tenant query
-    let tenantQuery = supabase.from('tenants').select('id, name').eq('is_active', true);
+    // Build tenant query (also filter by agent_enabled unless targeting specific tenant)
+    let tenantQuery = supabase.from('tenants').select('id, name, agent_enabled').eq('is_active', true);
 
     if (targetTenantId) {
       tenantQuery = tenantQuery.eq('id', targetTenantId);
@@ -277,6 +346,20 @@ export async function POST(request: NextRequest) {
     const results = [];
 
     for (const tenant of tenants) {
+      // Check tenant-level agent enabled status
+      const tenantStatus = await isAgentEnabledForTenant(tenant.id);
+      if (!tenantStatus.enabled) {
+        console.log(`[Cron Agent] Skipping tenant ${tenant.name}: ${tenantStatus.reason}`);
+        results.push({
+          tenantId: tenant.id,
+          tenantName: tenant.name,
+          success: false,
+          error: tenantStatus.reason || 'Agent disabled for tenant',
+          skipped: true,
+        });
+        continue;
+      }
+
       try {
         const workBlock = await runAutonomousCycle(tenant.id);
         results.push({

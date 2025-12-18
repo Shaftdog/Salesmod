@@ -252,16 +252,42 @@ async function processMessage(
     throw new Error('User has no tenant_id assigned');
   }
 
-  // Check if message already processed
-  const { data: existing } = await supabase
-    .from('gmail_messages')
-    .select('id')
-    .eq('tenant_id', tenantId)
-    .eq('gmail_message_id', message.id)
-    .single();
+  // Check if message already processed (fast path using cache + fallback)
+  const { data: isProcessed } = await supabase.rpc('is_gmail_message_processed', {
+    p_tenant_id: tenantId,
+    p_gmail_message_id: message.id,
+  });
 
-  if (existing) {
-    console.log(`[Gmail Poller] Message ${message.id} already processed, skipping`);
+  if (isProcessed === true) {
+    console.log(`[Gmail Poller] Message ${message.id} already processed (fast path), skipping`);
+
+    // Increment duplicate counter (simple increment, may race but that's ok for stats)
+    const { data: currentState } = await supabase
+      .from('gmail_sync_state')
+      .select('duplicate_messages_skipped')
+      .eq('tenant_id', tenantId)
+      .single();
+
+    await supabase
+      .from('gmail_sync_state')
+      .update({
+        duplicate_messages_skipped: (currentState?.duplicate_messages_skipped || 0) + 1,
+      })
+      .eq('tenant_id', tenantId);
+
+    return false;
+  }
+
+  // Mark message as processed in cache immediately (race-safe)
+  // This prevents other concurrent workers from processing the same message
+  const { data: wasInserted } = await supabase.rpc('mark_gmail_message_processed', {
+    p_tenant_id: tenantId,
+    p_gmail_message_id: message.id,
+  });
+
+  if (!wasInserted) {
+    // Another worker beat us to it
+    console.log(`[Gmail Poller] Message ${message.id} already being processed by another worker, skipping`);
     return false;
   }
 

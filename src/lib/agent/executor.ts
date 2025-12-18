@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { checkRateLimit } from './agent-config';
 
 export interface KanbanCard {
   id: string;
@@ -79,6 +80,38 @@ export async function executeCard(cardId: string): Promise<ExecutionResult> {
   const card = transitioned;
 
   try {
+    // Check rate limits before executing (only for rate-limited action types)
+    const rateLimitedTypes: Record<string, string> = {
+      'send_email': 'email_send',
+      'reply_to_email': 'email_send',
+      'research': 'research',
+      'create_deal': 'create_deal',
+      'create_task': 'create_task',
+      'follow_up': 'follow_up',
+    };
+
+    const rateLimitKey = rateLimitedTypes[card.type];
+    if (rateLimitKey && card.tenant_id) {
+      const rateLimitResult = await checkRateLimit(card.tenant_id, rateLimitKey);
+      if (!rateLimitResult.allowed) {
+        // Rate limited - revert card to approved state so it can be retried later
+        await supabase
+          .from('kanban_cards')
+          .update({
+            state: 'approved', // Revert to approved state
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', cardId);
+
+        return {
+          success: false,
+          cardId,
+          message: 'Rate limited - action deferred',
+          error: `Rate limit exceeded for ${rateLimitKey}: ${rateLimitResult.currentCount}/${rateLimitResult.maxAllowed} actions this hour. Will retry next cycle.`,
+        };
+      }
+    }
+
     let result: ExecutionResult;
 
     // Execute based on card type

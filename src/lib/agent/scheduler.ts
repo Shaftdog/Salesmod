@@ -2,14 +2,14 @@
  * Scheduler for promoting scheduled kanban cards when they become due
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 
 /**
  * Promote scheduled cards that are now due to 'suggested' state
  * This should be called at the start of each agent run
  */
 export async function promoteScheduledCards(tenantId?: string): Promise<number> {
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   const now = new Date().toISOString();
 
   // Build the query

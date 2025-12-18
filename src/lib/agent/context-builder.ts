@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { Client, Order, Deal, Goal, Activity, Contact, Case } from '@/lib/types';
 import { calculateGoalProgress } from '@/hooks/use-goals';
 
@@ -44,7 +44,7 @@ export interface AgentContext {
  * Build comprehensive context for the agent to make decisions
  */
 export async function buildContext(orgId: string): Promise<AgentContext> {
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);

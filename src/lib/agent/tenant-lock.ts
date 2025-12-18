@@ -4,10 +4,10 @@
  */
 
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 const LOCK_DURATION_MINUTES = 30;
-const INSTANCE_ID = `agent-${process.env.VERCEL_REGION || 'local'}-${uuidv4().substring(0, 8)}`;
+const INSTANCE_ID = `agent-${process.env.VERCEL_REGION || 'local'}-${randomUUID().substring(0, 8)}`;
 
 export interface TenantLock {
   tenantId: string;

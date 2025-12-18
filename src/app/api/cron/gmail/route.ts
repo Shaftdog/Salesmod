@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { pollGmailInbox } from '@/lib/agent/gmail-poller';
+import { isAgentGloballyEnabled, isAgentEnabledForTenant } from '@/lib/agent/agent-config';
 
 // Vercel cron authorization header
 const CRON_SECRET = process.env.CRON_SECRET;
@@ -35,6 +36,19 @@ export async function GET(request: NextRequest) {
   console.log('[Cron Gmail] Starting Gmail polling cycle');
 
   try {
+    // Check global kill switch FIRST
+    const globalStatus = await isAgentGloballyEnabled();
+    if (!globalStatus.enabled) {
+      console.log(`[Cron Gmail] KILL SWITCH ACTIVE: ${globalStatus.reason}`);
+      return NextResponse.json({
+        success: false,
+        killSwitchActive: true,
+        reason: globalStatus.reason,
+        source: globalStatus.source,
+        duration: Date.now() - startTime,
+      });
+    }
+
     const supabase = createServiceRoleClient();
 
     // Get all tenants with Gmail sync enabled
@@ -92,6 +106,20 @@ export async function GET(request: NextRequest) {
     for (const syncState of activeSyncStates) {
       const tenant = syncState.tenants as any;
       const tenantStart = Date.now();
+
+      // Check tenant-level agent enabled status
+      const tenantStatus = await isAgentEnabledForTenant(syncState.tenant_id);
+      if (!tenantStatus.enabled) {
+        console.log(`[Cron Gmail] Skipping tenant ${tenant.name}: ${tenantStatus.reason}`);
+        results.push({
+          tenantId: syncState.tenant_id,
+          tenantName: tenant.name,
+          success: false,
+          errors: [tenantStatus.reason || 'Agent disabled for tenant'],
+          duration: Date.now() - tenantStart,
+        });
+        continue;
+      }
 
       try {
         console.log(`[Cron Gmail] Polling Gmail for tenant: ${tenant.name} (${tenant.id})`);
@@ -214,6 +242,19 @@ export async function POST(request: NextRequest) {
   console.log('[Cron Gmail] Manual trigger initiated');
 
   try {
+    // Check global kill switch FIRST
+    const globalStatus = await isAgentGloballyEnabled();
+    if (!globalStatus.enabled) {
+      console.log(`[Cron Gmail] KILL SWITCH ACTIVE: ${globalStatus.reason}`);
+      return NextResponse.json({
+        success: false,
+        killSwitchActive: true,
+        reason: globalStatus.reason,
+        source: globalStatus.source,
+        duration: Date.now() - startTime,
+      });
+    }
+
     // Build sync state query
     let query = supabase
       .from('gmail_sync_state')

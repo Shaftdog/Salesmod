@@ -208,7 +208,9 @@ export async function selectNextContactsToTouch(
   const now = new Date();
 
   for (const contact of contacts || []) {
-    if (!contact.clients?.is_active) continue;
+    // Handle both array and object cases for the join
+    const client = Array.isArray(contact.clients) ? contact.clients[0] : contact.clients;
+    if (!client?.is_active) continue;
     if (!contact.email) continue;
 
     const clock = Array.isArray(contact.engagement_clocks)
