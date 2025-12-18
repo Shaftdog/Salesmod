@@ -24,7 +24,9 @@ export function useOrders() {
           .select(`
             *,
             client:clients(*),
-            assignee:profiles!orders_assigned_to_fkey(*)
+            assignee:profiles!orders_assigned_to_fkey(*),
+            property:properties(*),
+            property_unit:property_units(*)
           `)
           .order('created_at', { ascending: false })
           .range(from, from + batchSize - 1);
@@ -71,7 +73,9 @@ export function useOrders() {
         .select(`
           *,
           client:clients(*),
-          assignee:profiles!orders_assigned_to_fkey(*)
+          assignee:profiles!orders_assigned_to_fkey(*),
+          property:properties(*),
+          property_unit:property_units(*)
         `)
         .single()
 
@@ -129,7 +133,9 @@ export function useOrders() {
         .select(`
           *,
           client:clients(*),
-          assignee:profiles!orders_assigned_to_fkey(*)
+          assignee:profiles!orders_assigned_to_fkey(*),
+          property:properties(*),
+          property_unit:property_units(*)
         `)
         .single()
       
@@ -203,11 +209,13 @@ export function useOrder(id: string) {
         .select(`
           *,
           client:clients(*),
-          assignee:profiles!orders_assigned_to_fkey(*)
+          assignee:profiles!orders_assigned_to_fkey(*),
+          property:properties(*),
+          property_unit:property_units(*)
         `)
         .eq('id', id)
         .single()
-      
+
       if (error) throw error
       return transformOrder(data)
     },
@@ -254,12 +262,14 @@ export function useUpdateOrder() {
         .select(`
           *,
           client:clients(*),
-          assignee:profiles!orders_assigned_to_fkey(*)
+          assignee:profiles!orders_assigned_to_fkey(*),
+          property:properties(*),
+          property_unit:property_units(*)
         `)
         .single()
-      
+
       if (error) throw error
-      
+
       // If order was completed and has a property_id, refresh USPAP cache
       if (updates.status === 'completed' && data.property_id) {
         try {

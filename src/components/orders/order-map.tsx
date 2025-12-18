@@ -1,42 +1,52 @@
-
 "use client"
 
-import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
 
 type OrderMapProps = {
     address: string;
+    lat?: number;
+    lng?: number;
 };
 
-// This is a simplified implementation that relies on client-side geocoding.
-// For production, you would want to geocode the address on the server
-// and pass the latitude and longitude to this component.
-// We are hardcoding a location for now.
-const fakeGeocodedLocation = {
-    lat: 37.7749,
-    lng: -122.4194,
+// Default to Orlando, FL area if no coordinates provided
+const DEFAULT_LOCATION = {
+    lat: 28.5383,
+    lng: -81.3792,
 };
 
+// Map ID from Google Cloud Console (required for AdvancedMarker)
+const MAP_ID = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID';
 
-export function OrderMap({ address }: OrderMapProps) {
+export function OrderMap({ address, lat, lng }: OrderMapProps) {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
     if (!apiKey) {
         return (
-            <div className="flex items-center justify-center h-full bg-muted rounded-lg">
-                <p className="text-muted-foreground text-sm">Google Maps API key is missing.</p>
+            <div className="flex items-center justify-center min-h-[300px] h-full bg-muted rounded-lg border border-dashed border-muted-foreground/25">
+                <div className="text-center">
+                    <p className="text-muted-foreground text-sm">Map unavailable</p>
+                    <p className="text-muted-foreground/60 text-xs mt-1">Google Maps API key not configured</p>
+                </div>
             </div>
         );
     }
-    
+
+    const center = lat && lng ? { lat, lng } : DEFAULT_LOCATION;
+
     return (
         <APIProvider apiKey={apiKey}>
-            <div className="h-full w-full rounded-lg overflow-hidden">
+            <div className="min-h-[300px] h-full w-full rounded-lg overflow-hidden">
                 <Map
-                    defaultCenter={fakeGeocodedLocation}
+                    defaultCenter={center}
                     defaultZoom={14}
-                    mapId="a3bbf35b1d432b95"
+                    gestureHandling="cooperative"
+                    disableDefaultUI={false}
+                    mapId={MAP_ID}
+                    style={{ width: '100%', height: '100%', minHeight: '300px' }}
                 >
-                    <AdvancedMarker position={fakeGeocodedLocation} />
+                    <AdvancedMarker position={center}>
+                        <Pin background="#3b82f6" glyphColor="#fff" borderColor="#1d4ed8" />
+                    </AdvancedMarker>
                 </Map>
             </div>
         </APIProvider>

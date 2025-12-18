@@ -124,9 +124,10 @@ export function PropertyChip({ order, variant = 'chip', showPriorWork = true }: 
 interface PropertyChipInlineProps {
   order: Order;
   className?: string;
+  disableLink?: boolean;
 }
 
-export function PropertyChipInline({ order, className = "" }: PropertyChipInlineProps) {
+export function PropertyChipInline({ order, className = "", disableLink = false }: PropertyChipInlineProps) {
   if (!order.property) {
     return (
       <span className={`text-sm text-gray-500 ${className}`}>
@@ -141,17 +142,17 @@ export function PropertyChipInline({ order, className = "" }: PropertyChipInline
       property.addressLine2,
       `${property.city}, ${property.state} ${property.postalCode}`
     ].filter(Boolean);
-    
+
     return parts.join(', ');
   };
 
   const getPriorWorkIndicator = () => {
     if (!order.props?.uspap) return null;
-    
+
     const priorWork = order.props.uspap.prior_work_3y || 0;
-    
+
     if (priorWork === 0) return null;
-    
+
     return (
       <span className="text-xs text-red-600 font-medium">
         ({priorWork} prior work)
@@ -161,7 +162,7 @@ export function PropertyChipInline({ order, className = "" }: PropertyChipInline
 
   const getUnitIndicator = () => {
     if (!order.props?.unit) return null;
-    
+
     return (
       <span className="text-xs text-gray-500">
         Unit {order.props.unit}
@@ -169,14 +170,22 @@ export function PropertyChipInline({ order, className = "" }: PropertyChipInline
     );
   };
 
+  const addressContent = formatAddress(order.property);
+
   return (
     <div className={`text-sm ${className}`}>
-      <Link 
-        href={`/properties/${order.property.id}`}
-        className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
-      >
-        {formatAddress(order.property)}
-      </Link>
+      {disableLink ? (
+        <span className="font-medium text-blue-600">
+          {addressContent}
+        </span>
+      ) : (
+        <Link
+          href={`/properties/${order.property.id}`}
+          className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          {addressContent}
+        </Link>
+      )}
       <div className="flex items-center space-x-2 mt-1">
         {getUnitIndicator()}
         {getPriorWorkIndicator()}
