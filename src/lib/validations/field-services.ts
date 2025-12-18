@@ -26,7 +26,7 @@ const phoneSchema = z.string().regex(/^\+?[\d\s\-\(\)]+$/).optional();
 // =====================================================
 
 export const createBookingSchema = z.object({
-  resourceId: uuidSchema,
+  resourceId: uuidSchema.optional(), // Optional - inspection can be scheduled without assigned resource
   orderId: uuidSchema.optional(),
   territoryId: uuidSchema.optional(),
   bookingType: z.enum(['inspection', 'meeting', 'other']).default('inspection'),

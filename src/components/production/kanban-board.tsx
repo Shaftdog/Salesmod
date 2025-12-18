@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Calendar, User, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Loader2, Calendar, CalendarCheck, User, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -19,6 +19,22 @@ import {
   calculateCompletionPercent,
 } from '@/types/production';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
+
+// Helper to parse date-only strings (YYYY-MM-DD) as local dates, not UTC
+// This prevents timezone issues where Dec 23 becomes Dec 22
+function parseLocalDate(dateString: string | null | undefined): Date | undefined {
+  if (!dateString) return undefined;
+  const date = new Date(dateString + 'T00:00:00');
+  if (isNaN(date.getTime())) return undefined;
+  return date;
+}
+
+// Safe date formatter that handles null/invalid dates
+function formatLocalDate(dateString: string | null | undefined, formatStr: string): string {
+  const date = parseLocalDate(dateString);
+  if (!date) return '';
+  return format(date, formatStr);
+}
 
 interface ProductionKanbanBoardProps {
   onCardClick?: (card: ProductionCardWithOrder) => void;
@@ -234,7 +250,8 @@ function AssignedResourcesDisplay({ card }: { card: ProductionCardWithOrder }) {
 
 function ProductionCardItem({ card, onDragStart, onClick, isDragging }: ProductionCardItemProps) {
   const completionPercent = calculateCompletionPercent(card.completed_tasks, card.total_tasks);
-  const isOverdue = card.due_date && isPast(new Date(card.due_date));
+  const parsedDueDate = parseLocalDate(card.due_date);
+  const isOverdue = parsedDueDate && isPast(parsedDueDate);
 
   return (
     <Card
@@ -269,6 +286,19 @@ function ProductionCardItem({ card, onDragStart, onClick, isDragging }: Producti
           </Badge>
         </div>
 
+        {/* Inspection Date - Prominent Display */}
+        {card.order?.inspection_date && (
+          <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-teal-50 border border-teal-200">
+            <CalendarCheck className="h-4 w-4 text-teal-600 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-teal-700">Inspection</p>
+              <p className="text-sm font-semibold text-teal-800">
+                {format(new Date(card.order.inspection_date), 'EEE, MMM d')}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Progress Bar */}
         <div className="space-y-1">
           <div className="flex justify-between text-xs text-muted-foreground">
@@ -298,10 +328,10 @@ function ProductionCardItem({ card, onDragStart, onClick, isDragging }: Producti
             <Calendar className="h-3 w-3" />
             <span>
               {isOverdue ? 'Overdue: ' : 'Due: '}
-              {format(new Date(card.due_date), 'MMM d')}
+              {formatLocalDate(card.due_date, 'MMM d')}
             </span>
             <span className="text-xs">
-              ({formatDistanceToNow(new Date(card.due_date), { addSuffix: true })})
+              {parseLocalDate(card.due_date) && `(${formatDistanceToNow(parseLocalDate(card.due_date)!, { addSuffix: true })})`}
             </span>
           </div>
         )}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { transformBooking } from '@/lib/supabase/transforms';
-import { getApiContext, handleApiError, requireAdmin, ApiError } from '@/lib/api-utils';
+import { getApiContext, handleApiError, ApiError } from '@/lib/api-utils';
 import { createBookingSchema } from '@/lib/validations/field-services';
 
 /**
@@ -91,33 +91,62 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const context = await getApiContext(request);
-    const { supabase, orgId, userId } = context;
-
-    // Check if user is admin
-    await requireAdmin(context);
+    const { supabase, orgId, userId, requestId } = context;
 
     // Parse and validate request body
     const body = await request.json();
     const validated = createBookingSchema.parse(body);
 
-    // HIGH-5: Verify resource belongs to org
-    const { data: resource, error: resourceError } = await supabase
-      .from('bookable_resources')
-      .select('id')
-      .eq('id', validated.resourceId)
-      .eq('org_id', orgId)
+    // Authorization: Allow admins OR assigned appraiser for inspection bookings
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
       .single();
 
-    if (resourceError || !resource) {
-      throw new ApiError('Resource not found or not accessible', 403, 'RESOURCE_NOT_FOUND');
+    const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
+
+    if (!isAdmin) {
+      // Non-admins can only create inspection bookings for orders assigned to them
+      if (validated.bookingType !== 'inspection' || !validated.orderId) {
+        throw new ApiError('Admin access required for this booking type', 403, 'ADMIN_REQUIRED', requestId);
+      }
+
+      // Check if user is assigned to this order
+      const { data: order } = await supabase
+        .from('orders')
+        .select('assigned_to')
+        .eq('id', validated.orderId)
+        .eq('org_id', orgId)
+        .single();
+
+      if (!order || order.assigned_to !== userId) {
+        throw new ApiError('You can only schedule inspections for orders assigned to you', 403, 'NOT_ASSIGNED', requestId);
+      }
     }
 
-    // Check for conflicts before creating
-    const conflicts = await checkBookingConflicts(supabase, {
-      resourceId: validated.resourceId,
-      scheduledStart: validated.scheduledStart,
-      scheduledEnd: validated.scheduledEnd,
-    });
+    // HIGH-5: Verify resource belongs to org (only if resourceId provided)
+    let conflicts: Awaited<ReturnType<typeof checkBookingConflicts>> = [];
+
+    if (validated.resourceId) {
+      const { data: resource, error: resourceError } = await supabase
+        .from('bookable_resources')
+        .select('id')
+        .eq('id', validated.resourceId)
+        .eq('org_id', orgId)
+        .single();
+
+      if (resourceError || !resource) {
+        throw new ApiError('Resource not found or not accessible', 403, 'RESOURCE_NOT_FOUND');
+      }
+
+      // Check for conflicts before creating (only when resource assigned)
+      conflicts = await checkBookingConflicts(supabase, {
+        resourceId: validated.resourceId,
+        scheduledStart: validated.scheduledStart,
+        scheduledEnd: validated.scheduledEnd,
+      });
+    }
 
     // Insert booking
     const { data: booking, error: insertError } = await supabase
@@ -125,7 +154,7 @@ export async function POST(request: NextRequest) {
       .insert({
         org_id: orgId,
         order_id: validated.orderId,
-        resource_id: validated.resourceId,
+        resource_id: validated.resourceId || null, // null if no resource assigned
         territory_id: validated.territoryId,
         booking_type: validated.bookingType,
         scheduled_start: validated.scheduledStart,
@@ -163,10 +192,28 @@ export async function POST(request: NextRequest) {
 
     if (insertError) {
       console.error('Booking insert error:', insertError);
-      return NextResponse.json({ error: 'Failed to create booking' }, { status: 500 });
+      console.error('Insert error details:', JSON.stringify(insertError, null, 2));
+      return NextResponse.json({
+        error: 'Failed to create booking',
+        details: process.env.NODE_ENV === 'development' ? insertError.message : undefined
+      }, { status: 500 });
     }
 
     const transformedBooking = transformBooking(booking);
+
+    // Sync inspection date to order when scheduling an inspection
+    // This enables the SLA system to calculate task due dates based on inspection date
+    if (validated.bookingType === 'inspection' && validated.orderId) {
+      const { error: orderUpdateError } = await supabase
+        .from('orders')
+        .update({ inspection_date: validated.scheduledStart })
+        .eq('id', validated.orderId);
+
+      if (orderUpdateError) {
+        console.error('Failed to update order inspection_date:', orderUpdateError);
+        // Non-blocking - booking was created successfully
+      }
+    }
 
     return NextResponse.json({
       booking: transformedBooking,

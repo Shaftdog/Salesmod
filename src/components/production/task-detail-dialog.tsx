@@ -45,6 +45,22 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { TaskAssigneePopover } from './task-assignee-popover';
 
+// Helper to parse date-only strings (YYYY-MM-DD) as local dates, not UTC
+// This prevents timezone issues where Dec 23 becomes Dec 22
+function parseLocalDate(dateString: string | null | undefined): Date | undefined {
+  if (!dateString) return undefined;
+  const date = new Date(dateString + 'T00:00:00');
+  if (isNaN(date.getTime())) return undefined;
+  return date;
+}
+
+// Safe date formatter that handles null/invalid dates
+function formatLocalDate(dateString: string | null | undefined, formatStr: string): string {
+  const date = parseLocalDate(dateString);
+  if (!date) return '';
+  return format(date, formatStr);
+}
+
 interface TaskDetailDialogProps {
   task: ProductionTask & {
     subtasks?: ProductionTask[];
@@ -207,7 +223,7 @@ export function TaskDetailDialog({
                 )}>
                   <Calendar className="h-4 w-4" />
                   {task.due_date ? (
-                    <span>{format(new Date(task.due_date), 'MMM d, yyyy')}</span>
+                    <span>{formatLocalDate(task.due_date, 'MMM d, yyyy')}</span>
                   ) : (
                     <span className="text-muted-foreground">Not set</span>
                   )}
@@ -357,7 +373,7 @@ export function TaskDetailDialog({
                   <Label className="text-xs text-muted-foreground">
                     Subtasks ({task.subtasks.filter(s => s.status === 'completed').length}/{task.subtasks.length})
                   </Label>
-                  <div className="space-y-1">
+                  <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
                     {task.subtasks.map((subtask) => (
                       <div
                         key={subtask.id}

@@ -15,6 +15,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Loader2,
   Calendar,
+  CalendarCheck,
+  CalendarPlus,
   User,
   ChevronRight,
   Play,
@@ -42,7 +44,14 @@ import {
   useStartTimer,
   useStopTimer,
   useResumeProductionCard,
+  useUpdateProductionCard,
 } from '@/hooks/use-production';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import {
   ProductionStage,
   ProductionTask,
@@ -57,6 +66,24 @@ import {
   isTaskOverdue,
 } from '@/types/production';
 import { format, formatDistanceToNow } from 'date-fns';
+
+// Helper to parse date-only strings (YYYY-MM-DD) as local dates, not UTC
+// This prevents timezone issues where Dec 23 becomes Dec 22
+function parseLocalDate(dateString: string | null | undefined): Date | undefined {
+  if (!dateString) return undefined;
+  // Add time component to force local interpretation
+  const date = new Date(dateString + 'T00:00:00');
+  // Return undefined if invalid date
+  if (isNaN(date.getTime())) return undefined;
+  return date;
+}
+
+// Safe date formatter that handles null/invalid dates
+function formatLocalDate(dateString: string | null | undefined, formatStr: string): string {
+  const date = parseLocalDate(dateString);
+  if (!date) return '';
+  return format(date, formatStr);
+}
 import { CorrectionDialog } from './correction-dialog';
 import { TaskAssigneePopover } from './task-assignee-popover';
 import { EditTeamDialog } from './edit-team-dialog';
@@ -64,6 +91,8 @@ import { HoldOrderDialog } from './hold-order-dialog';
 import { CancelOrderDialog } from './cancel-order-dialog';
 import { AddTasksDialog } from './add-tasks-dialog';
 import { TaskDetailDialog } from './task-detail-dialog';
+import { ScheduleInspectionDialog } from '@/components/orders/schedule-inspection-dialog';
+import type { Order } from '@/lib/types';
 
 interface ProductionCardModalProps {
   cardId: string;
@@ -79,7 +108,9 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
   const startTimer = useStartTimer();
   const stopTimer = useStopTimer();
   const resumeCard = useResumeProductionCard();
+  const updateCard = useUpdateProductionCard();
   const [expandedStages, setExpandedStages] = useState<Set<ProductionStage>>(new Set());
+  const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
   const [correctionDialogOpen, setCorrectionDialogOpen] = useState(false);
   const [selectedTaskForCorrection, setSelectedTaskForCorrection] = useState<any>(null);
   const [editTeamDialogOpen, setEditTeamDialogOpen] = useState(false);
@@ -88,6 +119,7 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
   const [addTasksDialogOpen, setAddTasksDialogOpen] = useState(false);
   const [taskDetailDialogOpen, setTaskDetailDialogOpen] = useState(false);
   const [selectedTaskForDetail, setSelectedTaskForDetail] = useState<any>(null);
+  const [scheduleInspectionDialogOpen, setScheduleInspectionDialogOpen] = useState(false);
 
   const card = data?.card;
   const canMoveToNextStage = data?.can_move_to_next_stage;
@@ -220,6 +252,40 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
                 )}
               </div>
 
+              {/* Inspection Date - Prominent Display with Schedule Button */}
+              {card.order?.inspection_date ? (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-teal-50 border border-teal-200">
+                  <CalendarCheck className="h-8 w-8 text-teal-600" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-teal-700">Inspection Date</p>
+                    <p className="text-lg font-semibold text-teal-800">
+                      {format(new Date(card.order.inspection_date), 'EEEE, MMMM d, yyyy')}
+                    </p>
+                    <p className="text-xs text-teal-600">
+                      {formatDistanceToNow(new Date(card.order.inspection_date), { addSuffix: true })}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setScheduleInspectionDialogOpen(true)}
+                    className="border-teal-300 text-teal-700 hover:bg-teal-100"
+                  >
+                    <CalendarPlus className="h-4 w-4 mr-1" />
+                    Reschedule
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={() => setScheduleInspectionDialogOpen(true)}
+                  className="w-full border-dashed border-teal-300 text-teal-700 hover:bg-teal-50"
+                >
+                  <CalendarPlus className="h-4 w-4 mr-2" />
+                  Schedule Inspection
+                </Button>
+              )}
+
               {/* Progress */}
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
@@ -239,12 +305,56 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
 
               {/* Meta Info */}
               <div className="flex flex-wrap items-center gap-4 text-sm">
-                {card.due_date && (
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <Calendar className="h-4 w-4" />
-                    <span>Due: {format(new Date(card.due_date), 'MMM d, yyyy')}</span>
-                  </div>
-                )}
+                {/* Editable Due Date */}
+                <Popover open={dueDatePopoverOpen} onOpenChange={setDueDatePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      className={cn(
+                        'flex items-center gap-1 hover:text-primary transition-colors',
+                        card.due_date ? 'text-muted-foreground' : 'text-muted-foreground/60'
+                      )}
+                    >
+                      <Calendar className="h-4 w-4" />
+                      <span>
+                        {card.due_date
+                          ? `Due: ${formatLocalDate(card.due_date, 'MMM d, yyyy')}`
+                          : 'Set due date'}
+                      </span>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={parseLocalDate(card.due_date)}
+                      onSelect={(date) => {
+                        updateCard.mutate({
+                          id: card.id,
+                          due_date: date ? format(date, 'yyyy-MM-dd') : null,
+                        });
+                        setDueDatePopoverOpen(false);
+                      }}
+                      initialFocus
+                    />
+                    {card.due_date && (
+                      <div className="p-2 border-t">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full text-muted-foreground"
+                          onClick={() => {
+                            updateCard.mutate({
+                              id: card.id,
+                              due_date: null,
+                            });
+                            setDueDatePopoverOpen(false);
+                          }}
+                        >
+                          Clear due date
+                        </Button>
+                      </div>
+                    )}
+                  </PopoverContent>
+                </Popover>
                 {card.assigned_appraiser && (
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <User className="h-4 w-4" />
@@ -512,6 +622,30 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
           }}
         />
       )}
+
+      {/* Schedule Inspection Dialog */}
+      {card?.order && (
+        <ScheduleInspectionDialog
+          order={{
+            id: card.order.id,
+            orderNumber: card.order.order_number || '',
+            propertyAddress: card.order.property_address || '',
+            propertyCity: card.order.property_city || '',
+            propertyState: card.order.property_state || '',
+            propertyZip: card.order.property_zip || '',
+            borrowerName: card.order.borrower_name || '',
+            borrowerEmail: card.order.borrower_email || undefined,
+            borrowerPhone: card.order.borrower_phone || undefined,
+            propertyContactName: card.order.property_contact_name || undefined,
+            propertyContactPhone: card.order.property_contact_phone || undefined,
+            propertyContactEmail: card.order.property_contact_email || undefined,
+            accessInstructions: card.order.access_instructions || undefined,
+            specialInstructions: card.order.special_instructions || undefined,
+          } as Order}
+          open={scheduleInspectionDialogOpen}
+          onOpenChange={setScheduleInspectionDialogOpen}
+        />
+      )}
     </Sheet>
   );
 }
@@ -609,7 +743,7 @@ function TaskItem({
             {task.due_date && (
               <div className={cn('flex items-center gap-1', overdue && !isCompleted && 'text-red-600')}>
                 <Calendar className="h-3 w-3" />
-                <span>{format(new Date(task.due_date), 'MMM d')}</span>
+                <span>{formatLocalDate(task.due_date, 'MMM d')}</span>
               </div>
             )}
             {task.total_time_minutes > 0 && (

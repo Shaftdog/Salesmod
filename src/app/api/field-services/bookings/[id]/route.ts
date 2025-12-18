@@ -148,6 +148,24 @@ export async function PATCH(
 
     const transformedBooking = transformBooking(booking);
 
+    // Sync inspection date to order when rescheduling an inspection
+    // This keeps SLA calculations in sync with the new inspection date
+    if (
+      updateData.scheduled_start &&
+      booking.booking_type === 'inspection' &&
+      booking.order_id
+    ) {
+      const { error: orderUpdateError } = await supabase
+        .from('orders')
+        .update({ inspection_date: updateData.scheduled_start })
+        .eq('id', booking.order_id);
+
+      if (orderUpdateError) {
+        console.error('Failed to update order inspection_date:', orderUpdateError);
+        // Non-blocking - booking was updated successfully
+      }
+    }
+
     return NextResponse.json({
       booking: transformedBooking,
       message: 'Booking updated successfully'
@@ -182,6 +200,13 @@ export async function DELETE(
     const { searchParams } = new URL(request.url);
     const reason = searchParams.get('reason') || 'Cancelled by user';
 
+    // First, get the booking to check if it's an inspection
+    const { data: existingBooking } = await supabase
+      .from('bookings')
+      .select('booking_type, order_id')
+      .eq('id', id)
+      .single();
+
     // Update to cancelled status instead of deleting
     const { error: cancelError } = await supabase
       .from('bookings')
@@ -196,6 +221,20 @@ export async function DELETE(
     if (cancelError) {
       console.error('Booking cancel error:', cancelError);
       return NextResponse.json({ error: 'Failed to cancel booking' }, { status: 500 });
+    }
+
+    // Clear inspection date from order when cancelling an inspection booking
+    // This ensures SLA calculations don't use a cancelled inspection date
+    if (existingBooking?.booking_type === 'inspection' && existingBooking?.order_id) {
+      const { error: orderUpdateError } = await supabase
+        .from('orders')
+        .update({ inspection_date: null })
+        .eq('id', existingBooking.order_id);
+
+      if (orderUpdateError) {
+        console.error('Failed to clear order inspection_date:', orderUpdateError);
+        // Non-blocking - booking was cancelled successfully
+      }
     }
 
     return NextResponse.json({ message: 'Booking cancelled successfully' });
