@@ -67,12 +67,26 @@ import {
 } from '@/types/production';
 import { format, formatDistanceToNow } from 'date-fns';
 
-// Helper to parse date-only strings (YYYY-MM-DD) as local dates, not UTC
+// Helper to parse date strings as local dates, not UTC
+// Handles both date-only strings (YYYY-MM-DD) and full ISO timestamps
 // This prevents timezone issues where Dec 23 becomes Dec 22
 function parseLocalDate(dateString: string | null | undefined): Date | undefined {
   if (!dateString) return undefined;
-  // Add time component to force local interpretation
-  const date = new Date(dateString + 'T00:00:00');
+
+  let date: Date;
+
+  // Check if it's a full ISO timestamp (contains 'T')
+  if (dateString.includes('T')) {
+    // Parse the ISO timestamp and extract date parts in UTC, then create local date
+    const isoDate = new Date(dateString);
+    if (isNaN(isoDate.getTime())) return undefined;
+    // Create a new date using the UTC date components as local
+    date = new Date(isoDate.getUTCFullYear(), isoDate.getUTCMonth(), isoDate.getUTCDate());
+  } else {
+    // Date-only string (YYYY-MM-DD) - add time component to force local interpretation
+    date = new Date(dateString + 'T00:00:00');
+  }
+
   // Return undefined if invalid date
   if (isNaN(date.getTime())) return undefined;
   return date;
