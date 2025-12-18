@@ -178,6 +178,11 @@
       "name": "CHECK Constraint Alignment",
       "description": "When multiple tables have CHECK constraints for the same enum (like roles), keep them synchronized. If production_tasks supports 8 roles but task_library only allows 4, task creation will fail or fall back incorrectly.",
       "files": ["supabase/migrations/20251218000002_add_researcher_roles_to_task_library.sql"]
+    },
+    {
+      "name": "Universal Date Parsing Pattern",
+      "description": "Date parsing must handle multiple formats: 1) Date-only strings (YYYY-MM-DD) from DATE columns - append T00:00:00 for local interpretation, 2) Full ISO timestamps from TIMESTAMPTZ columns - parse and extract UTC components. Check for 'T' in string to determine format.",
+      "files": ["src/components/production/production-card-modal.tsx", "src/components/production/kanban-board.tsx", "src/components/production/task-detail-dialog.tsx"]
     }
   ],
   "last_updated": "2025-12-18",
@@ -208,6 +213,15 @@
       "fix": "1) Validate parsed date with isNaN(date.getTime()), 2) Create safe formatLocalDate() helper that returns empty string for invalid dates",
       "lesson": "Always validate Date objects before formatting. Use isNaN(date.getTime()) to detect invalid dates. Never use non-null assertion (!) on potentially undefined date values.",
       "files": ["src/components/production/production-card-modal.tsx"]
+    },
+    {
+      "date": "2025-12-18",
+      "bug": "Task due dates showing calendar icon but no date text",
+      "symptom": "Production card modal showed calendar icons next to tasks but the due date text was blank",
+      "root_cause": "task.due_date contained full ISO timestamps (2025-12-23T05:00:00.000Z) from database. parseLocalDate appended 'T00:00:00' creating invalid string '2025-12-23T05:00:00.000ZT00:00:00'",
+      "fix": "Check if dateString.includes('T') - if so, parse as ISO and extract UTC date parts; if not, append T00:00:00 for local interpretation",
+      "lesson": "Date parsing must handle BOTH date-only strings (YYYY-MM-DD) AND full ISO timestamps. Database columns may return either format depending on type (DATE vs TIMESTAMPTZ).",
+      "files": ["src/components/production/production-card-modal.tsx", "src/components/production/kanban-board.tsx", "src/components/production/task-detail-dialog.tsx"]
     },
     {
       "date": "2025-12-16",
