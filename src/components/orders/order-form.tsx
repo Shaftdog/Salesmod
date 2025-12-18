@@ -289,7 +289,7 @@ export function OrderForm({ appraisers, clients: initialClients, initialValues }
       console.log('Creating order with currentUser:', currentUser.id)
       const newOrder = await createOrder({
         org_id: currentUser.id,
-        status: 'new',
+        status: 'INTAKE',
         priority: data.priority,
         order_type: data.orderType,
         property_address: data.propertyAddress,

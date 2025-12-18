@@ -37,7 +37,7 @@ Review and validate:
 - Check database state after migrations
 
 ### 5. Automated Testing (playwright-tester agent)
-Test the feature/changes at http://localhost:3000:
+Test the feature/changes at http://localhost:9002:
 - All user workflows and interactions
 - Happy path scenarios
 - Error conditions and validation

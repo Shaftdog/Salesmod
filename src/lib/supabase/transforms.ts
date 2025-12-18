@@ -14,6 +14,8 @@ import type {
   Case,
   CaseComment,
   PartyRole,
+  Property,
+  PropertyUnit,
   SkillType,
   ServiceTerritory,
   BookableResource,
@@ -55,6 +57,45 @@ export function transformClient(dbClient: any): Client {
     billingEmailConfirmed: dbClient.billing_email_confirmed ?? false,
     role: dbClient.party_roles ? transformPartyRole(dbClient.party_roles) : undefined,
     billingContact: dbClient.billing_contact ? transformContact(dbClient.billing_contact) : undefined,
+  }
+}
+
+export function transformProperty(dbProperty: any): Property {
+  return {
+    id: dbProperty.id,
+    orgId: dbProperty.org_id,
+    addressLine1: dbProperty.address_line_1,
+    addressLine2: dbProperty.address_line_2,
+    city: dbProperty.city,
+    state: dbProperty.state,
+    postalCode: dbProperty.postal_code,
+    country: dbProperty.country,
+    propertyType: dbProperty.property_type,
+    apn: dbProperty.apn,
+    latitude: dbProperty.latitude,
+    longitude: dbProperty.longitude,
+    gla: dbProperty.gla,
+    lotSize: dbProperty.lot_size,
+    yearBuilt: dbProperty.year_built,
+    addrHash: dbProperty.addr_hash,
+    validationStatus: dbProperty.validation_status,
+    verificationSource: dbProperty.verification_source,
+    props: dbProperty.props,
+    createdAt: dbProperty.created_at,
+    updatedAt: dbProperty.updated_at,
+  }
+}
+
+export function transformPropertyUnit(dbUnit: any): PropertyUnit {
+  return {
+    id: dbUnit.id,
+    propertyId: dbUnit.property_id,
+    unitIdentifier: dbUnit.unit_identifier,
+    unitNorm: dbUnit.unit_norm,
+    unitType: dbUnit.unit_type,
+    props: dbUnit.props,
+    createdAt: dbUnit.created_at,
+    updatedAt: dbUnit.updated_at,
   }
 }
 
@@ -125,6 +166,8 @@ export function transformOrder(dbOrder: any): Order {
     props: dbOrder.props,
     client: dbOrder.client ? transformClient(dbOrder.client) : undefined,
     assignee: dbOrder.assignee ? transformUser(dbOrder.assignee) : undefined,
+    property: dbOrder.property ? transformProperty(dbOrder.property) : undefined,
+    propertyUnit: dbOrder.property_unit ? transformPropertyUnit(dbOrder.property_unit) : undefined,
   }
 }
 

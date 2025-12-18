@@ -20,6 +20,8 @@ export const PRODUCTION_STAGES = [
   'CORRECTION',
   'REVISION',
   'WORKFILE',
+  'ON_HOLD',
+  'CANCELLED',
 ] as const;
 
 export const PRODUCTION_STAGE_LABELS: Record<ProductionStage, string> = {
@@ -33,6 +35,8 @@ export const PRODUCTION_STAGE_LABELS: Record<ProductionStage, string> = {
   CORRECTION: 'Correction',
   REVISION: 'Revision',
   WORKFILE: 'Workfile',
+  ON_HOLD: 'On Hold',
+  CANCELLED: 'Cancelled',
 };
 
 export const PRODUCTION_STAGE_COLORS: Record<ProductionStage, string> = {
@@ -46,6 +50,8 @@ export const PRODUCTION_STAGE_COLORS: Record<ProductionStage, string> = {
   CORRECTION: 'bg-red-50 border-red-200 text-red-700',
   REVISION: 'bg-pink-50 border-pink-200 text-pink-700',
   WORKFILE: 'bg-gray-50 border-gray-200 text-gray-700',
+  ON_HOLD: 'bg-amber-50 border-amber-300 text-amber-700',
+  CANCELLED: 'bg-red-100 border-red-300 text-red-800',
 };
 
 export const PRODUCTION_ROLES = [
@@ -354,6 +360,12 @@ export interface ProductionCard {
   assigned_researcher_level_2_id: string | null;
   assigned_researcher_level_3_id: string | null;
   assigned_inspector_id: string | null;
+  // Hold/Cancel tracking
+  hold_reason: string | null;
+  cancelled_reason: string | null;
+  previous_stage: ProductionStage | null;
+  held_at: string | null;
+  cancelled_at: string | null;
   // Timestamps
   started_at: string | null;
   completed_at: string | null;
@@ -469,7 +481,19 @@ export interface ProductionCardWithOrder extends ProductionCard {
     order_number: string | null;
     status: string;
     property_address: string | null;
-    // Add more order fields as needed
+    property_city: string | null;
+    property_state: string | null;
+    property_zip: string | null;
+    property_id: string | null;
+    inspection_date: string | null;
+    borrower_name: string | null;
+    borrower_email: string | null;
+    borrower_phone: string | null;
+    property_contact_name: string | null;
+    property_contact_phone: string | null;
+    property_contact_email: string | null;
+    access_instructions: string | null;
+    special_instructions: string | null;
   };
   template: {
     id: string;
@@ -747,3 +771,109 @@ export function isTaskDueToday(task: { due_date: string | null; status: TaskStat
     dueDate.getDate() === today.getDate()
   );
 }
+
+// ============================================================================
+// CALENDAR VIEW TYPES
+// ============================================================================
+
+export type CalendarViewMode = 'month' | 'week';
+
+export interface CalendarItem {
+  id: string;
+  title: string;
+  dueDate: string;
+  type: 'card' | 'task';
+  priority: CardPriority;
+  stage: ProductionStage;
+  orderNumber?: string;
+  propertyAddress?: string;
+  cardId: string; // Always set - for tasks, this is the parent card ID
+  assignedTo?: string;
+}
+
+export interface CalendarData {
+  items: CalendarItem[];
+  cards: ProductionCardWithOrder[];
+  startDate: string;
+  endDate: string;
+}
+
+// ============================================================================
+// WORKLOAD CHART TYPES
+// ============================================================================
+
+export type WorkloadMetric = 'task_count' | 'hours';
+export type WorkloadPeriod = 'day' | 'week' | 'month';
+
+export interface ResourceWorkload {
+  resourceId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  roles: ProductionRole[];
+  taskCount: number;
+  estimatedHours: number;
+  maxDailyTasks: number;
+  maxWeeklyHours: number;
+  capacityUsedPercent: number;
+  isOverloaded: boolean;
+}
+
+export interface WorkloadData {
+  resources: ResourceWorkload[];
+  period: WorkloadPeriod;
+  startDate: string;
+  endDate: string;
+}
+
+// ============================================================================
+// SLA CONFIGURATION TYPES
+// ============================================================================
+
+export const SLA_REFERENCE_POINTS = [
+  'stage_entry',
+  'card_created',
+  'inspection_before',
+  'inspection_after',
+] as const;
+
+export type SLAReferencePoint = (typeof SLA_REFERENCE_POINTS)[number];
+
+export const SLA_REFERENCE_POINT_LABELS: Record<SLAReferencePoint, string> = {
+  stage_entry: 'Days after entering stage',
+  card_created: 'Days after card created',
+  inspection_before: 'Days before inspection',
+  inspection_after: 'Days after inspection',
+};
+
+export interface ProductionSLAConfig {
+  id: string;
+  tenant_id: string;
+  stage: ProductionStage;
+  sla_days: number;
+  reference_point: SLAReferencePoint;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SLAConfigInput {
+  stage: ProductionStage;
+  sla_days: number;
+  reference_point: SLAReferencePoint;
+}
+
+// Default SLA configuration
+export const DEFAULT_SLA_CONFIG: Record<ProductionStage, { sla_days: number; reference_point: SLAReferencePoint }> = {
+  INTAKE: { sla_days: 1, reference_point: 'card_created' },
+  SCHEDULING: { sla_days: 1, reference_point: 'stage_entry' },
+  SCHEDULED: { sla_days: 1, reference_point: 'inspection_before' },
+  INSPECTED: { sla_days: 1, reference_point: 'inspection_after' },
+  FINALIZATION: { sla_days: 1, reference_point: 'inspection_after' },
+  READY_FOR_DELIVERY: { sla_days: 1, reference_point: 'inspection_after' },
+  DELIVERED: { sla_days: 1, reference_point: 'stage_entry' },
+  CORRECTION: { sla_days: 2, reference_point: 'stage_entry' },
+  REVISION: { sla_days: 2, reference_point: 'stage_entry' },
+  WORKFILE: { sla_days: 1, reference_point: 'stage_entry' },
+  ON_HOLD: { sla_days: 0, reference_point: 'stage_entry' },
+  CANCELLED: { sla_days: 0, reference_point: 'stage_entry' },
+};

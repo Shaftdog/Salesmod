@@ -16,8 +16,6 @@ import {
   handleApiError,
   validateRequestBody,
   validateQueryParams,
-  getAuthenticatedOrgId,
-  successResponse,
   createdResponse,
 } from '@/lib/errors/api-errors';
 import type { Product, ProductListResponse } from '@/types/products';
@@ -29,17 +27,32 @@ import type { Product, ProductListResponse } from '@/types/products';
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
+
+    // Get user's tenant_id for filtering
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      return NextResponse.json({ error: 'User has no tenant assigned' }, { status: 403 });
+    }
 
     // Parse and validate query parameters
     const url = new URL(request.url);
     const query = validateQueryParams<ProductListParamsInput>(url, ProductListParamsSchema);
 
-    // Build the base query
+    // Build the base query - filter by tenant_id for multi-tenant isolation
     let supabaseQuery = supabase
       .from('products')
       .select('*', { count: 'exact' })
-      .eq('org_id', orgId);
+      .eq('tenant_id', profile.tenant_id);
 
     // Apply filters
     if (query.category) {
@@ -111,7 +124,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const orgId = await getAuthenticatedOrgId(supabase);
 
     // Get authenticated user
     const {
@@ -143,11 +155,11 @@ export async function POST(request: NextRequest) {
       CreateProductSchema
     );
 
-    // Check if product with same name already exists for this org
+    // Check if product with same name already exists for this tenant
     const { data: existingProduct } = await supabase
       .from('products')
       .select('id, name')
-      .eq('org_id', orgId)
+      .eq('tenant_id', tenantId)
       .eq('name', body.name)
       .single();
 
@@ -164,7 +176,7 @@ export async function POST(request: NextRequest) {
     // Prepare product data
     const productData = {
       tenant_id: tenantId,
-      org_id: orgId,
+      org_id: user.id,  // Use current user's ID as org_id for backwards compatibility
       name: body.name,
       description: body.description || null,
       sku: body.sku || null,

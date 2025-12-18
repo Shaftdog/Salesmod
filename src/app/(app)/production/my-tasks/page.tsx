@@ -26,6 +26,7 @@ import {
   ChevronRight,
   ExternalLink,
   ListTodo,
+  MapPin,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -297,14 +298,20 @@ function TaskCard({
 
             {/* Order & Stage Info */}
             <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-              {(task as any).production_card?.order?.file_number && (
+              {(task as any).production_card?.order?.order_number && (
                 <Link
                   href={`/production/board`}
                   className="flex items-center gap-1 hover:text-foreground"
                 >
                   <FileText className="h-3.5 w-3.5" />
-                  <span>{(task as any).production_card.order.file_number}</span>
+                  <span>{(task as any).production_card.order.order_number}</span>
                 </Link>
+              )}
+              {(task as any).production_card?.order?.property_address && (
+                <span className="flex items-center gap-1 text-muted-foreground">
+                  <MapPin className="h-3.5 w-3.5" />
+                  {(task as any).production_card.order.property_address}
+                </span>
               )}
               <Badge variant="secondary" className="text-xs">
                 {PRODUCTION_STAGE_LABELS[task.stage]}

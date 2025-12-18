@@ -39,6 +39,30 @@
   ],
   "improvements": [
     {
+      "date": "2025-12-18",
+      "area": "Order Detail Page",
+      "change": "Added property relation to order queries, display property with PropertyChip, use same PropertyMap as Property page",
+      "impact": "Order detail page now shows linked property with address, verification badge, and interactive map with satellite toggle"
+    },
+    {
+      "date": "2025-12-16",
+      "area": "Production Board",
+      "change": "Added Edit Team dialog to production card modal for editing role assignments post-creation",
+      "impact": "Users can now reassign Appraiser, Reviewer, Admin, Trainee, Researchers, Inspector after card is created"
+    },
+    {
+      "date": "2025-12-16",
+      "area": "My Tasks Page",
+      "change": "Added order_number and property_address display to task cards",
+      "impact": "Users can see which property/order each task belongs to without opening the card"
+    },
+    {
+      "date": "2025-12-16",
+      "area": "Task Assignment",
+      "change": "Added TaskAssigneePopover to production card modal for reassigning individual tasks",
+      "impact": "Tasks can be reassigned to different team members directly from the Kanban board"
+    },
+    {
       "date": "2025-12-10",
       "area": "Contact Enrichment",
       "change": "Added Apollo.io integration for verified email addresses during research",
@@ -145,10 +169,101 @@
       "name": "Fail-Closed Security Checks",
       "description": "Security checks should fail-closed. If checking `if (SECRET && header !== SECRET)`, an undefined SECRET bypasses the check. Instead: first check if SECRET exists (return 500 if not), then validate header separately.",
       "files": ["src/app/api/cron/agent/route.ts", "src/app/api/cron/gmail/route.ts"]
+    },
+    {
+      "name": "Child Records Need tenant_id",
+      "description": "When database functions create child records (tasks from cards, line items from invoices), they MUST copy tenant_id from parent. RLS policies silently filter records without tenant_id, causing 'invisible data' bugs.",
+      "files": ["supabase/migrations/*"]
+    },
+    {
+      "name": "PostgreSQL Function Updates",
+      "description": "When updating PostgreSQL functions, you may need DROP FUNCTION first if changing return type. Use: DROP FUNCTION IF EXISTS function_name(param_types); before CREATE OR REPLACE.",
+      "files": ["scripts/fix-generate-stage-tasks.js"]
+    },
+    {
+      "name": "Database Credentials Location",
+      "description": "Database connection strings are in .env.local (DATABASE_URL, DIRECT_DATABASE_URL). Don't hardcode credentials. Session pooler (port 5432) works for migrations, transaction pooler (port 6543) requires tenant info.",
+      "files": [".env.local"]
+    },
+    {
+      "name": "Creation-Only vs Editable Fields",
+      "description": "When adding fields that users set at creation time (like role assignments), ALSO add edit functionality. Users need to modify these after creation. Check: does the API PUT endpoint support updating this field?",
+      "files": ["src/app/api/production/cards/[id]/route.ts"]
+    },
+    {
+      "name": "Safe Date Parsing Pattern",
+      "description": "For date-only strings (YYYY-MM-DD), always use: new Date(dateString + 'T00:00:00') to prevent UTC timezone shift. Create parseLocalDate() and formatLocalDate() helpers. Validate with isNaN(date.getTime()). Never use non-null assertion on dates.",
+      "files": ["src/components/production/production-card-modal.tsx"]
+    },
+    {
+      "name": "Migration Function Execution",
+      "description": "When migrations create setup functions (initialize_defaults, seed_data), the function must be CALLED in the migration or separately executed. Just CREATE FUNCTION is not enough - data won't exist until the function runs.",
+      "files": ["supabase/migrations/20251218000000_add_production_sla_config.sql"]
+    },
+    {
+      "name": "CHECK Constraint Alignment",
+      "description": "When multiple tables have CHECK constraints for the same enum (like roles), keep them synchronized. If production_tasks supports 8 roles but task_library only allows 4, task creation will fail or fall back incorrectly.",
+      "files": ["supabase/migrations/20251218000002_add_researcher_roles_to_task_library.sql"]
+    },
+    {
+      "name": "Universal Date Parsing Pattern",
+      "description": "Date parsing must handle multiple formats: 1) Date-only strings (YYYY-MM-DD) from DATE columns - append T00:00:00 for local interpretation, 2) Full ISO timestamps from TIMESTAMPTZ columns - parse and extract UTC components. Check for 'T' in string to determine format.",
+      "files": ["src/components/production/production-card-modal.tsx", "src/components/production/kanban-board.tsx", "src/components/production/task-detail-dialog.tsx"]
+    },
+    {
+      "name": "Google Maps with @vis.gl/react-google-maps",
+      "description": "1) Use AdvancedMarker, not Marker (deprecated since Feb 2024). 2) mapId can be any string like 'property-map' - doesn't need Google Cloud Console ID for basic use. 3) Map components MUST have explicit height (minHeight or fixed px) - h-full alone won't work if parent height is undefined. 4) Use mapTypeId for roadmap/satellite toggle. 5) gestureHandling='greedy' for full control.",
+      "files": ["src/components/properties/property-map.tsx", "src/components/orders/order-map.tsx"]
+    },
+    {
+      "name": "Nested Link Hydration Error",
+      "description": "HTML forbids <a> inside <a>. When a component with Link is used inside another Link wrapper (like a card), add disableLink prop to render <span> instead. Error shows as 'In HTML, <a> cannot be a descendant of <a>. This will cause a hydration error.'",
+      "files": ["src/components/orders/property-chip.tsx", "src/components/orders/order-card.tsx"]
+    },
+    {
+      "name": "Supabase Relations Must Be Explicitly Selected",
+      "description": "Having a foreign key (property_id) does NOT auto-load the relation. Must: 1) Add 'property:properties(*)' to select query, 2) Add transform function (transformProperty), 3) Update parent transform to call it (transformOrder). Check: if order.propertyId exists but order.property is undefined, the relation isn't being fetched.",
+      "files": ["src/hooks/use-orders.ts", "src/lib/supabase/transforms.ts"]
     }
   ],
-  "last_updated": "2025-12-17",
+  "last_updated": "2025-12-18",
   "critical_bugs": [
+    {
+      "date": "2025-12-18",
+      "bug": "SLA due dates not being set on production tasks",
+      "symptom": "Tasks created when card moves to new stage had 'Due Date: Not set' despite SLA configuration existing in migration",
+      "root_cause": "Migration created initialize_production_sla_defaults() function but never CALLED it for existing tenants. production_sla_config table was empty.",
+      "fix": "1) Run initialize_production_sla_defaults(tenant_id) for each tenant, 2) Backfill existing tasks with UPDATE...SET due_date = calculate_task_due_date(...)",
+      "lesson": "Migration functions that SETUP data (defaults, seeds) must be EXECUTED, not just created. Add INSERT statements or call the function in the migration itself.",
+      "files": ["supabase/migrations/20251218000000_add_production_sla_config.sql", "init-sla-defaults.js"]
+    },
+    {
+      "date": "2025-12-18",
+      "bug": "Due dates showing wrong day (Dec 23 displays as Dec 22)",
+      "symptom": "When user enters December 23 as due date, it shows December 22 on the card",
+      "root_cause": "JavaScript new Date('2025-12-23') interprets date-only strings as UTC midnight. In US Eastern time (UTC-5), UTC midnight becomes previous day at 7pm local.",
+      "fix": "Append T00:00:00 to force local timezone: new Date('2025-12-23T00:00:00') creates local midnight instead of UTC midnight",
+      "lesson": "NEVER use new Date() directly on date-only strings (YYYY-MM-DD). Always append 'T00:00:00' or use a parseLocalDate helper function.",
+      "files": ["src/components/production/production-card-modal.tsx", "src/components/production/kanban-board.tsx", "src/components/production/task-detail-dialog.tsx"]
+    },
+    {
+      "date": "2025-12-18",
+      "bug": "RangeError: Invalid time value when formatting dates",
+      "symptom": "Runtime error 'Invalid time value' when opening production card modal",
+      "root_cause": "Some task.due_date values were empty strings or malformed. parseLocalDate returned undefined but code used non-null assertion (!) and tried to format it.",
+      "fix": "1) Validate parsed date with isNaN(date.getTime()), 2) Create safe formatLocalDate() helper that returns empty string for invalid dates",
+      "lesson": "Always validate Date objects before formatting. Use isNaN(date.getTime()) to detect invalid dates. Never use non-null assertion (!) on potentially undefined date values.",
+      "files": ["src/components/production/production-card-modal.tsx"]
+    },
+    {
+      "date": "2025-12-18",
+      "bug": "Task due dates showing calendar icon but no date text",
+      "symptom": "Production card modal showed calendar icons next to tasks but the due date text was blank",
+      "root_cause": "task.due_date contained full ISO timestamps (2025-12-23T05:00:00.000Z) from database. parseLocalDate appended 'T00:00:00' creating invalid string '2025-12-23T05:00:00.000ZT00:00:00'",
+      "fix": "Check if dateString.includes('T') - if so, parse as ISO and extract UTC date parts; if not, append T00:00:00 for local interpretation",
+      "lesson": "Date parsing must handle BOTH date-only strings (YYYY-MM-DD) AND full ISO timestamps. Database columns may return either format depending on type (DATE vs TIMESTAMPTZ).",
+      "files": ["src/components/production/production-card-modal.tsx", "src/components/production/kanban-board.tsx", "src/components/production/task-detail-dialog.tsx"]
+    },
     {
       "date": "2025-12-17",
       "bug": "CRON_SECRET validation bypass",
@@ -166,6 +281,24 @@
       "fix": "Use intermediate variable: `GET DIAGNOSTICS v_row_count = ROW_COUNT; v_released := v_row_count > 0;`",
       "lesson": "GET DIAGNOSTICS only assigns special variables (ROW_COUNT, etc.) to regular variables. Boolean expressions must be done separately.",
       "files": ["supabase/migrations/20251217000000_autonomous_agent_system.sql"]
+    },
+    {
+      "date": "2025-12-16",
+      "bug": "Production tasks not showing in Kanban board modal",
+      "symptom": "Cards showed '0 of 4 tasks' but task list was empty when clicking on card",
+      "root_cause": "generate_stage_tasks function created tasks WITHOUT tenant_id. RLS policy production_tasks_tenant_isolation filtered them out.",
+      "fix": "1) Backfill existing tasks with UPDATE...FROM production_cards, 2) Update generate_stage_tasks to include tenant_id in INSERT, 3) Add trigger auto_set_production_task_tenant_id as fallback",
+      "lesson": "When creating child records (tasks) from parent records (cards), ALWAYS copy tenant_id. RLS policies silently filter records without proper tenant_id.",
+      "files": ["supabase/migrations/20251216000000_fix_production_tasks_tenant_id.sql"]
+    },
+    {
+      "date": "2025-12-16",
+      "bug": "Order creation failing with constraint violation",
+      "symptom": "Error: 'new row for relation orders violates check constraint orders_status_check'",
+      "root_cause": "Order forms used legacy status values ('new', 'pending') but database constraint only allows production stages (INTAKE, SCHEDULING, etc.)",
+      "fix": "Changed all order creation forms to use status: 'INTAKE' instead of 'new' or 'pending'",
+      "lesson": "When database constraints are updated (like orders_status_check), search entire codebase for hardcoded status values that may now be invalid.",
+      "files": ["src/components/orders/order-form.tsx", "src/app/client-portal/orders/new/page.tsx"]
     },
     {
       "date": "2025-12-14",

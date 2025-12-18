@@ -74,13 +74,14 @@ export function ScheduleInspectionDialog({
       const scheduledEnd = addHours(scheduledStart, 2);
 
       // Create booking linked to this order
+      // Note: resourceId is not passed here - the appraiser can be assigned later
+      // through the field services interface if they have a bookable_resources record
       await createBooking({
         orderId: order.id,
         bookingType: 'inspection',
-        resourceId: order.assignedTo || undefined, // Assign to appraiser if already assigned
         scheduledStart: scheduledStart.toISOString(),
         scheduledEnd: scheduledEnd.toISOString(),
-        status: 'scheduled',
+        // Note: status is calculated by API based on conflicts (not sent from frontend)
         // Pre-populate property data from order
         propertyAddress: order.propertyAddress,
         propertyCity: order.propertyCity || undefined,

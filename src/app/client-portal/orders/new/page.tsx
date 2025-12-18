@@ -117,7 +117,7 @@ export default function NewOrderPage() {
         .insert({
           property_id: property.id,
           tenant_id: profile.tenant_id,
-          status: "pending",
+          status: "INTAKE",
           order_type: data.orderType,
           ordered_date: new Date().toISOString(),
           due_date: data.dueDate,

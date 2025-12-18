@@ -72,10 +72,10 @@ export function OrderCard({ order }: OrderCardProps) {
                                 {order.orderNumber}
                             </CardTitle>
                             <CardDescription>
-                                {order.propertyId ? (
-                                    <PropertyChipInline order={order} />
+                                {order.property ? (
+                                    <PropertyChipInline order={order} disableLink />
                                 ) : (
-                                    order.propertyAddress
+                                    order.propertyAddress || "No property"
                                 )}
                             </CardDescription>
                         </div>

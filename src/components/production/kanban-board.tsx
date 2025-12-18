@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Calendar, User, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Loader2, Calendar, CalendarCheck, User, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -19,6 +19,38 @@ import {
   calculateCompletionPercent,
 } from '@/types/production';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
+
+// Helper to parse date strings as local dates, not UTC
+// Handles both date-only strings (YYYY-MM-DD) and full ISO timestamps
+// This prevents timezone issues where Dec 23 becomes Dec 22
+function parseLocalDate(dateString: string | null | undefined): Date | undefined {
+  if (!dateString) return undefined;
+
+  let date: Date;
+
+  // Check if it's a full ISO timestamp (contains 'T')
+  if (dateString.includes('T')) {
+    // Parse the ISO timestamp and extract date parts in UTC, then create local date
+    const isoDate = new Date(dateString);
+    if (isNaN(isoDate.getTime())) return undefined;
+    // Create a new date using the UTC date components as local
+    date = new Date(isoDate.getUTCFullYear(), isoDate.getUTCMonth(), isoDate.getUTCDate());
+  } else {
+    // Date-only string (YYYY-MM-DD) - add time component to force local interpretation
+    date = new Date(dateString + 'T00:00:00');
+  }
+
+  // Return undefined if invalid date
+  if (isNaN(date.getTime())) return undefined;
+  return date;
+}
+
+// Safe date formatter that handles null/invalid dates
+function formatLocalDate(dateString: string | null | undefined, formatStr: string): string {
+  const date = parseLocalDate(dateString);
+  if (!date) return '';
+  return format(date, formatStr);
+}
 
 interface ProductionKanbanBoardProps {
   onCardClick?: (card: ProductionCardWithOrder) => void;
@@ -47,9 +79,32 @@ export function ProductionKanbanBoard({ onCardClick }: ProductionKanbanBoardProp
       return;
     }
 
-    // Get adjacent stages for validation
-    const currentIndex = PRODUCTION_STAGES.indexOf(draggedCard.current_stage);
-    const targetIndex = PRODUCTION_STAGES.indexOf(targetStage);
+    // Don't allow dragging from ON_HOLD or CANCELLED
+    if (draggedCard.current_stage === 'ON_HOLD' || draggedCard.current_stage === 'CANCELLED') {
+      toast({
+        title: 'Cannot Move',
+        description: 'Use the detail panel to resume or restore this order.',
+        variant: 'destructive',
+      });
+      setDraggedCard(null);
+      return;
+    }
+
+    // Don't allow dropping into ON_HOLD or CANCELLED via drag
+    if (targetStage === 'ON_HOLD' || targetStage === 'CANCELLED') {
+      toast({
+        title: 'Cannot Move',
+        description: 'Use the detail panel to hold or cancel this order.',
+        variant: 'destructive',
+      });
+      setDraggedCard(null);
+      return;
+    }
+
+    // Get adjacent stages for validation (excluding ON_HOLD and CANCELLED from index calculation)
+    const workflowStages = PRODUCTION_STAGES.filter(s => s !== 'ON_HOLD' && s !== 'CANCELLED');
+    const currentIndex = workflowStages.indexOf(draggedCard.current_stage);
+    const targetIndex = workflowStages.indexOf(targetStage);
 
     // For now, only allow moving to adjacent stages
     // In the future, could allow skipping with confirmation
@@ -211,7 +266,8 @@ function AssignedResourcesDisplay({ card }: { card: ProductionCardWithOrder }) {
 
 function ProductionCardItem({ card, onDragStart, onClick, isDragging }: ProductionCardItemProps) {
   const completionPercent = calculateCompletionPercent(card.completed_tasks, card.total_tasks);
-  const isOverdue = card.due_date && isPast(new Date(card.due_date));
+  const parsedDueDate = parseLocalDate(card.due_date);
+  const isOverdue = parsedDueDate && isPast(parsedDueDate);
 
   return (
     <Card
@@ -246,6 +302,19 @@ function ProductionCardItem({ card, onDragStart, onClick, isDragging }: Producti
           </Badge>
         </div>
 
+        {/* Inspection Date - Prominent Display */}
+        {card.order?.inspection_date && (
+          <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-teal-50 border border-teal-200">
+            <CalendarCheck className="h-4 w-4 text-teal-600 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-teal-700">Inspection</p>
+              <p className="text-sm font-semibold text-teal-800">
+                {format(new Date(card.order.inspection_date), 'EEE, MMM d')}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Progress Bar */}
         <div className="space-y-1">
           <div className="flex justify-between text-xs text-muted-foreground">
@@ -275,10 +344,10 @@ function ProductionCardItem({ card, onDragStart, onClick, isDragging }: Producti
             <Calendar className="h-3 w-3" />
             <span>
               {isOverdue ? 'Overdue: ' : 'Due: '}
-              {format(new Date(card.due_date), 'MMM d')}
+              {formatLocalDate(card.due_date, 'MMM d')}
             </span>
             <span className="text-xs">
-              ({formatDistanceToNow(new Date(card.due_date), { addSuffix: true })})
+              {parseLocalDate(card.due_date) && `(${formatDistanceToNow(parseLocalDate(card.due_date)!, { addSuffix: true })})`}
             </span>
           </div>
         )}

@@ -29,7 +29,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { EditInvoiceDialog } from '@/components/invoicing/edit-invoice-dialog';
 import { PrintInvoiceDialog } from '@/components/invoicing/print-invoice-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { INVOICE_STATUS_TRANSITIONS, type InvoiceStatus } from '@/lib/constants/invoicing';
+import { ALL_INVOICE_STATUSES, type InvoiceStatus } from '@/lib/constants/invoicing';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils/currency';
 import { useForm } from 'react-hook-form';
@@ -239,11 +239,11 @@ export default function InvoiceDetailPage() {
     }
   };
 
-  // Get valid status transitions for current invoice status
+  // Get all statuses except current for manual override
   const getValidTransitions = (): string[] => {
     if (!invoice) return [];
-    const currentStatus = invoice.status as InvoiceStatus;
-    return [...(INVOICE_STATUS_TRANSITIONS[currentStatus] || [])];
+    const currentStatus = invoice.status;
+    return ALL_INVOICE_STATUSES.filter(s => s !== currentStatus);
   };
 
   const formatStatusLabel = (status: string): string => {
@@ -831,8 +831,8 @@ export default function InvoiceDetailPage() {
           onOpenChange={setIsEditDialogOpen}
           onSuccess={() => {
             setIsEditDialogOpen(false);
-            router.refresh();
-            window.location.reload();
+            // Cache is already updated by edit-invoice-dialog via setQueryData
+            // No page reload needed - React Query will re-render with fresh data
           }}
         />
       )}

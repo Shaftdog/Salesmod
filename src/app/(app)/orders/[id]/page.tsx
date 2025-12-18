@@ -42,7 +42,7 @@ import {
 import { OrderTimeline } from "@/components/orders/order-timeline";
 import { Progress } from "@/components/ui/progress";
 import { orderStatuses } from "@/lib/types";
-import { OrderMap } from "@/components/orders/order-map";
+import { PropertyMap } from "@/components/properties/property-map";
 import { formatCurrency } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { PropertyChip } from "@/components/orders/property-chip";
@@ -145,13 +145,15 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                         <div className="space-y-4">
                             <div>
                                 <h3 className="font-semibold">Property</h3>
-                                {order.propertyId ? (
+                                {order.property ? (
                                     <PropertyChip order={order} variant="card" />
-                                ) : (
+                                ) : order.propertyAddress ? (
                                     <div>
                                         <p className="text-sm text-muted-foreground">{order.propertyAddress}</p>
                                         <p className="text-sm text-muted-foreground">{order.propertyCity}, {order.propertyState} {order.propertyZip}</p>
                                     </div>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground italic">No property linked</p>
                                 )}
                             </div>
                             <div>
@@ -174,8 +176,12 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                             </div>
                         </div>
                         <div className="space-y-4">
-                            <div className="min-h-[300px]">
-                                <OrderMap address={fullAddress} />
+                            <div>
+                                <PropertyMap
+                                    latitude={order.property?.latitude || 0}
+                                    longitude={order.property?.longitude || 0}
+                                    address={fullAddress}
+                                />
                             </div>
                             <div className="space-y-4">
                                 <h3 className="font-semibold">Important Dates</h3>

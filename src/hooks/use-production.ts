@@ -26,7 +26,15 @@ import type {
   ProductionResourceInput,
   KanbanBoardData,
 } from '@/types/production'
-import { PRODUCTION_STAGES } from '@/types/production'
+import { PRODUCTION_STAGES, SLA_REFERENCE_POINTS } from '@/types/production'
+import { z } from 'zod'
+
+// Zod schema for SLA config input validation
+const SLAConfigInputSchema = z.object({
+  stage: z.enum(PRODUCTION_STAGES.filter(s => s !== 'ON_HOLD' && s !== 'CANCELLED') as unknown as [string, ...string[]]),
+  sla_days: z.number().int().min(0).max(30),
+  reference_point: z.enum(SLA_REFERENCE_POINTS as unknown as [string, ...string[]]),
+})
 
 // ============================================================================
 // TEMPLATES
@@ -467,7 +475,25 @@ export function useDuplicateProductionTemplate() {
 // Shared select for production cards with all role joins
 const PRODUCTION_CARD_SELECT = `
   *,
-  order:orders(id, order_number, status, property_address),
+  order:orders(
+    id,
+    order_number,
+    status,
+    property_address,
+    property_city,
+    property_state,
+    property_zip,
+    property_id,
+    inspection_date,
+    borrower_name,
+    borrower_email,
+    borrower_phone,
+    property_contact_name,
+    property_contact_phone,
+    property_contact_email,
+    access_instructions,
+    special_instructions
+  ),
   template:production_templates(id, name),
   assigned_appraiser:profiles!production_cards_assigned_appraiser_id_fkey(id, name, email),
   assigned_reviewer:profiles!production_cards_assigned_reviewer_id_fkey(id, name, email),
@@ -946,6 +972,40 @@ export function useCompleteProductionTask() {
   })
 }
 
+export function useDeleteProductionTask() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const supabase = createClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      // Delete the task (also cascades to subtasks via FK)
+      const { error } = await supabase
+        .from('production_tasks')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['production-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['production-cards'] })
+      queryClient.invalidateQueries({ queryKey: ['production-board'] })
+      toast({
+        title: 'Task Deleted',
+        description: 'Task has been removed.',
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to delete task.',
+      })
+    },
+  })
+}
+
 // ============================================================================
 // TIME TRACKING
 // ============================================================================
@@ -1345,6 +1405,150 @@ export function useResolveAlert() {
 }
 
 // ============================================================================
+// ADD TASKS FROM LIBRARY TO CARD
+// ============================================================================
+
+export function useAddTasksToCard() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+
+  return useMutation({
+    mutationFn: async ({ cardId, libraryTaskIds }: { cardId: string; libraryTaskIds: string[] }) => {
+      const response = await fetch(`/api/production/cards/${cardId}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ libraryTaskIds }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to add tasks')
+      }
+
+      return response.json()
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['production-cards'] })
+      queryClient.invalidateQueries({ queryKey: ['production-cards', variables.cardId] })
+      queryClient.invalidateQueries({ queryKey: ['production-board'] })
+      toast({
+        title: 'Tasks Added',
+        description: data.message || `${data.tasks_created} task(s) added to the card.`,
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to add tasks to card.',
+      })
+    },
+  })
+}
+
+// ============================================================================
+// HOLD / CANCEL / RESUME WORKFLOWS
+// ============================================================================
+
+export function useHoldProductionCard() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const supabase = createClient()
+
+  return useMutation({
+    mutationFn: async ({ cardId, holdReason }: { cardId: string; holdReason?: string }) => {
+      const { error } = await supabase.rpc('hold_production_card', {
+        p_card_id: cardId,
+        p_hold_reason: holdReason || null,
+      })
+
+      if (error) throw error
+      return { cardId }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['production-cards'] })
+      queryClient.invalidateQueries({ queryKey: ['production-board'] })
+      toast({
+        title: 'Order On Hold',
+        description: 'Production card has been put on hold.',
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot Put On Hold',
+        description: error.message || 'Failed to put card on hold.',
+      })
+    },
+  })
+}
+
+export function useResumeProductionCard() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const supabase = createClient()
+
+  return useMutation({
+    mutationFn: async ({ cardId }: { cardId: string }) => {
+      const { data, error } = await supabase.rpc('resume_production_card', {
+        p_card_id: cardId,
+      })
+
+      if (error) throw error
+      return { cardId, resumedToStage: data }
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['production-cards'] })
+      queryClient.invalidateQueries({ queryKey: ['production-board'] })
+      toast({
+        title: 'Order Resumed',
+        description: `Production card has been resumed to ${data.resumedToStage} stage.`,
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot Resume',
+        description: error.message || 'Failed to resume card.',
+      })
+    },
+  })
+}
+
+export function useCancelProductionCard() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const supabase = createClient()
+
+  return useMutation({
+    mutationFn: async ({ cardId, cancelReason }: { cardId: string; cancelReason?: string }) => {
+      const { error } = await supabase.rpc('cancel_production_card', {
+        p_card_id: cardId,
+        p_cancel_reason: cancelReason || null,
+      })
+
+      if (error) throw error
+      return { cardId }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['production-cards'] })
+      queryClient.invalidateQueries({ queryKey: ['production-board'] })
+      toast({
+        title: 'Order Cancelled',
+        description: 'Production card has been cancelled.',
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot Cancel',
+        description: error.message || 'Failed to cancel card.',
+      })
+    },
+  })
+}
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
@@ -1360,6 +1564,444 @@ function getStageColor(stage: ProductionStage): string {
     CORRECTION: 'bg-red-50 border-red-200',
     REVISION: 'bg-pink-50 border-pink-200',
     WORKFILE: 'bg-gray-50 border-gray-200',
+    ON_HOLD: 'bg-amber-50 border-amber-300',
+    CANCELLED: 'bg-red-100 border-red-300',
   }
   return colors[stage]
+}
+
+// ============================================================================
+// CALENDAR VIEW
+// ============================================================================
+
+import type {
+  CalendarItem,
+  CalendarData,
+  WorkloadPeriod,
+  ResourceWorkload,
+  WorkloadData,
+  ProductionSLAConfig,
+  SLAConfigInput,
+} from '@/types/production'
+import { DEFAULT_SLA_CONFIG } from '@/types/production'
+
+// Constants for workload calculations
+const BUSINESS_DAYS_PER_WEEK = 5
+const BUSINESS_DAYS_PER_MONTH = 22
+const WEEKS_PER_MONTH = 4.33
+const WEEK_TO_DAY_RATIO = 0.2
+
+// Date format validation regex
+const ISO_DATE_FORMAT = /^\d{4}-\d{2}-\d{2}$/
+
+export function useCalendarData(startDate: Date, endDate: Date) {
+  const supabase = createClient()
+
+  return useQuery({
+    queryKey: ['production-calendar', startDate.toISOString(), endDate.toISOString()],
+    queryFn: async () => {
+      // Validate input dates
+      if (!(startDate instanceof Date) || isNaN(startDate.getTime())) {
+        throw new Error('Invalid startDate: must be a valid Date object')
+      }
+      if (!(endDate instanceof Date) || isNaN(endDate.getTime())) {
+        throw new Error('Invalid endDate: must be a valid Date object')
+      }
+
+      // Format dates for server-side query
+      const startISO = startDate.toISOString().split('T')[0]
+      const endISO = endDate.toISOString().split('T')[0]
+
+      // Validate date format
+      if (!ISO_DATE_FORMAT.test(startISO)) {
+        throw new Error(`Invalid startISO format: ${startISO}`)
+      }
+      if (!ISO_DATE_FORMAT.test(endISO)) {
+        throw new Error(`Invalid endISO format: ${endISO}`)
+      }
+
+      // Fetch cards with due dates in range
+      const { data: cards, error: cardsError } = await supabase
+        .from('production_cards')
+        .select(`
+          *,
+          order:orders(id, order_number, status, property_address),
+          template:production_templates(id, name),
+          assigned_appraiser:profiles!production_cards_assigned_appraiser_id_fkey(id, name, email),
+          assigned_reviewer:profiles!production_cards_assigned_reviewer_id_fkey(id, name, email),
+          assigned_admin:profiles!production_cards_assigned_admin_id_fkey(id, name, email),
+          assigned_trainee:profiles!production_cards_assigned_trainee_id_fkey(id, name, email),
+          assigned_researcher_level_1:profiles!production_cards_assigned_researcher_level_1_id_fkey(id, name, email),
+          assigned_researcher_level_2:profiles!production_cards_assigned_researcher_level_2_id_fkey(id, name, email),
+          assigned_researcher_level_3:profiles!production_cards_assigned_researcher_level_3_id_fkey(id, name, email),
+          assigned_inspector:profiles!production_cards_assigned_inspector_id_fkey(id, name, email)
+        `)
+        .gte('due_date', startISO)
+        .lte('due_date', endISO)
+        .is('completed_at', null) // Only active cards
+
+      if (cardsError) throw cardsError
+
+      // Get card IDs for task query
+      const cardIds = cards?.map(c => c.id) || []
+
+      // Fetch tasks with due dates in range (including subtasks)
+      // Note: We query tasks with due_date in range, without filtering by parent_task_id
+      const { data: tasks, error: tasksError } = await supabase
+        .from('production_tasks')
+        .select(`
+          *,
+          production_card:production_cards(
+            id, order_id, current_stage, priority, due_date,
+            order:orders(id, order_number, property_address)
+          )
+        `)
+        .gte('due_date', startDate.toISOString())
+        .lte('due_date', endDate.toISOString())
+        .in('status', ['pending', 'in_progress'])
+
+      if (tasksError) throw tasksError
+
+      // Build calendar items
+      const items: CalendarItem[] = []
+
+      // Add card items
+      cards?.forEach((card) => {
+        if (card.due_date) {
+          items.push({
+            id: `card-${card.id}`,
+            title: card.order?.property_address || `Order #${card.order?.order_number}`,
+            dueDate: card.due_date,
+            type: 'card',
+            priority: card.priority,
+            stage: card.current_stage,
+            orderNumber: card.order?.order_number || undefined,
+            propertyAddress: card.order?.property_address || undefined,
+            cardId: card.id,
+          })
+        }
+      })
+
+      // Add task items
+      tasks?.forEach((task) => {
+        if (task.due_date && task.production_card) {
+          items.push({
+            id: `task-${task.id}`,
+            title: task.title,
+            dueDate: task.due_date,
+            type: 'task',
+            priority: task.production_card.priority || 'normal',
+            stage: task.stage,
+            orderNumber: task.production_card.order?.order_number || undefined,
+            propertyAddress: task.production_card.order?.property_address || undefined,
+            cardId: task.production_card_id,
+            assignedTo: task.assigned_to || undefined,
+          })
+        }
+      })
+
+      return {
+        items,
+        cards: cards as ProductionCardWithOrder[],
+        startDate: startISO,
+        endDate: endISO,
+      } as CalendarData
+    },
+    staleTime: 1000 * 60, // 1 minute
+    refetchInterval: 1000 * 60 * 2, // Refetch every 2 minutes
+  })
+}
+
+// ============================================================================
+// WORKLOAD CHART
+// ============================================================================
+
+export function useWorkloadData(period: WorkloadPeriod, selectedDate: Date) {
+  const supabase = createClient()
+
+  return useQuery({
+    queryKey: ['production-workload', period, selectedDate.toISOString()],
+    queryFn: async () => {
+      // Validate input date
+      if (!(selectedDate instanceof Date) || isNaN(selectedDate.getTime())) {
+        throw new Error('Invalid selectedDate: must be a valid Date object')
+      }
+
+      // Calculate date range based on period
+      let startDate: Date
+      let endDate: Date
+
+      switch (period) {
+        case 'day':
+          startDate = new Date(selectedDate)
+          startDate.setHours(0, 0, 0, 0)
+          endDate = new Date(selectedDate)
+          endDate.setHours(23, 59, 59, 999)
+          break
+        case 'week':
+          // Start of week (Sunday)
+          startDate = new Date(selectedDate)
+          startDate.setDate(startDate.getDate() - startDate.getDay())
+          startDate.setHours(0, 0, 0, 0)
+          endDate = new Date(startDate)
+          endDate.setDate(endDate.getDate() + 6)
+          endDate.setHours(23, 59, 59, 999)
+          break
+        case 'month':
+          startDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
+          endDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0, 23, 59, 59, 999)
+          break
+      }
+
+      // Fetch all production resources with user info
+      const { data: resources, error: resourcesError } = await supabase
+        .from('production_resources')
+        .select(`
+          *,
+          user:profiles!production_resources_user_id_fkey(id, name, email)
+        `)
+        .eq('is_available', true)
+
+      if (resourcesError) throw resourcesError
+
+      // Fetch all tasks in the date range (including subtasks for accurate workload)
+      const { data: tasks, error: tasksError } = await supabase
+        .from('production_tasks')
+        .select('id, assigned_to, estimated_minutes, status, due_date')
+        .gte('due_date', startDate.toISOString())
+        .lte('due_date', endDate.toISOString())
+        .in('status', ['pending', 'in_progress'])
+
+      if (tasksError) throw tasksError
+
+      // Calculate capacity multiplier based on period
+      const getCapacityMultiplier = (period: WorkloadPeriod): { daily: number; weekly: number } => {
+        switch (period) {
+          case 'day':
+            return { daily: 1, weekly: WEEK_TO_DAY_RATIO } // 1 day, ~20% of week
+          case 'week':
+            return { daily: BUSINESS_DAYS_PER_WEEK, weekly: 1 } // 5 business days, 1 week
+          case 'month':
+            return { daily: BUSINESS_DAYS_PER_MONTH, weekly: WEEKS_PER_MONTH } // ~22 business days, ~4.33 weeks
+        }
+      }
+
+      const multiplier = getCapacityMultiplier(period)
+
+      // Aggregate workload per resource
+      const workloadByUser: Record<string, { taskCount: number; estimatedMinutes: number }> = {}
+
+      tasks?.forEach((task) => {
+        if (task.assigned_to) {
+          if (!workloadByUser[task.assigned_to]) {
+            workloadByUser[task.assigned_to] = { taskCount: 0, estimatedMinutes: 0 }
+          }
+          workloadByUser[task.assigned_to].taskCount++
+          workloadByUser[task.assigned_to].estimatedMinutes += task.estimated_minutes || 30 // Default 30 min if not set
+        }
+      })
+
+      // Build resource workload data
+      const resourceWorkloads: ResourceWorkload[] = resources?.map((resource) => {
+        const workload = workloadByUser[resource.user_id] || { taskCount: 0, estimatedMinutes: 0 }
+        const estimatedHours = workload.estimatedMinutes / 60
+
+        // Calculate capacity for this period
+        const maxTasks = resource.max_daily_tasks * multiplier.daily
+        const maxHours = resource.max_weekly_hours * multiplier.weekly
+
+        // Calculate capacity used (using whichever metric is higher)
+        const taskCapacityUsed = maxTasks > 0 ? (workload.taskCount / maxTasks) * 100 : 0
+        const hourCapacityUsed = maxHours > 0 ? (estimatedHours / maxHours) * 100 : 0
+        const capacityUsedPercent = Math.max(taskCapacityUsed, hourCapacityUsed)
+
+        return {
+          resourceId: resource.id,
+          userId: resource.user_id,
+          userName: resource.user?.name || resource.user?.email || 'Unknown',
+          userEmail: resource.user?.email || '',
+          roles: resource.roles,
+          taskCount: workload.taskCount,
+          estimatedHours,
+          maxDailyTasks: resource.max_daily_tasks,
+          maxWeeklyHours: resource.max_weekly_hours,
+          capacityUsedPercent,
+          isOverloaded: capacityUsedPercent > 100,
+        }
+      }) || []
+
+      // Sort by capacity used (descending)
+      resourceWorkloads.sort((a, b) => b.capacityUsedPercent - a.capacityUsedPercent)
+
+      return {
+        resources: resourceWorkloads,
+        period,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      } as WorkloadData
+    },
+    staleTime: 1000 * 60, // 1 minute
+    refetchInterval: 1000 * 60 * 2, // Refetch every 2 minutes
+  })
+}
+
+// ============================================================================
+// SLA CONFIGURATION
+// ============================================================================
+
+export function useProductionSLAConfig() {
+  const supabase = createClient()
+
+  return useQuery({
+    queryKey: ['production-sla-config'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('production_sla_config')
+        .select('*')
+        .order('stage')
+
+      if (error) {
+        // If table doesn't exist yet, return defaults
+        if (error.code === '42P01') {
+          return Object.entries(DEFAULT_SLA_CONFIG).map(([stage, config]) => ({
+            id: stage,
+            tenant_id: '',
+            stage,
+            sla_days: config.sla_days,
+            reference_point: config.reference_point,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })) as ProductionSLAConfig[]
+        }
+        throw error
+      }
+
+      // If no config exists, return defaults
+      if (!data || data.length === 0) {
+        return Object.entries(DEFAULT_SLA_CONFIG).map(([stage, config]) => ({
+          id: stage,
+          tenant_id: '',
+          stage,
+          sla_days: config.sla_days,
+          reference_point: config.reference_point,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })) as ProductionSLAConfig[]
+      }
+
+      return data as ProductionSLAConfig[]
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  })
+}
+
+export function useUpdateSLAConfig() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const supabase = createClient()
+
+  return useMutation({
+    mutationFn: async (configs: SLAConfigInput[]) => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      // Get user's tenant_id
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.tenant_id) {
+        throw new Error('User has no tenant_id assigned')
+      }
+
+      // Validate all configs using Zod schema
+      const validatedConfigs = configs.map(config => {
+        const result = SLAConfigInputSchema.safeParse(config)
+        if (!result.success) {
+          throw new Error(`Invalid SLA config: ${result.error.issues.map(i => i.message).join(', ')}`)
+        }
+        return result.data
+      })
+
+      // Upsert each validated config
+      for (const config of validatedConfigs) {
+        const { error } = await supabase
+          .from('production_sla_config')
+          .upsert({
+            tenant_id: profile.tenant_id,
+            stage: config.stage,
+            sla_days: config.sla_days,
+            reference_point: config.reference_point,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'tenant_id,stage'
+          })
+
+        if (error) throw error
+      }
+
+      return configs
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['production-sla-config'] })
+      toast({
+        title: 'SLA Configuration Saved',
+        description: 'Task due date settings have been updated.',
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to save SLA configuration.',
+      })
+    },
+  })
+}
+
+export function useInitializeSLADefaults() {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const supabase = createClient()
+
+  return useMutation({
+    mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      // Get user's tenant_id
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.tenant_id) {
+        throw new Error('User has no tenant_id assigned')
+      }
+
+      // Call the database function to initialize defaults
+      const { error } = await supabase.rpc('initialize_production_sla_defaults', {
+        p_tenant_id: profile.tenant_id
+      })
+
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['production-sla-config'] })
+      toast({
+        title: 'SLA Defaults Initialized',
+        description: 'Default SLA configuration has been set up.',
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to initialize SLA defaults.',
+      })
+    },
+  })
 }
