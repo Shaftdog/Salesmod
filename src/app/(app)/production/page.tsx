@@ -2,45 +2,23 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight, PlusCircle, ClipboardList, CheckCircle, Clock, AlertTriangle, Factory, FileCheck, Library } from "lucide-react";
+import { ArrowUpRight, Factory, FileCheck, Library, Clock, RefreshCw } from "lucide-react";
 import Link from "next/link";
+import { MetricCard, MetricGrid } from "./_components/metric-card";
+import { useProductionMetrics, formatTurnTime, formatCurrency } from "@/hooks/use-production-metrics";
+import { Skeleton } from "@/components/ui/skeleton";
+
+function MetricCardSkeleton() {
+  return (
+    <div className="flex flex-col items-center justify-center p-4 min-h-[140px] bg-zinc-900/80 border border-zinc-700/50 rounded-lg">
+      <Skeleton className="h-3 w-24 mb-3 bg-zinc-700" />
+      <Skeleton className="h-10 w-16 bg-zinc-700" />
+    </div>
+  );
+}
 
 export default function ProductionDashboard() {
-  // Placeholder stats - will be replaced with real data
-  const stats = [
-    {
-      title: "Active Appraisals",
-      value: "0",
-      change: "Start production",
-      note: "in progress",
-      icon: ClipboardList,
-      color: "text-blue-600"
-    },
-    {
-      title: "Completed Today",
-      value: "0",
-      change: "Track daily output",
-      note: "appraisals finished",
-      icon: CheckCircle,
-      color: "text-green-600"
-    },
-    {
-      title: "Average Time",
-      value: "0h",
-      change: "Measure efficiency",
-      note: "per appraisal",
-      icon: Clock,
-      color: "text-orange-600"
-    },
-    {
-      title: "Quality Score",
-      value: "0%",
-      change: "Ensure standards",
-      note: "QC pass rate",
-      icon: FileCheck,
-      color: "text-purple-600"
-    },
-  ];
+  const { data: metrics, isLoading, refetch, isRefetching } = useProductionMetrics();
 
   return (
     <div className="flex-1 space-y-4">
@@ -52,6 +30,14 @@ export default function ProductionDashboard() {
           </p>
         </div>
         <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => refetch()}
+            disabled={isRefetching}
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
+          </Button>
           <Button asChild variant="outline">
             <Link href="/production/templates">
               <FileCheck className="mr-2 h-4 w-4" /> Templates
@@ -75,25 +61,142 @@ export default function ProductionDashboard() {
         </div>
       </div>
 
-      {/* Key Metrics Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map(stat => (
-          <Card key={stat.title}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-muted-foreground">
-                <span className="font-medium">{stat.change}</span> {stat.note}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Production Metrics Dashboard */}
+      <div className="bg-zinc-950 rounded-xl p-4 border border-zinc-800">
+        {isLoading ? (
+          <MetricGrid>
+            {Array.from({ length: 20 }).map((_, i) => (
+              <MetricCardSkeleton key={i} />
+            ))}
+          </MetricGrid>
+        ) : (
+          <MetricGrid>
+            {/* Row 1: Files Status */}
+            <MetricCard
+              title="Files Due to Client"
+              value={metrics?.filesDueToClient ?? 0}
+              filterCount={4}
+              highlight={metrics?.filesDueToClient && metrics.filesDueToClient > 0 ? "yellow" : null}
+            />
+            <MetricCard
+              title="All Due"
+              value={metrics?.allDue ?? 0}
+              filterCount={3}
+              highlight={metrics?.allDue && metrics.allDue > 0 ? "yellow" : null}
+            />
+            <MetricCard
+              title="Files Overdue"
+              value={metrics?.filesOverdue ?? 0}
+              filterCount={3}
+              highlight={metrics?.filesOverdue && metrics.filesOverdue > 0 ? "red" : null}
+            />
+            <MetricCard
+              title="Production Due"
+              value={metrics?.productionDue ?? 0}
+              filterCount={3}
+              highlight={metrics?.productionDue && metrics.productionDue > 0 ? "orange" : null}
+            />
+
+            {/* Row 2: Review Status */}
+            <MetricCard
+              title="Files in Review"
+              value={metrics?.filesInReview ?? 0}
+              filterCount={3}
+            />
+            <MetricCard
+              title="Files Not in Review"
+              value={metrics?.filesNotInReview ?? 0}
+              filterCount={4}
+            />
+            <MetricCard
+              title="Files w/Issues"
+              value={metrics?.filesWithIssues ?? 0}
+              filterCount={3}
+              highlight={metrics?.filesWithIssues && metrics.filesWithIssues > 0 ? "red" : null}
+            />
+            <MetricCard
+              title="Files w/Correction"
+              value={metrics?.filesWithCorrection ?? 0}
+              filterCount={3}
+              highlight={metrics?.filesWithCorrection && metrics.filesWithCorrection > 0 ? "orange" : null}
+            />
+
+            {/* Row 3: Corrections & Cases */}
+            <MetricCard
+              title="Correction Review"
+              value={metrics?.correctionReview ?? 0}
+              filterCount={3}
+            />
+            <MetricCard
+              title="Cases in Progress"
+              value={metrics?.casesInProgress ?? 0}
+              filterCount={2}
+              highlight={metrics?.casesInProgress && metrics.casesInProgress > 0 ? "blue" : null}
+            />
+            <MetricCard
+              title="Cases Impeded"
+              value={metrics?.casesImpeded ?? 0}
+              filterCount={2}
+              highlight={metrics?.casesImpeded && metrics.casesImpeded > 0 ? "red" : null}
+            />
+            <MetricCard
+              title="Cases in Review"
+              value={metrics?.casesInReview ?? 0}
+              filterCount={2}
+            />
+
+            {/* Row 4: Delivery Status */}
+            <MetricCard
+              title="Cases Delivered"
+              value={metrics?.casesDelivered ?? 0}
+              filterCount={4}
+              highlight={metrics?.casesDelivered && metrics.casesDelivered > 0 ? "green" : null}
+            />
+            <MetricCard
+              title="Ready for Delivery"
+              value={metrics?.readyForDelivery ?? 0}
+              filterCount={3}
+              highlight={metrics?.readyForDelivery && metrics.readyForDelivery > 0 ? "green" : null}
+            />
+            <MetricCard
+              title="Orders Delivered Today"
+              value={metrics?.ordersDeliveredToday ?? 0}
+              filterCount={3}
+              highlight={metrics?.ordersDeliveredToday && metrics.ordersDeliveredToday > 0 ? "green" : null}
+            />
+            <MetricCard
+              title="Value Delivered Today"
+              value={formatCurrency(metrics?.valueDeliveredToday ?? 0)}
+              filterCount={3}
+              highlight={metrics?.valueDeliveredToday && metrics.valueDeliveredToday > 0 ? "green" : null}
+            />
+
+            {/* Row 5: 7-Day Stats & Turn Times */}
+            <MetricCard
+              title="# Delivered Past 7 Days"
+              value={metrics?.deliveredPast7Days ?? 0}
+              filterCount={4}
+            />
+            <MetricCard
+              title="Value Delivered Past 7 Days"
+              value={formatCurrency(metrics?.valueDeliveredPast7Days ?? 0)}
+              filterCount={3}
+            />
+            <MetricCard
+              title="Average Turn Time (1 Week)"
+              value={formatTurnTime(metrics?.avgTurnTime1Week ?? null)}
+              filterCount={2}
+            />
+            <MetricCard
+              title="Average Turn Time (Last 30 Days)"
+              value={formatTurnTime(metrics?.avgTurnTime30Days ?? null)}
+              filterCount={2}
+            />
+          </MetricGrid>
+        )}
       </div>
 
-      {/* Coming Soon Cards */}
+      {/* Quick Access Cards */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="hover:bg-accent transition-colors cursor-pointer">
           <Link href="/production/board">
@@ -103,30 +206,33 @@ export default function ProductionDashboard() {
                 Track appraisals through 10 production stages with Kanban board
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex items-center justify-center h-48">
+            <CardContent className="flex items-center justify-center h-32">
               <div className="text-center">
-                <Factory className="h-12 w-12 mx-auto mb-4 text-blue-500" />
-                <p className="text-muted-foreground">View production Kanban board</p>
-                <Button variant="link" className="mt-2">
+                <Factory className="h-10 w-10 mx-auto mb-3 text-blue-500" />
+                <Button variant="link" className="p-0">
                   Open Board <ArrowUpRight className="ml-1 h-4 w-4" />
                 </Button>
               </div>
             </CardContent>
           </Link>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Quality Control Queue</CardTitle>
-            <CardDescription>
-              Appraisals pending quality review
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex items-center justify-center h-48">
-            <div className="text-center text-muted-foreground">
-              <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>QC queue coming soon</p>
-            </div>
-          </CardContent>
+        <Card className="hover:bg-accent transition-colors cursor-pointer">
+          <Link href="/production/quality-control">
+            <CardHeader>
+              <CardTitle>Quality Control Queue</CardTitle>
+              <CardDescription>
+                Appraisals pending quality review
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex items-center justify-center h-32">
+              <div className="text-center">
+                <FileCheck className="h-10 w-10 mx-auto mb-3 text-green-500" />
+                <Button variant="link" className="p-0">
+                  View Queue <ArrowUpRight className="ml-1 h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Link>
         </Card>
       </div>
 
