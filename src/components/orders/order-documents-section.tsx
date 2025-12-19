@@ -25,8 +25,10 @@ import {
   Trash2,
   Loader2,
   ExternalLink,
+  Eye,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { DocumentViewerDialog } from "./document-viewer-dialog";
 
 interface OrderDocumentsSectionProps {
   orderId: string;
@@ -97,6 +99,7 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
   const deleteDocument = useDeleteDocument(orderId);
   const { toast } = useToast();
   const [documentToDelete, setDocumentToDelete] = useState<OrderDocument | null>(null);
+  const [documentToView, setDocumentToView] = useState<OrderDocument | null>(null);
 
   const handleDelete = async () => {
     if (!documentToDelete) return;
@@ -168,12 +171,18 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
           {documents.map((doc) => (
             <div
               key={doc.id}
-              className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+              className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors group"
             >
-              <div className="flex items-center gap-3 flex-1 min-w-0">
+              <button
+                type="button"
+                className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer"
+                onClick={() => setDocumentToView(doc)}
+              >
                 {getFileIcon(doc.mime_type)}
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{doc.file_name}</p>
+                  <p className="font-medium text-sm truncate group-hover:text-primary transition-colors">
+                    {doc.file_name}
+                  </p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{formatFileSize(doc.file_size)}</span>
                     <span>-</span>
@@ -188,14 +197,22 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
                     )}
                   </div>
                 </div>
-              </div>
+              </button>
               <div className="flex items-center gap-2">
                 <Badge className={documentTypeColors[doc.document_type] || "bg-gray-500"}>
                   {documentTypeLabels[doc.document_type] || doc.document_type}
                 </Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setDocumentToView(doc)}
+                  title="View"
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
                 {doc.url && (
                   <Button variant="ghost" size="icon" asChild>
-                    <a href={doc.url} target="_blank" rel="noopener noreferrer" title="Open">
+                    <a href={doc.url} target="_blank" rel="noopener noreferrer" title="Open in new tab">
                       <ExternalLink className="h-4 w-4" />
                     </a>
                   </Button>
@@ -263,6 +280,15 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
     </AlertDialog>
   );
 
+  // Document viewer dialog
+  const viewerDialog = (
+    <DocumentViewerDialog
+      open={!!documentToView}
+      onOpenChange={(open) => !open && setDocumentToView(null)}
+      document={documentToView}
+    />
+  );
+
   // Render based on variant
   if (variant === 'inline') {
     return (
@@ -285,6 +311,7 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
           {documentsContent}
         </div>
         {deleteDialog}
+        {viewerDialog}
       </>
     );
   }
@@ -313,6 +340,7 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
         <CardContent>{documentsContent}</CardContent>
       </Card>
       {deleteDialog}
+      {viewerDialog}
     </>
   );
 }
