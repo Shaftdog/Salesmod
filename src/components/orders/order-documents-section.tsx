@@ -258,17 +258,20 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
     return (
       <>
         <div className="space-y-4">
-          {/* Inline header */}
+          {/* Inline header - matches card variant styling */}
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              {documents && documents.length > 0
-                ? `${documents.length} document${documents.length === 1 ? "" : "s"} uploaded`
-                : "No documents yet"}
-            </p>
+            <div>
+              <h3 className="font-semibold">Documents</h3>
+              <p className="text-sm text-muted-foreground">
+                {documents && documents.length > 0
+                  ? `${documents.length} document${documents.length === 1 ? "" : "s"} uploaded`
+                  : "No documents yet"}
+              </p>
+            </div>
             {onUpload && (
-              <Button size="sm" onClick={onUpload}>
+              <Button onClick={onUpload}>
                 <File className="mr-2 h-4 w-4" />
-                Upload
+                Upload Document
               </Button>
             )}
           </div>
