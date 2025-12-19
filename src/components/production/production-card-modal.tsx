@@ -33,6 +33,8 @@ import {
   PlayCircle,
   Plus,
   Trash2,
+  ListTodo,
+  MessageSquare,
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -106,6 +108,11 @@ import { CancelOrderDialog } from './cancel-order-dialog';
 import { AddTasksDialog } from './add-tasks-dialog';
 import { TaskDetailDialog } from './task-detail-dialog';
 import { ScheduleInspectionDialog } from '@/components/orders/schedule-inspection-dialog';
+import { OrderDocumentsSection } from '@/components/orders/order-documents-section';
+import { UploadDocumentDialog } from '@/components/orders/upload-document-dialog';
+import { OrderNotesSection } from '@/components/orders/order-notes-section';
+import { AddNoteDialog } from '@/components/orders/add-note-dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Order } from '@/lib/types';
 
 interface ProductionCardModalProps {
@@ -134,6 +141,8 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
   const [taskDetailDialogOpen, setTaskDetailDialogOpen] = useState(false);
   const [selectedTaskForDetail, setSelectedTaskForDetail] = useState<any>(null);
   const [scheduleInspectionDialogOpen, setScheduleInspectionDialogOpen] = useState(false);
+  const [uploadDocumentDialogOpen, setUploadDocumentDialogOpen] = useState(false);
+  const [addNoteDialogOpen, setAddNoteDialogOpen] = useState(false);
 
   const card = data?.card;
   const canMoveToNextStage = data?.can_move_to_next_stage;
@@ -474,81 +483,127 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
 
             <Separator className="my-4" />
 
-            {/* Tasks List */}
-            <ScrollArea className="flex-1">
-              <div className="space-y-4 pr-4">
-                {PRODUCTION_STAGES.map(stage => {
-                  const tasks = tasksByStage[stage] || [];
-                  if (tasks.length === 0) return null;
+            {/* Tabbed Content Area */}
+            <Tabs defaultValue="tasks" className="flex-1 flex flex-col min-h-0">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="tasks" className="flex items-center gap-2">
+                  <ListTodo className="h-4 w-4" />
+                  Tasks
+                </TabsTrigger>
+                <TabsTrigger value="documents" className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Documents
+                </TabsTrigger>
+                <TabsTrigger value="notes" className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  Notes
+                </TabsTrigger>
+              </TabsList>
 
-                  const stageTasks = tasks.filter(t => !t.parent_task_id);
-                  const stageCompleted = stageTasks.filter(t => t.status === 'completed').length;
-                  const isCurrentStage = stage === card.current_stage;
-                  const isExpanded = expandedStages.has(stage) || isCurrentStage;
+              {/* Tasks Tab */}
+              <TabsContent value="tasks" className="flex-1 mt-4 overflow-hidden">
+                <ScrollArea className="h-full">
+                  <div className="space-y-4 pr-4">
+                    {PRODUCTION_STAGES.map(stage => {
+                      const tasks = tasksByStage[stage] || [];
+                      if (tasks.length === 0) return null;
 
-                  return (
-                    <div key={stage} className={cn(
-                      'rounded-lg border p-3',
-                      isCurrentStage && 'border-blue-300 bg-blue-50/50'
-                    )}>
-                      <button
-                        onClick={() => toggleStageExpanded(stage)}
-                        className="w-full flex items-center justify-between text-left"
-                      >
-                        <div className="flex items-center gap-2">
-                          <ChevronRight className={cn(
-                            'h-4 w-4 transition-transform',
-                            isExpanded && 'rotate-90'
-                          )} />
-                          <span className="font-medium text-sm">
-                            {PRODUCTION_STAGE_LABELS[stage]}
-                          </span>
-                          {isCurrentStage && (
-                            <Badge variant="default" className="text-xs">Current</Badge>
+                      const stageTasks = tasks.filter(t => !t.parent_task_id);
+                      const stageCompleted = stageTasks.filter(t => t.status === 'completed').length;
+                      const isCurrentStage = stage === card.current_stage;
+                      const isExpanded = expandedStages.has(stage) || isCurrentStage;
+
+                      return (
+                        <div key={stage} className={cn(
+                          'rounded-lg border p-3',
+                          isCurrentStage && 'border-blue-300 bg-blue-50/50'
+                        )}>
+                          <button
+                            onClick={() => toggleStageExpanded(stage)}
+                            className="w-full flex items-center justify-between text-left"
+                          >
+                            <div className="flex items-center gap-2">
+                              <ChevronRight className={cn(
+                                'h-4 w-4 transition-transform',
+                                isExpanded && 'rotate-90'
+                              )} />
+                              <span className="font-medium text-sm">
+                                {PRODUCTION_STAGE_LABELS[stage]}
+                              </span>
+                              {isCurrentStage && (
+                                <Badge variant="default" className="text-xs">Current</Badge>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {stageCompleted}/{stageTasks.length} tasks
+                            </span>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="mt-3 space-y-2">
+                              {stageTasks.map(task => (
+                                <TaskItem
+                                  key={task.id}
+                                  task={task}
+                                  onClick={() => handleTaskClick(task)}
+                                  onComplete={() => handleCompleteTask(task.id)}
+                                  onDelete={() => handleDeleteTask(task.id)}
+                                  onStartTimer={() => handleStartTimer(task.id)}
+                                  onStopTimer={() => task.active_timer && handleStopTimer(task.active_timer.id)}
+                                  onRequestCorrection={() => handleRequestCorrection(task)}
+                                  isCompletingTask={completeTask.isPending}
+                                  isDeletingTask={deleteTask.isPending}
+                                  isStartingTimer={startTimer.isPending}
+                                  isStoppingTimer={stopTimer.isPending}
+                                />
+                              ))}
+                            </div>
                           )}
                         </div>
-                        <span className="text-xs text-muted-foreground">
-                          {stageCompleted}/{stageTasks.length} tasks
-                        </span>
-                      </button>
+                      );
+                    })}
 
-                      {isExpanded && (
-                        <div className="mt-3 space-y-2">
-                          {stageTasks.map(task => (
-                            <TaskItem
-                              key={task.id}
-                              task={task}
-                              onClick={() => handleTaskClick(task)}
-                              onComplete={() => handleCompleteTask(task.id)}
-                              onDelete={() => handleDeleteTask(task.id)}
-                              onStartTimer={() => handleStartTimer(task.id)}
-                              onStopTimer={() => task.active_timer && handleStopTimer(task.active_timer.id)}
-                              onRequestCorrection={() => handleRequestCorrection(task)}
-                              isCompletingTask={completeTask.isPending}
-                              isDeletingTask={deleteTask.isPending}
-                              isStartingTimer={startTimer.isPending}
-                              isStoppingTimer={stopTimer.isPending}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                    {/* Add Tasks Button */}
+                    {card.current_stage !== 'CANCELLED' && (
+                      <Button
+                        variant="outline"
+                        className="w-full border-dashed"
+                        onClick={() => setAddTasksDialogOpen(true)}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Tasks from Library
+                      </Button>
+                    )}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
 
-                {/* Add Tasks Button */}
-                {card.current_stage !== 'CANCELLED' && (
-                  <Button
-                    variant="outline"
-                    className="w-full border-dashed"
-                    onClick={() => setAddTasksDialogOpen(true)}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Tasks from Library
-                  </Button>
-                )}
-              </div>
-            </ScrollArea>
+              {/* Documents Tab */}
+              <TabsContent value="documents" className="flex-1 mt-4 overflow-hidden">
+                <ScrollArea className="h-full">
+                  <div className="pr-4">
+                    <OrderDocumentsSection
+                      orderId={card.order_id}
+                      variant="inline"
+                      onUpload={() => setUploadDocumentDialogOpen(true)}
+                    />
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+
+              {/* Notes Tab */}
+              <TabsContent value="notes" className="flex-1 mt-4 overflow-hidden">
+                <ScrollArea className="h-full">
+                  <div className="pr-4">
+                    <OrderNotesSection
+                      orderId={card.order_id}
+                      variant="inline"
+                      onAddNote={() => setAddNoteDialogOpen(true)}
+                    />
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
           </>
         )}
       </SheetContent>
@@ -658,6 +713,30 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
           } as Order}
           open={scheduleInspectionDialogOpen}
           onOpenChange={setScheduleInspectionDialogOpen}
+        />
+      )}
+
+      {/* Upload Document Dialog */}
+      {card?.order && (
+        <UploadDocumentDialog
+          order={{
+            id: card.order.id,
+            orderNumber: card.order.order_number || '',
+          } as Order}
+          open={uploadDocumentDialogOpen}
+          onOpenChange={setUploadDocumentDialogOpen}
+        />
+      )}
+
+      {/* Add Note Dialog */}
+      {card?.order && (
+        <AddNoteDialog
+          order={{
+            id: card.order.id,
+            orderNumber: card.order.order_number || '',
+          } as Order}
+          open={addNoteDialogOpen}
+          onOpenChange={setAddNoteDialogOpen}
         />
       )}
     </Sheet>
