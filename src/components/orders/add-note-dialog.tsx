@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { useCreateNote, NoteType } from "@/lib/hooks/use-order-notes";
 
 interface AddNoteDialogProps {
   order: Order;
@@ -42,10 +43,10 @@ export function AddNoteDialog({
   open,
   onOpenChange,
 }: AddNoteDialogProps) {
-  const [noteType, setNoteType] = useState("general");
+  const [noteType, setNoteType] = useState<NoteType>("general");
   const [content, setContent] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const createNote = useCreateNote(order.id);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,20 +60,28 @@ export function AddNoteDialog({
       return;
     }
 
-    setIsSubmitting(true);
+    try {
+      await createNote.mutateAsync({
+        note: content.trim(),
+        note_type: noteType,
+        is_internal: false,
+      });
 
-    // Simulate API call (you can implement actual backend later)
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+      toast({
+        title: "Note Added",
+        description: "Your note has been saved successfully",
+      });
 
-    toast({
-      title: "Note Added",
-      description: "Your note has been saved successfully",
-    });
-
-    setContent("");
-    setNoteType("general");
-    setIsSubmitting(false);
-    onOpenChange(false);
+      setContent("");
+      setNoteType("general");
+      onOpenChange(false);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to add note",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -88,7 +97,7 @@ export function AddNoteDialog({
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="noteType">Type</Label>
-              <Select value={noteType} onValueChange={setNoteType}>
+              <Select value={noteType} onValueChange={(value) => setNoteType(value as NoteType)}>
                 <SelectTrigger id="noteType">
                   <SelectValue />
                 </SelectTrigger>
@@ -128,8 +137,8 @@ export function AddNoteDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting || !content.trim()}>
-              {isSubmitting && (
+            <Button type="submit" disabled={createNote.isPending || !content.trim()}>
+              {createNote.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Add Note

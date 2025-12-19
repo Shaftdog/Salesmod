@@ -31,6 +31,7 @@ import { formatDistanceToNow } from "date-fns";
 interface OrderDocumentsSectionProps {
   orderId: string;
   onUpload?: () => void;
+  variant?: 'card' | 'inline';
 }
 
 const documentTypeLabels: Record<string, string> = {
@@ -91,7 +92,7 @@ function formatFileSize(bytes: number): string {
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
 }
 
-export function OrderDocumentsSection({ orderId, onUpload }: OrderDocumentsSectionProps) {
+export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: OrderDocumentsSectionProps) {
   const { data: documents, isLoading, error } = useOrderDocuments(orderId);
   const deleteDocument = useDeleteDocument(orderId);
   const { toast } = useToast();
@@ -117,31 +118,174 @@ export function OrderDocumentsSection({ orderId, onUpload }: OrderDocumentsSecti
     }
   };
 
+  // Loading state
   if (isLoading) {
+    const loadingContent = (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+
+    if (variant === 'inline') {
+      return loadingContent;
+    }
+
     return (
       <Card>
         <CardHeader>
           <CardTitle>Documents</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        </CardContent>
+        <CardContent>{loadingContent}</CardContent>
       </Card>
     );
   }
 
+  // Error state
   if (error) {
+    const errorContent = (
+      <p className="text-sm text-destructive">Failed to load documents</p>
+    );
+
+    if (variant === 'inline') {
+      return <div className="py-4">{errorContent}</div>;
+    }
+
     return (
       <Card>
         <CardHeader>
           <CardTitle>Documents</CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-destructive">Failed to load documents</p>
-        </CardContent>
+        <CardContent>{errorContent}</CardContent>
       </Card>
+    );
+  }
+
+  // Documents list content
+  const documentsContent = (
+    <>
+      {documents && documents.length > 0 ? (
+        <div className="space-y-3">
+          {documents.map((doc) => (
+            <div
+              key={doc.id}
+              className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                {getFileIcon(doc.mime_type)}
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{doc.file_name}</p>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{formatFileSize(doc.file_size)}</span>
+                    <span>-</span>
+                    <span>
+                      {formatDistanceToNow(new Date(doc.created_at), { addSuffix: true })}
+                    </span>
+                    {doc.uploader?.full_name && (
+                      <>
+                        <span>-</span>
+                        <span>by {doc.uploader.full_name}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge className={documentTypeColors[doc.document_type] || "bg-gray-500"}>
+                  {documentTypeLabels[doc.document_type] || doc.document_type}
+                </Badge>
+                {doc.url && (
+                  <Button variant="ghost" size="icon" asChild>
+                    <a href={doc.url} target="_blank" rel="noopener noreferrer" title="Open">
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </Button>
+                )}
+                {doc.url && (
+                  <Button variant="ghost" size="icon" asChild>
+                    <a href={doc.url} download={doc.file_name} title="Download">
+                      <Download className="h-4 w-4" />
+                    </a>
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setDocumentToDelete(doc)}
+                  title="Delete"
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-8">
+          <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
+          <p className="mt-2 text-sm text-muted-foreground">
+            No documents have been uploaded for this order.
+          </p>
+          {onUpload && (
+            <Button variant="outline" onClick={onUpload} className="mt-4">
+              <File className="h-4 w-4 mr-2" />
+              Upload First Document
+            </Button>
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  // Delete confirmation dialog
+  const deleteDialog = (
+    <AlertDialog open={!!documentToDelete} onOpenChange={() => setDocumentToDelete(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete Document</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete "{documentToDelete?.file_name}"? This action cannot
+            be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDelete}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {deleteDocument.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : null}
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
+  // Render based on variant
+  if (variant === 'inline') {
+    return (
+      <>
+        <div className="space-y-4">
+          {/* Inline header */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {documents && documents.length > 0
+                ? `${documents.length} document${documents.length === 1 ? "" : "s"} uploaded`
+                : "No documents yet"}
+            </p>
+            {onUpload && (
+              <Button size="sm" onClick={onUpload}>
+                <File className="mr-2 h-4 w-4" />
+                Upload
+              </Button>
+            )}
+          </div>
+          {documentsContent}
+        </div>
+        {deleteDialog}
+      </>
     );
   }
 
@@ -166,100 +310,9 @@ export function OrderDocumentsSection({ orderId, onUpload }: OrderDocumentsSecti
             )}
           </div>
         </CardHeader>
-        <CardContent>
-          {documents && documents.length > 0 ? (
-            <div className="space-y-3">
-              {documents.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    {getFileIcon(doc.mime_type)}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{doc.file_name}</p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{formatFileSize(doc.file_size)}</span>
-                        <span>•</span>
-                        <span>
-                          {formatDistanceToNow(new Date(doc.created_at), { addSuffix: true })}
-                        </span>
-                        {doc.uploader?.full_name && (
-                          <>
-                            <span>•</span>
-                            <span>by {doc.uploader.full_name}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className={documentTypeColors[doc.document_type] || "bg-gray-500"}>
-                      {documentTypeLabels[doc.document_type] || doc.document_type}
-                    </Badge>
-                    {doc.url && (
-                      <Button variant="ghost" size="icon" asChild>
-                        <a href={doc.url} target="_blank" rel="noopener noreferrer" title="Open">
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      </Button>
-                    )}
-                    {doc.url && (
-                      <Button variant="ghost" size="icon" asChild>
-                        <a href={doc.url} download={doc.file_name} title="Download">
-                          <Download className="h-4 w-4" />
-                        </a>
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setDocumentToDelete(doc)}
-                      title="Delete"
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
-              <p className="mt-2 text-sm text-muted-foreground">
-                No documents have been uploaded for this order.
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Use the "Upload Document" button to add files.
-              </p>
-            </div>
-          )}
-        </CardContent>
+        <CardContent>{documentsContent}</CardContent>
       </Card>
-
-      <AlertDialog open={!!documentToDelete} onOpenChange={() => setDocumentToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Document</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete "{documentToDelete?.file_name}"? This action cannot
-              be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleteDocument.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : null}
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {deleteDialog}
     </>
   );
 }

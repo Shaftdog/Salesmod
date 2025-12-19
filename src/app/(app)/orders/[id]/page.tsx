@@ -49,6 +49,7 @@ import { PropertyChip } from "@/components/orders/property-chip";
 import { useRouter } from "next/navigation";
 import { OrderInvoicesSection } from "@/components/orders/order-invoices-section";
 import { OrderDocumentsSection } from "@/components/orders/order-documents-section";
+import { OrderNotesSection } from "@/components/orders/order-notes-section";
 
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -233,13 +234,12 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 </div>
               </TabsContent>
                <TabsContent value="communication">
-                <div className="pt-6 text-center">
-                    <MessageSquare className="mx-auto h-12 w-12 text-muted-foreground" />
-                    <h3 className="mt-4 text-lg font-semibold">No Communication Yet</h3>
-                    <p className="mb-4 mt-2 text-sm text-muted-foreground">
-                        Notes and messages will appear here.
-                    </p>
-                    <Button onClick={() => setAddNoteOpen(true)}>Add Note</Button>
+                <div className="pt-6">
+                  <OrderNotesSection
+                    orderId={order.id}
+                    onAddNote={() => setAddNoteOpen(true)}
+                    variant="inline"
+                  />
                 </div>
               </TabsContent>
               <TabsContent value="history">
