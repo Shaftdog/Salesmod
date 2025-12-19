@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import {
+  checkEmailSendPermission,
+  getEmailConfig,
+} from '@/lib/email/email-config';
+import {
+  recordPolicyBlock,
+  recordEmailProviderFailure,
+  checkEmailVolumeSpike,
+} from '@/lib/agent/agent-config';
 
 /**
  * POST /api/email/send
- * Send an email via Resend
- * 
- * Note: This is a placeholder. Install Resend with: npm install resend
- * Then import and use: import { Resend } from 'resend';
+ * Send an email via Resend with rollout controls
+ *
+ * Send modes:
+ * - dry_run: Log only, no actual send
+ * - internal_only: Send only to approved domains/emails
+ * - limited_live: Send with strict per-tenant rate limits
+ * - live: Full production sending
  */
 export async function POST(request: NextRequest) {
   try {
@@ -33,35 +45,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check suppressions
-    if (contactId) {
-      const { data: suppression } = await supabase
-        .from('email_suppressions')
-        .select('*')
-        .eq('org_id', user.id)
-        .eq('contact_id', contactId)
-        .single();
-
-      if (suppression) {
-        return NextResponse.json(
-          {
-            error: 'Email address is suppressed',
-            reason: suppression.reason,
-          },
-          { status: 403 }
-        );
-      }
-    }
-
-    // Check daily send limit
-    const { data: settings } = await supabase
-      .from('agent_settings')
-      .select('daily_send_limit')
-      .eq('org_id', user.id)
-      .single();
-
-    const dailyLimit = settings?.daily_send_limit || 50;
-
     // Get user's tenant_id for multi-tenant isolation
     const { data: profile } = await supabase
       .from('profiles')
@@ -73,66 +56,148 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User has no tenant_id assigned' }, { status: 403 });
     }
 
-    // Count emails sent today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const tenantId = profile.tenant_id;
 
-    const { count: sentToday } = await supabase
-      .from('activities')
-      .select('*', { count: 'exact', head: true })
-      .eq('created_by', user.id)
-      .eq('activity_type', 'email')
-      .eq('outcome', 'sent')
-      .gte('created_at', today.toISOString());
+    // Check suppressions
+    if (contactId) {
+      const { data: suppression } = await supabase
+        .from('email_suppressions')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('contact_id', contactId)
+        .single();
 
-    if (sentToday && sentToday >= dailyLimit) {
+      if (suppression) {
+        return NextResponse.json(
+          {
+            error: 'Email address is suppressed',
+            reason: suppression.reason,
+            bounceType: suppression.bounce_type,
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Check send permission based on mode and rate limits
+    const sendCheck = await checkEmailSendPermission(tenantId, to);
+
+    if (!sendCheck.allowed) {
+      // Log the blocked send attempt
+      await supabase.from('activities').insert({
+        activity_type: 'email',
+        subject,
+        description: `Email blocked: ${sendCheck.reason}`,
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        outcome: 'blocked',
+        created_by: user.id,
+        tenant_id: tenantId,
+        metadata: {
+          to,
+          mode: sendCheck.mode,
+          reason: sendCheck.reason,
+        },
+      });
+
+      // Record policy block for alerting
+      await recordPolicyBlock(tenantId, `email_${sendCheck.mode}`, sendCheck.reason || 'Unknown');
+
       return NextResponse.json(
-        { error: `Daily send limit reached (${dailyLimit} emails)` },
+        {
+          error: sendCheck.reason,
+          mode: sendCheck.mode,
+          blocked: true,
+        },
         { status: 429 }
       );
     }
 
-    // Send email via Resend
-    const resendApiKey = process.env.RESEND_API_KEY;
-    
-    if (!resendApiKey || resendApiKey === 're_YOUR_API_KEY_HERE') {
-      // Fallback to simulation if Resend not configured
-      console.log('Email send (simulated - no Resend key):', { to, subject });
-      const messageId = `sim_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      
+    // Get email config for from address
+    const emailConfig = await getEmailConfig(tenantId);
+
+    // If should simulate (dry-run or internal-only blocked), log and return
+    if (sendCheck.shouldSimulate) {
+      console.log(`[Email] Simulated send (${sendCheck.mode}):`, { to, subject });
+      const messageId = `sim_${sendCheck.mode}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
       await supabase.from('activities').insert({
         activity_type: 'email',
         subject,
-        description: `Email sent (simulated) to ${to}`,
+        description: `Email sent (simulated - ${sendCheck.mode}) to ${to}`,
         status: 'completed',
         completed_at: new Date().toISOString(),
         outcome: 'sent',
         created_by: user.id,
-        tenant_id: profile.tenant_id,
+        tenant_id: tenantId,
+        metadata: {
+          to,
+          mode: sendCheck.mode,
+          simulated: true,
+          messageId,
+        },
       });
-      
+
       return NextResponse.json({
         success: true,
         messageId,
         simulated: true,
+        mode: sendCheck.mode,
       });
     }
 
-    // Real Resend send
+    // Real send via Resend
+    const resendApiKey = process.env.RESEND_API_KEY;
+
+    if (!resendApiKey || resendApiKey === 're_YOUR_API_KEY_HERE') {
+      // Fallback to simulation if Resend not configured
+      console.log('[Email] Simulated send (no Resend key):', { to, subject });
+      const messageId = `sim_no_key_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+      await supabase.from('activities').insert({
+        activity_type: 'email',
+        subject,
+        description: `Email sent (simulated - no API key) to ${to}`,
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        outcome: 'sent',
+        created_by: user.id,
+        tenant_id: tenantId,
+        metadata: {
+          to,
+          mode: sendCheck.mode,
+          simulated: true,
+          reason: 'RESEND_API_KEY not configured',
+          messageId,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        messageId,
+        simulated: true,
+        mode: sendCheck.mode,
+        reason: 'RESEND_API_KEY not configured',
+      });
+    }
+
+    // Send via Resend API
     try {
+      const fromAddress = replyTo || `${emailConfig.fromName} <${emailConfig.fromEmail}>`;
+
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
+          Authorization: `Bearer ${resendApiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: replyTo || 'Admin <Admin@roiappraise.com>',
-          to: to, // Must be a string
+          from: fromAddress,
+          to,
           subject,
           html,
           text,
-          reply_to: replyTo || 'Admin@roiappraise.com',
+          reply_to: replyTo || emailConfig.replyToEmail,
         }),
       });
 
@@ -144,7 +209,7 @@ export async function POST(request: NextRequest) {
       const data = await response.json();
       const messageId = data.id;
 
-      // Log the email send
+      // Log successful send
       await supabase.from('activities').insert({
         activity_type: 'email',
         subject,
@@ -153,17 +218,35 @@ export async function POST(request: NextRequest) {
         completed_at: new Date().toISOString(),
         outcome: 'sent',
         created_by: user.id,
-        tenant_id: profile.tenant_id,
+        tenant_id: tenantId,
+        metadata: {
+          to,
+          mode: sendCheck.mode,
+          simulated: false,
+          messageId,
+        },
+      });
+
+      // Check for volume spike (async, don't block response)
+      checkEmailVolumeSpike(tenantId, 1).catch(() => {
+        // Ignore errors in volume spike check
       });
 
       return NextResponse.json({
         success: true,
         messageId,
         simulated: false,
+        mode: sendCheck.mode,
       });
     } catch (resendError: any) {
-      console.error('Resend send error:', resendError);
-      
+      console.error('[Email] Resend send error:', resendError);
+
+      // Record provider failure for alerting
+      const errorType = resendError.message?.includes('401') ? 'auth_error' :
+                       resendError.message?.includes('429') ? 'rate_limit' :
+                       resendError.message?.includes('5') ? 'server_error' : 'unknown';
+      await recordEmailProviderFailure(tenantId, errorType, resendError.message);
+
       // Log failed send
       await supabase.from('activities').insert({
         activity_type: 'email',
@@ -173,21 +256,27 @@ export async function POST(request: NextRequest) {
         completed_at: new Date().toISOString(),
         outcome: 'failed',
         created_by: user.id,
-        tenant_id: profile.tenant_id,
+        tenant_id: tenantId,
+        metadata: {
+          to,
+          mode: sendCheck.mode,
+          error: resendError.message,
+        },
       });
 
       return NextResponse.json(
-        { error: `Email send failed: ${resendError.message}` },
+        {
+          error: `Email send failed: ${resendError.message}`,
+          mode: sendCheck.mode,
+        },
         { status: 500 }
       );
     }
   } catch (error: any) {
-    console.error('Email send failed:', error);
+    console.error('[Email] Send failed:', error);
     return NextResponse.json(
       { error: error.message || 'Email send failed' },
       { status: 500 }
     );
   }
 }
-
-
