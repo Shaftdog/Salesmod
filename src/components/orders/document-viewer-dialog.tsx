@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,15 +12,26 @@ import { Badge } from "@/components/ui/badge";
 import {
   Download,
   ExternalLink,
-  FileText,
-  FileImage,
-  FileSpreadsheet,
-  File,
   Loader2,
   ZoomIn,
   ZoomOut,
   RotateCw,
+  AlertTriangle,
 } from "lucide-react";
+import {
+  getFileIcon,
+  formatFileSize,
+  getDocumentTypeLabel,
+  getDocumentTypeColor,
+  canPreviewFile,
+  isPreviewableImage,
+  isPdfFile,
+  isLargeFile,
+  ZOOM_MIN,
+  ZOOM_MAX,
+  ZOOM_STEP,
+  ZOOM_DEFAULT,
+} from "@/lib/utils/document-helpers";
 
 interface DocumentViewerDialogProps {
   open: boolean;
@@ -35,96 +46,59 @@ interface DocumentViewerDialogProps {
   } | null;
 }
 
-const documentTypeLabels: Record<string, string> = {
-  engagement_letter: "Engagement Letter",
-  order_form: "Order Form",
-  client_instructions: "Client Instructions",
-  title_report: "Title Report",
-  prior_appraisal: "Prior Appraisal",
-  purchase_contract: "Purchase Contract",
-  contract_addenda: "Contract Addenda",
-  flood_certification: "Flood Certification",
-  plans: "Plans",
-  building_specs: "Building Specs",
-  construction_budget: "Construction Budget",
-  permits: "Permits",
-  rental_data: "Rental Data",
-  other: "Other",
-};
-
-const documentTypeColors: Record<string, string> = {
-  engagement_letter: "bg-blue-500",
-  order_form: "bg-indigo-500",
-  client_instructions: "bg-purple-500",
-  title_report: "bg-green-500",
-  prior_appraisal: "bg-teal-500",
-  purchase_contract: "bg-orange-500",
-  contract_addenda: "bg-amber-500",
-  flood_certification: "bg-cyan-500",
-  plans: "bg-sky-500",
-  building_specs: "bg-violet-500",
-  construction_budget: "bg-emerald-500",
-  permits: "bg-rose-500",
-  rental_data: "bg-pink-500",
-  other: "bg-gray-500",
-};
-
-function getFileIcon(mimeType: string) {
-  if (mimeType.startsWith("image/")) {
-    return <FileImage className="h-5 w-5 text-purple-500" />;
-  }
-  if (mimeType === "application/pdf") {
-    return <FileText className="h-5 w-5 text-red-500" />;
-  }
-  if (mimeType.includes("spreadsheet") || mimeType.includes("excel")) {
-    return <FileSpreadsheet className="h-5 w-5 text-green-500" />;
-  }
-  if (mimeType.includes("word") || mimeType.includes("document")) {
-    return <FileText className="h-5 w-5 text-blue-500" />;
-  }
-  return <File className="h-5 w-5 text-gray-500" />;
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 Bytes";
-  const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
-}
-
 export function DocumentViewerDialog({
   open,
   onOpenChange,
   document,
 }: DocumentViewerDialogProps) {
   const [isLoading, setIsLoading] = useState(true);
-  const [imageZoom, setImageZoom] = useState(100);
+  const [imageZoom, setImageZoom] = useState(ZOOM_DEFAULT);
   const [imageRotation, setImageRotation] = useState(0);
+  const [loadError, setLoadError] = useState(false);
+
+  // Reset controls when dialog closes or document changes
+  const resetControls = useCallback(() => {
+    setImageZoom(ZOOM_DEFAULT);
+    setImageRotation(0);
+    setIsLoading(true);
+    setLoadError(false);
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      // Delay reset to allow dialog animation to complete
+      const timer = setTimeout(resetControls, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [open, resetControls]);
+
+  // Reset when document changes while dialog is open
+  useEffect(() => {
+    if (open && document) {
+      resetControls();
+    }
+  }, [document?.id, open, resetControls]);
 
   if (!document) return null;
 
-  const isImage = document.mime_type.startsWith("image/");
-  const isPdf = document.mime_type === "application/pdf";
-  const canPreview = isImage || isPdf;
+  const isImage = isPreviewableImage(document.mime_type);
+  const isPdf = isPdfFile(document.mime_type);
+  const canPreview = canPreviewFile(document.mime_type);
+  const isLarge = isLargeFile(document.file_size);
 
-  const handleZoomIn = () => setImageZoom((prev) => Math.min(prev + 25, 200));
-  const handleZoomOut = () => setImageZoom((prev) => Math.max(prev - 25, 50));
+  const handleZoomIn = () => setImageZoom((prev) => Math.min(prev + ZOOM_STEP, ZOOM_MAX));
+  const handleZoomOut = () => setImageZoom((prev) => Math.max(prev - ZOOM_STEP, ZOOM_MIN));
   const handleRotate = () => setImageRotation((prev) => (prev + 90) % 360);
 
-  const resetControls = () => {
-    setImageZoom(100);
-    setImageRotation(0);
-    setIsLoading(true);
+  const handleLoadError = () => {
+    setIsLoading(false);
+    setLoadError(true);
   };
 
   return (
     <Dialog
       open={open}
-      onOpenChange={(newOpen) => {
-        if (!newOpen) resetControls();
-        onOpenChange(newOpen);
-      }}
+      onOpenChange={onOpenChange}
     >
       <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
@@ -137,10 +111,16 @@ export function DocumentViewerDialog({
                   <span className="text-xs text-muted-foreground">
                     {formatFileSize(document.file_size)}
                   </span>
+                  {isLarge && (
+                    <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
+                      <AlertTriangle className="h-3 w-3 mr-1" />
+                      Large file
+                    </Badge>
+                  )}
                   <Badge
-                    className={`${documentTypeColors[document.document_type] || "bg-gray-500"} text-xs`}
+                    className={`${getDocumentTypeColor(document.document_type)} text-xs`}
                   >
-                    {documentTypeLabels[document.document_type] || document.document_type}
+                    {getDocumentTypeLabel(document.document_type)}
                   </Badge>
                 </div>
               </div>
@@ -152,8 +132,9 @@ export function DocumentViewerDialog({
                     variant="outline"
                     size="icon"
                     onClick={handleZoomOut}
-                    disabled={imageZoom <= 50}
+                    disabled={imageZoom <= ZOOM_MIN}
                     title="Zoom out"
+                    aria-label="Zoom out"
                   >
                     <ZoomOut className="h-4 w-4" />
                   </Button>
@@ -164,8 +145,9 @@ export function DocumentViewerDialog({
                     variant="outline"
                     size="icon"
                     onClick={handleZoomIn}
-                    disabled={imageZoom >= 200}
+                    disabled={imageZoom >= ZOOM_MAX}
                     title="Zoom in"
+                    aria-label="Zoom in"
                   >
                     <ZoomIn className="h-4 w-4" />
                   </Button>
@@ -174,6 +156,7 @@ export function DocumentViewerDialog({
                     size="icon"
                     onClick={handleRotate}
                     title="Rotate"
+                    aria-label="Rotate image 90 degrees"
                   >
                     <RotateCw className="h-4 w-4" />
                   </Button>
@@ -182,12 +165,21 @@ export function DocumentViewerDialog({
               {document.url && (
                 <>
                   <Button variant="outline" size="icon" asChild title="Open in new tab">
-                    <a href={document.url} target="_blank" rel="noopener noreferrer">
+                    <a
+                      href={document.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Open ${document.file_name} in new tab`}
+                    >
                       <ExternalLink className="h-4 w-4" />
                     </a>
                   </Button>
                   <Button variant="outline" size="icon" asChild title="Download">
-                    <a href={document.url} download={document.file_name}>
+                    <a
+                      href={document.url}
+                      download={document.file_name}
+                      aria-label={`Download ${document.file_name}`}
+                    >
                       <Download className="h-4 w-4" />
                     </a>
                   </Button>
@@ -202,6 +194,26 @@ export function DocumentViewerDialog({
             <div className="flex items-center justify-center h-full min-h-[400px]">
               <p className="text-muted-foreground">Document URL not available</p>
             </div>
+          ) : loadError ? (
+            <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4">
+              <div className="p-4 bg-destructive/10 rounded-full">
+                <AlertTriangle className="h-8 w-8 text-destructive" />
+              </div>
+              <div className="text-center">
+                <p className="font-medium">Failed to load document</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  The document could not be loaded. It may have expired or be unavailable.
+                </p>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <Button variant="outline" asChild>
+                  <a href={document.url} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Try Opening Directly
+                  </a>
+                </Button>
+              </div>
+            </div>
           ) : canPreview ? (
             <div className="relative w-full h-full min-h-[500px]">
               {isLoading && (
@@ -211,6 +223,7 @@ export function DocumentViewerDialog({
               )}
               {isImage ? (
                 <div className="flex items-center justify-center p-4 h-full overflow-auto">
+                  {/* Using native img for rotation/zoom transforms not supported by next/image */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={document.url}
@@ -220,7 +233,7 @@ export function DocumentViewerDialog({
                       transform: `scale(${imageZoom / 100}) rotate(${imageRotation}deg)`,
                     }}
                     onLoad={() => setIsLoading(false)}
-                    onError={() => setIsLoading(false)}
+                    onError={handleLoadError}
                   />
                 </div>
               ) : (
@@ -229,6 +242,12 @@ export function DocumentViewerDialog({
                   className="w-full h-full min-h-[500px] border-0"
                   title={document.file_name}
                   onLoad={() => setIsLoading(false)}
+                  onError={handleLoadError}
+                  // Security: Sandbox restricts iframe capabilities
+                  // - No sandbox attrs = most secure but breaks PDF viewing
+                  // - allow-same-origin needed for browser PDF viewer
+                  // - allow-popups for PDF links (without escape-sandbox for security)
+                  sandbox="allow-same-origin allow-popups"
                 />
               )}
             </div>

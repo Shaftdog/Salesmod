@@ -18,8 +18,6 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   FileText,
-  FileImage,
-  FileSpreadsheet,
   File,
   Download,
   Trash2,
@@ -29,69 +27,17 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { DocumentViewerDialog } from "./document-viewer-dialog";
+import {
+  getFileIcon,
+  formatFileSize,
+  getDocumentTypeLabel,
+  getDocumentTypeColor,
+} from "@/lib/utils/document-helpers";
 
 interface OrderDocumentsSectionProps {
   orderId: string;
   onUpload?: () => void;
   variant?: 'card' | 'inline';
-}
-
-const documentTypeLabels: Record<string, string> = {
-  engagement_letter: "Engagement Letter",
-  order_form: "Order Form",
-  client_instructions: "Client Instructions",
-  title_report: "Title Report",
-  prior_appraisal: "Prior Appraisal",
-  purchase_contract: "Purchase Contract",
-  contract_addenda: "Contract Addenda",
-  flood_certification: "Flood Certification",
-  plans: "Plans",
-  building_specs: "Building Specs",
-  construction_budget: "Construction Budget",
-  permits: "Permits",
-  rental_data: "Rental Data",
-  other: "Other",
-};
-
-const documentTypeColors: Record<string, string> = {
-  engagement_letter: "bg-blue-500",
-  order_form: "bg-indigo-500",
-  client_instructions: "bg-purple-500",
-  title_report: "bg-green-500",
-  prior_appraisal: "bg-teal-500",
-  purchase_contract: "bg-orange-500",
-  contract_addenda: "bg-amber-500",
-  flood_certification: "bg-cyan-500",
-  plans: "bg-sky-500",
-  building_specs: "bg-violet-500",
-  construction_budget: "bg-emerald-500",
-  permits: "bg-rose-500",
-  rental_data: "bg-pink-500",
-  other: "bg-gray-500",
-};
-
-function getFileIcon(mimeType: string) {
-  if (mimeType.startsWith("image/")) {
-    return <FileImage className="h-5 w-5 text-purple-500" />;
-  }
-  if (mimeType === "application/pdf") {
-    return <FileText className="h-5 w-5 text-red-500" />;
-  }
-  if (mimeType.includes("spreadsheet") || mimeType.includes("excel")) {
-    return <FileSpreadsheet className="h-5 w-5 text-green-500" />;
-  }
-  if (mimeType.includes("word") || mimeType.includes("document")) {
-    return <FileText className="h-5 w-5 text-blue-500" />;
-  }
-  return <File className="h-5 w-5 text-gray-500" />;
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 Bytes";
-  const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
 }
 
 export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: OrderDocumentsSectionProps) {
@@ -110,10 +56,14 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
         title: "Document Deleted",
         description: `"${documentToDelete.file_name}" has been deleted`,
       });
-    } catch (error) {
+    } catch (err) {
+      console.error("Document deletion failed:", {
+        documentId: documentToDelete.id,
+        error: err,
+      });
       toast({
         title: "Delete Failed",
-        description: error instanceof Error ? error.message : "Failed to delete document",
+        description: err instanceof Error ? err.message : "Failed to delete document",
         variant: "destructive",
       });
     } finally {
@@ -177,6 +127,7 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
                 type="button"
                 className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer"
                 onClick={() => setDocumentToView(doc)}
+                aria-label={`View document: ${doc.file_name}`}
               >
                 {getFileIcon(doc.mime_type)}
                 <div className="flex-1 min-w-0">
@@ -199,27 +150,39 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
                 </div>
               </button>
               <div className="flex items-center gap-2">
-                <Badge className={documentTypeColors[doc.document_type] || "bg-gray-500"}>
-                  {documentTypeLabels[doc.document_type] || doc.document_type}
+                <Badge className={getDocumentTypeColor(doc.document_type)}>
+                  {getDocumentTypeLabel(doc.document_type)}
                 </Badge>
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => setDocumentToView(doc)}
                   title="View"
+                  aria-label={`View ${doc.file_name}`}
                 >
                   <Eye className="h-4 w-4" />
                 </Button>
                 {doc.url && (
                   <Button variant="ghost" size="icon" asChild>
-                    <a href={doc.url} target="_blank" rel="noopener noreferrer" title="Open in new tab">
+                    <a
+                      href={doc.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open in new tab"
+                      aria-label={`Open ${doc.file_name} in new tab`}
+                    >
                       <ExternalLink className="h-4 w-4" />
                     </a>
                   </Button>
                 )}
                 {doc.url && (
                   <Button variant="ghost" size="icon" asChild>
-                    <a href={doc.url} download={doc.file_name} title="Download">
+                    <a
+                      href={doc.url}
+                      download={doc.file_name}
+                      title="Download"
+                      aria-label={`Download ${doc.file_name}`}
+                    >
                       <Download className="h-4 w-4" />
                     </a>
                   </Button>
@@ -229,6 +192,7 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
                   size="icon"
                   onClick={() => setDocumentToDelete(doc)}
                   title="Delete"
+                  aria-label={`Delete ${doc.file_name}`}
                 >
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
@@ -260,7 +224,7 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
         <AlertDialogHeader>
           <AlertDialogTitle>Delete Document</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to delete "{documentToDelete?.file_name}"? This action cannot
+            Are you sure you want to delete &quot;{documentToDelete?.file_name}&quot;? This action cannot
             be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
