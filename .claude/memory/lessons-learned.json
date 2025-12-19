@@ -204,9 +204,14 @@
       "name": "Supabase Relations Must Be Explicitly Selected",
       "description": "Having a foreign key (property_id) does NOT auto-load the relation. Must: 1) Add 'property:properties(*)' to select query, 2) Add transform function (transformProperty), 3) Update parent transform to call it (transformOrder). Check: if order.propertyId exists but order.property is undefined, the relation isn't being fetched.",
       "files": ["src/hooks/use-orders.ts", "src/lib/supabase/transforms.ts"]
+    },
+    {
+      "name": "Narrow Panel Layout Pattern",
+      "description": "For components used in narrow panels (side sheets, modals): 1) Avoid horizontal flex with justify-between - buttons get cut off by overflow-hidden. 2) Stack vertically instead (space-y-3). 3) Use w-full on buttons to span available width. 4) shrink-0 alone doesn't prevent clipping if container is narrower than content. 5) Always test in the actual container width, not just in isolation.",
+      "files": ["src/components/orders/order-documents-section.tsx"]
     }
   ],
-  "last_updated": "2025-12-18",
+  "last_updated": "2025-12-19",
   "critical_bugs": [
     {
       "date": "2025-12-18",
@@ -288,6 +293,13 @@
       "technique": "Use Playwright evaluate() to check if expected text exists in DOM",
       "example": "document.body.textContent.includes('Subtasks') returned false, proving the component wasn't rendering subtasks despite API returning them",
       "next_step": "If DOM doesn't have expected content, trace data flow: API -> React Query hook -> Component props -> Render logic"
+    },
+    {
+      "date": "2025-12-19",
+      "scenario": "Button or UI element not visible despite code looking correct",
+      "technique": "Use Playwright to test in actual container context, not just check if element exists in DOM",
+      "example": "Upload Document button was in DOM (visible in get_visible_text) but cut off by narrow panel overflow. Screenshot and actual user view showed missing button.",
+      "next_step": "If element exists in DOM but user can't see it: 1) Check parent overflow-hidden, 2) Test in actual container width, 3) Consider vertical stacking instead of horizontal layout"
     }
   ],
   "anti_patterns": [
