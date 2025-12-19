@@ -14,20 +14,25 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Search, DollarSign, FileText, AlertCircle } from 'lucide-react';
+import { Plus, Search, DollarSign, FileText, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils/currency';
 import type { InvoiceStatusType } from '@/types/invoicing';
+
+const PAGE_SIZE = 20;
 
 export default function InvoicesListPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<InvoiceStatusType | 'all'>('all');
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { data, isLoading } = useInvoices({
     search: searchTerm || undefined,
     status: statusFilter !== 'all' ? [statusFilter] : undefined,
     overdue_only: overdueOnly,
+    page: currentPage,
+    limit: PAGE_SIZE,
   });
 
   const invoices = data?.invoices || [];
@@ -36,6 +41,23 @@ export default function InvoicesListPage() {
     total_amount: 0,
     total_outstanding: 0,
     total_overdue: 0,
+  };
+  const meta = data?.meta || { page: 1, limit: PAGE_SIZE, total: 0, totalPages: 0 };
+
+  // Reset to page 1 when filters change
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  const handleStatusChange = (value: InvoiceStatusType | 'all') => {
+    setStatusFilter(value);
+    setCurrentPage(1);
+  };
+
+  const handleOverdueChange = (checked: boolean) => {
+    setOverdueOnly(checked);
+    setCurrentPage(1);
   };
 
   return (
@@ -115,12 +137,12 @@ export default function InvoicesListPage() {
                 <Input
                   placeholder="Search by invoice number or client..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   className="pl-8"
                 />
               </div>
             </div>
-            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as InvoiceStatusType | 'all')}>
+            <Select value={statusFilter} onValueChange={handleStatusChange}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -139,7 +161,7 @@ export default function InvoicesListPage() {
               <Checkbox
                 id="overdue"
                 checked={overdueOnly}
-                onCheckedChange={(checked) => setOverdueOnly(checked as boolean)}
+                onCheckedChange={(checked) => handleOverdueChange(checked as boolean)}
               />
               <label
                 htmlFor="overdue"
@@ -171,54 +193,111 @@ export default function InvoicesListPage() {
               </Button>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Invoice #</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Paid</TableHead>
-                  <TableHead>Balance</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Payment Method</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {invoices.map((invoice: {
-                  id: string;
-                  invoice_number: string;
-                  client?: { company_name: string } | null;
-                  invoice_date: string;
-                  due_date?: string | null;
-                  total_amount: number;
-                  amount_paid: number;
-                  status: InvoiceStatusType;
-                  payment_method: string;
-                }) => (
-                  <TableRow key={invoice.id} className="cursor-pointer hover:bg-muted/50">
-                    <TableCell>
-                      <Link href={`/finance/invoicing/${invoice.id}`} className="font-medium hover:underline">
-                        {invoice.invoice_number}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{invoice.client?.company_name || 'N/A'}</TableCell>
-                    <TableCell>{new Date(invoice.invoice_date).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      {invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : 'N/A'}
-                    </TableCell>
-                    <TableCell>{formatCurrency(invoice.total_amount)}</TableCell>
-                    <TableCell>{formatCurrency(invoice.amount_paid)}</TableCell>
-                    <TableCell>{formatCurrency(invoice.total_amount - invoice.amount_paid)}</TableCell>
-                    <TableCell>
-                      <InvoiceStatusBadge status={invoice.status} />
-                    </TableCell>
-                    <TableCell className="capitalize">{invoice.payment_method}</TableCell>
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Invoice #</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Paid</TableHead>
+                    <TableHead>Balance</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Payment Method</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {invoices.map((invoice: {
+                    id: string;
+                    invoice_number: string;
+                    client?: { company_name: string } | null;
+                    invoice_date: string;
+                    due_date?: string | null;
+                    total_amount: number;
+                    amount_paid: number;
+                    status: InvoiceStatusType;
+                    payment_method: string;
+                  }) => (
+                    <TableRow key={invoice.id} className="cursor-pointer hover:bg-muted/50">
+                      <TableCell>
+                        <Link href={`/finance/invoicing/${invoice.id}`} className="font-medium hover:underline">
+                          {invoice.invoice_number}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{invoice.client?.company_name || 'N/A'}</TableCell>
+                      <TableCell>{new Date(invoice.invoice_date).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        {invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : 'N/A'}
+                      </TableCell>
+                      <TableCell>{formatCurrency(invoice.total_amount)}</TableCell>
+                      <TableCell>{formatCurrency(invoice.amount_paid)}</TableCell>
+                      <TableCell>{formatCurrency(invoice.total_amount - invoice.amount_paid)}</TableCell>
+                      <TableCell>
+                        <InvoiceStatusBadge status={invoice.status} />
+                      </TableCell>
+                      <TableCell className="capitalize">{invoice.payment_method}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+
+              {/* Pagination Controls */}
+              {meta.totalPages > 1 && (
+                <div className="flex items-center justify-between border-t pt-4 mt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {((currentPage - 1) * PAGE_SIZE) + 1} to {Math.min(currentPage * PAGE_SIZE, meta.total)} of {meta.total} invoices
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1 || isLoading}
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-1" />
+                      Previous
+                    </Button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, meta.totalPages) }, (_, i) => {
+                        let pageNum: number;
+                        if (meta.totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= meta.totalPages - 2) {
+                          pageNum = meta.totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={currentPage === pageNum ? "default" : "outline"}
+                            size="sm"
+                            className="w-8 h-8 p-0"
+                            onClick={() => setCurrentPage(pageNum)}
+                            disabled={isLoading}
+                          >
+                            {pageNum}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.min(meta.totalPages, p + 1))}
+                      disabled={currentPage === meta.totalPages || isLoading}
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

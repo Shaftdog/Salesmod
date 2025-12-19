@@ -250,13 +250,13 @@ export const InvoiceFiltersSchema = z.object({
   ]).optional(),
   date_from: z.string().datetime().optional(),
   date_to: z.string().datetime().optional(),
-  overdue_only: z.boolean().optional(),
+  overdue_only: z.preprocess((val) => val === 'true' || val === true, z.boolean().optional()),
   search: z.string().max(200).optional(),
 });
 
 export const PaginationSchema = z.object({
-  page: z.number().int().positive().max(MAX_PAGE_NUMBER).optional().default(DEFAULT_PAGE),
-  limit: z.number().int().positive().max(MAX_PAGE_LIMIT).optional().default(DEFAULT_PAGE_LIMIT),
+  page: z.coerce.number().int().positive().max(MAX_PAGE_NUMBER).optional().default(DEFAULT_PAGE),
+  limit: z.coerce.number().int().positive().max(MAX_PAGE_LIMIT).optional().default(DEFAULT_PAGE_LIMIT),
   sort_by: z.string().optional().default(DEFAULT_SORT_BY),
   sort_order: z.enum(['asc', 'desc']).optional().default(DEFAULT_SORT_ORDER),
 });

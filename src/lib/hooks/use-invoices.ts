@@ -33,8 +33,12 @@ export function useInvoices(params?: {
       if (!response.ok) throw new Error('Failed to fetch invoices');
       const result = await response.json();
 
-      // Return the data object which contains invoices and stats
-      return result.data || { invoices: [], stats: {} };
+      // Return the data object which contains invoices, stats, and meta
+      return {
+        invoices: result.data?.invoices || [],
+        stats: result.data?.stats || {},
+        meta: result.meta || { page: 1, limit: 20, total: 0, totalPages: 0 },
+      };
     },
   });
 }

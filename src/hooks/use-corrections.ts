@@ -227,6 +227,7 @@ export function useCreateCorrection() {
       if (!user) throw new Error('Not authenticated')
 
       // Call the database function to create correction
+      // Note: Function uses auth.uid() internally, no p_user_id needed
       const { data, error } = await supabase.rpc('create_correction_request', {
         p_card_id: input.production_card_id,
         p_source_task_id: input.source_task_id || null,
@@ -234,7 +235,6 @@ export function useCreateCorrection() {
         p_severity: input.severity || null,
         p_category: input.category || null,
         p_ai_summary: input.ai_summary || null,
-        p_user_id: user.id,
       })
 
       if (error) throw error
@@ -271,13 +271,13 @@ export function useCreateRevisionFromCase() {
       if (!user) throw new Error('Not authenticated')
 
       // Call the database function to create revision
+      // Note: Function uses auth.uid() internally, no p_user_id needed
       const { data, error } = await supabase.rpc('create_revision_from_case', {
         p_case_id: input.case_id,
         p_description: input.description,
         p_severity: input.severity || null,
         p_category: input.category || null,
         p_ai_summary: input.ai_summary || null,
-        p_user_id: user.id,
       })
 
       if (error) throw error
@@ -292,12 +292,25 @@ export function useCreateRevisionFromCase() {
         description: "The revision request has been submitted.",
       })
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Create revision error:', error)
+
+      // Extract meaningful error message from Supabase error
+      let errorMessage = "Failed to create revision. Please try again."
+      if (error?.message?.includes('No production card')) {
+        errorMessage = "This order doesn't have a production card. Please add it to production first."
+      } else if (error?.message?.includes('Case not found')) {
+        errorMessage = "Case not found."
+      } else if (error?.message?.includes('no linked order')) {
+        errorMessage = "This case is not linked to an order."
+      } else if (error?.message) {
+        errorMessage = error.message
+      }
+
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to create revision. Please try again.",
+        description: errorMessage,
       })
     },
   })

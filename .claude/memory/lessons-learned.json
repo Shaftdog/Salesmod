@@ -201,6 +201,11 @@
       "files": ["src/components/orders/property-chip.tsx", "src/components/orders/order-card.tsx"]
     },
     {
+      "name": "Zod Schemas for URL Query Parameters",
+      "description": "URL query parameters are ALWAYS strings. When using Zod schemas to validate them: 1) z.number() will FAIL on '1' (string) - use z.coerce.number() instead, 2) z.boolean() will FAIL on 'true' (string) - use z.preprocess((v) => v === 'true' || v === true, z.boolean()), 3) For JSON request bodies, z.number() and z.boolean() work fine since JSON preserves types.",
+      "files": ["src/lib/validations/invoicing.ts", "src/lib/errors/api-errors.ts"]
+    },
+    {
       "name": "Supabase Relations Must Be Explicitly Selected",
       "description": "Having a foreign key (property_id) does NOT auto-load the relation. Must: 1) Add 'property:properties(*)' to select query, 2) Add transform function (transformProperty), 3) Update parent transform to call it (transformOrder). Check: if order.propertyId exists but order.property is undefined, the relation isn't being fetched.",
       "files": ["src/hooks/use-orders.ts", "src/lib/supabase/transforms.ts"]
@@ -213,6 +218,15 @@
   ],
   "last_updated": "2025-12-19",
   "critical_bugs": [
+    {
+      "date": "2025-12-19",
+      "bug": "Invoice pagination breaks entire page - no invoices load",
+      "symptom": "After adding pagination parameters (page, limit) to invoice API calls, the page shows 'Loading invoices...' forever or empty table",
+      "root_cause": "Zod schema used z.number() for page/limit, but URL query params are strings. Validation failed silently, API returned empty or error.",
+      "fix": "Changed PaginationSchema to use z.coerce.number() for page/limit, and z.preprocess() for overdue_only boolean",
+      "lesson": "URL query parameters are ALWAYS strings. Use z.coerce.number() instead of z.number(), and z.preprocess() for booleans. Existing code may have latent bugs if the validation path was never exercised.",
+      "files": ["src/lib/validations/invoicing.ts"]
+    },
     {
       "date": "2025-12-18",
       "bug": "SLA due dates not being set on production tasks",
