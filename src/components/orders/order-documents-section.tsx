@@ -260,22 +260,20 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
         <div className="space-y-4">
           {/* Inline header - stacked layout for narrow panels */}
           <div className="space-y-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <h3 className="font-semibold">Documents</h3>
-                <p className="text-sm text-muted-foreground">
-                  {documents && documents.length > 0
-                    ? `${documents.length} document${documents.length === 1 ? "" : "s"} uploaded`
-                    : "No documents yet"}
-                </p>
-              </div>
-              {onUpload && (
-                <Button onClick={onUpload} className="shrink-0">
-                  <File className="mr-2 h-4 w-4" />
-                  Upload Document
-                </Button>
-              )}
+            <div>
+              <h3 className="font-semibold">Documents</h3>
+              <p className="text-sm text-muted-foreground">
+                {documents && documents.length > 0
+                  ? `${documents.length} document${documents.length === 1 ? "" : "s"} uploaded`
+                  : "No documents yet"}
+              </p>
             </div>
+            {onUpload && (
+              <Button onClick={onUpload} className="w-full">
+                <File className="mr-2 h-4 w-4" />
+                Upload Document
+              </Button>
+            )}
           </div>
           {documentsContent}
         </div>
