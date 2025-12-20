@@ -15,6 +15,7 @@ import {
   BadRequestError,
   ForbiddenError,
 } from '@/lib/errors/api-errors';
+import { logNoteAdded } from '@/lib/services/order-activities';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,7 +70,7 @@ export async function POST(
 ) {
   try {
     const supabase = await createClient();
-    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
+    const { orgId, tenantId, profile } = await getAuthenticatedContext(supabase);
     const { id: orderId } = await params;
 
     // Verify order exists and belongs to tenant
@@ -130,6 +131,16 @@ export async function POST(
       console.error('Error creating note:', insertError);
       throw insertError;
     }
+
+    // Log activity for the note creation
+    await logNoteAdded(
+      supabase,
+      orderId,
+      tenantId,
+      note_type,
+      orgId,
+      profile?.name || 'Unknown'
+    );
 
     return successResponse(newNote, 'Note created successfully');
   } catch (error) {

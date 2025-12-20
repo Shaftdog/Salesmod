@@ -243,7 +243,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 </div>
               </TabsContent>
               <TabsContent value="history">
-                 <OrderTimeline />
+                 <OrderTimeline orderId={orderId} />
               </TabsContent>
             </Tabs>
           </CardContent>
