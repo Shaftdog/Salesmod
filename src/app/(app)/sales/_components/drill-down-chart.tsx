@@ -14,12 +14,14 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
-import type { Order } from '@/lib/types'
+import type { Order, Deal } from '@/lib/types'
 import type { DrillDownConfig } from './drill-down-utils'
 
 interface DrillDownChartProps {
   orders: Order[]
+  deals?: Deal[]
   config: DrillDownConfig
+  isOpportunities?: boolean
 }
 
 const COLORS = [
@@ -48,7 +50,16 @@ const statusColors: Record<string, string> = {
   REVISION: '#f59e0b',
 }
 
-export function DrillDownChart({ orders, config }: DrillDownChartProps) {
+const stageColors: Record<string, string> = {
+  LEAD: '#3b82f6',
+  QUALIFIED: '#eab308',
+  PROPOSAL: '#f97316',
+  NEGOTIATION: '#a855f7',
+  CLOSED_WON: '#22c55e',
+  CLOSED_LOST: '#ef4444',
+}
+
+export function DrillDownChart({ orders, deals = [], config, isOpportunities = false }: DrillDownChartProps) {
   // Determine chart type based on drill-down type
   const chartType = useMemo(() => {
     if (
@@ -107,10 +118,28 @@ export function DrillDownChart({ orders, config }: DrillDownChartProps) {
       .slice(0, 10) // Top 10
   }, [orders, config.type, chartType])
 
-  // Prepare data for bar chart (status breakdown)
+  // Prepare data for bar chart (status breakdown for orders, stage breakdown for deals)
   const barData = useMemo(() => {
     if (chartType !== 'bar') return []
 
+    if (isOpportunities) {
+      // Stage breakdown for deals
+      const stageCounts: Record<string, number> = {}
+      deals.forEach((deal) => {
+        const stage = deal.stage || 'UNKNOWN'
+        stageCounts[stage] = (stageCounts[stage] || 0) + 1
+      })
+
+      return Object.entries(stageCounts)
+        .map(([name, value]) => ({
+          name: name.replace(/_/g, ' '),
+          value,
+          fill: stageColors[name] || '#6b7280',
+        }))
+        .sort((a, b) => b.value - a.value)
+    }
+
+    // Status breakdown for orders
     const statusCounts: Record<string, number> = {}
     orders.forEach((order) => {
       const status = order.status || 'UNKNOWN'
@@ -124,9 +153,9 @@ export function DrillDownChart({ orders, config }: DrillDownChartProps) {
         fill: statusColors[name] || '#6b7280',
       }))
       .sort((a, b) => b.value - a.value)
-  }, [orders, chartType])
+  }, [orders, deals, chartType, isOpportunities])
 
-  const total = orders.length
+  const total = isOpportunities ? deals.length : orders.length
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -144,10 +173,12 @@ export function DrillDownChart({ orders, config }: DrillDownChartProps) {
     return null
   }
 
-  if (orders.length === 0) {
+  const hasData = isOpportunities ? deals.length > 0 : orders.length > 0
+
+  if (!hasData) {
     return (
       <div className="flex items-center justify-center h-[300px] text-zinc-500">
-        No data available for chart
+        No {isOpportunities ? 'opportunities' : 'orders'} available for chart
       </div>
     )
   }

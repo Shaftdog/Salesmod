@@ -18,11 +18,21 @@ import { useDrillDown } from './drill-down-context'
 import { DrillDownSummary } from './drill-down-summary'
 import { DrillDownChart } from './drill-down-chart'
 import { DrillDownOrdersTable } from './drill-down-orders-table'
+import { DrillDownDealsTable } from './drill-down-deals-table'
 import {
   filterOrdersForDrillDown,
+  filterDealsForDrillDown,
   exportOrdersToCsv,
   formatCurrency,
+  type DrillDownType,
 } from './drill-down-utils'
+
+// Types that should show deals instead of orders
+const OPPORTUNITY_TYPES: DrillDownType[] = ['opportunities_today', 'opportunities_weekly']
+
+function isOpportunityType(type: DrillDownType): boolean {
+  return OPPORTUNITY_TYPES.includes(type)
+}
 
 interface DrillDownReportDialogProps {
   orders: Order[]
@@ -38,24 +48,45 @@ export function DrillDownReportDialog({
   const { state, closeDrillDown } = useDrillDown()
   const { isOpen, config } = state
 
+  // Determine if this is an opportunities drill-down
+  const isOpportunities = config ? isOpportunityType(config.type) : false
+
   // Filter orders based on current config
   const filteredOrders = useMemo(() => {
-    if (!config) return []
+    if (!config || isOpportunities) return []
     return filterOrdersForDrillDown(orders, config)
-  }, [orders, config])
+  }, [orders, config, isOpportunities])
+
+  // Filter deals based on current config (for opportunities)
+  const filteredDeals = useMemo(() => {
+    if (!config || !isOpportunities) return []
+    return filterDealsForDrillDown(deals, config)
+  }, [deals, config, isOpportunities])
 
   // Calculate summary stats for header
   const totalFees = useMemo(() => {
     return filteredOrders.reduce((sum, o) => sum + (o.feeAmount || 0), 0)
   }, [filteredOrders])
 
+  // Calculate total deal value for opportunities
+  const totalDealValue = useMemo(() => {
+    return filteredDeals.reduce((sum, d) => sum + (d.value || 0), 0)
+  }, [filteredDeals])
+
   const handleExport = () => {
     if (!config) return
     const filename = `${config.type}_${new Date().toISOString().split('T')[0]}`
-    exportOrdersToCsv(filteredOrders, filename)
+    // TODO: Add exportDealsToCsv for opportunities
+    if (!isOpportunities) {
+      exportOrdersToCsv(filteredOrders, filename)
+    }
   }
 
   if (!config) return null
+
+  const itemCount = isOpportunities ? filteredDeals.length : filteredOrders.length
+  const itemLabel = isOpportunities ? 'opportunities' : 'orders'
+  const totalValue = isOpportunities ? totalDealValue : totalFees
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && closeDrillDown()}>
@@ -76,14 +107,14 @@ export function DrillDownReportDialog({
                 variant="outline"
                 className="bg-cyan-500/20 text-cyan-400 border-cyan-500/30 text-base px-3 py-1"
               >
-                {filteredOrders.length} orders
+                {itemCount} {itemLabel}
               </Badge>
-              {totalFees > 0 && (
+              {totalValue > 0 && (
                 <Badge
                   variant="outline"
                   className="bg-green-500/20 text-green-400 border-green-500/30 text-base px-3 py-1"
                 >
-                  {formatCurrency(totalFees)}
+                  {formatCurrency(totalValue)}
                 </Badge>
               )}
             </div>
@@ -109,26 +140,38 @@ export function DrillDownReportDialog({
                 Chart
               </TabsTrigger>
               <TabsTrigger
-                value="orders"
+                value="list"
                 className="data-[state=active]:bg-zinc-700 data-[state=active]:text-white"
               >
                 <LayoutList className="h-4 w-4 mr-2" />
-                Orders
+                {isOpportunities ? 'Opportunities' : 'Orders'}
               </TabsTrigger>
             </TabsList>
           </div>
 
           <ScrollArea className="flex-1 px-6 py-4">
             <TabsContent value="summary" className="mt-0 h-full">
-              <DrillDownSummary orders={filteredOrders} />
+              {isOpportunities ? (
+                <DrillDownSummary orders={[]} deals={filteredDeals} isOpportunities />
+              ) : (
+                <DrillDownSummary orders={filteredOrders} />
+              )}
             </TabsContent>
 
             <TabsContent value="chart" className="mt-0 h-full">
-              <DrillDownChart orders={filteredOrders} config={config} />
+              {isOpportunities ? (
+                <DrillDownChart orders={[]} deals={filteredDeals} config={config} isOpportunities />
+              ) : (
+                <DrillDownChart orders={filteredOrders} config={config} />
+              )}
             </TabsContent>
 
-            <TabsContent value="orders" className="mt-0 h-full">
-              <DrillDownOrdersTable orders={filteredOrders} />
+            <TabsContent value="list" className="mt-0 h-full">
+              {isOpportunities ? (
+                <DrillDownDealsTable deals={filteredDeals} />
+              ) : (
+                <DrillDownOrdersTable orders={filteredOrders} />
+              )}
             </TabsContent>
           </ScrollArea>
         </Tabs>
@@ -139,15 +182,17 @@ export function DrillDownReportDialog({
             Showing data for {config.dateRange.label}
           </span>
           <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExport}
-              className="bg-transparent border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
+            {!isOpportunities && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                className="bg-transparent border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export CSV
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
