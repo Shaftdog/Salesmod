@@ -58,6 +58,8 @@ export interface SalesMetrics {
   dailyOrdersTrend: TrendDataPoint[]
   weeklyOrdersTrend: TrendDataPoint[]
   monthlyOrdersTrend: TrendDataPoint[]
+  orders: Order[]
+  deals: Deal[]
   isLoading: boolean
   error: Error | null
 }
@@ -288,6 +290,8 @@ export function useSalesMetrics(currentUserId?: string): SalesMetrics {
 
   return {
     ...metrics,
+    orders, // Expose raw orders for drill-down reports
+    deals,  // Expose raw deals for opportunities drill-down
     isLoading: ordersLoading || dealsLoading || clientsLoading,
     error: ordersError || dealsError || clientsError,
   }

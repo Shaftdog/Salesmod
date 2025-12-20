@@ -1,5 +1,6 @@
 'use client'
 
+import { useCallback } from 'react'
 import {
   LineChart,
   Line,
@@ -8,7 +9,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  ReferenceLine,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -20,6 +20,7 @@ interface OrdersTrendChartProps {
   filterCount?: number
   showSeeAll?: boolean
   onSeeAll?: () => void
+  onPointClick?: (point: TrendDataPoint) => void
   isLoading?: boolean
   showDataLabels?: boolean
 }
@@ -30,6 +31,7 @@ export function OrdersTrendChart({
   filterCount = 1,
   showSeeAll = true,
   onSeeAll,
+  onPointClick,
   isLoading,
   showDataLabels = true,
 }: OrdersTrendChartProps) {
@@ -39,32 +41,64 @@ export function OrdersTrendChart({
         <div className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 shadow-lg">
           <p className="text-zinc-400 text-sm">{label}</p>
           <p className="text-white font-medium">{payload[0].value} orders</p>
+          {onPointClick && (
+            <p className="text-cyan-400 text-xs mt-1">Click to view details</p>
+          )}
         </div>
       )
     }
     return null
   }
 
-  // Custom dot with data label
-  const CustomDot = (props: any) => {
-    const { cx, cy, payload } = props
-    if (!showDataLabels) return null
+  // Custom dot with data label and click handler
+  const CustomDot = useCallback((props: any) => {
+    const { cx, cy, payload, index } = props
+
+    const handleClick = () => {
+      if (onPointClick && payload) {
+        onPointClick(payload)
+      }
+    }
+
     return (
-      <g>
-        <circle cx={cx} cy={cy} r={4} fill="#22d3ee" stroke="#22d3ee" strokeWidth={2} />
-        <text
-          x={cx}
-          y={cy - 12}
-          textAnchor="middle"
+      <g
+        onClick={handleClick}
+        style={{ cursor: onPointClick ? 'pointer' : 'default' }}
+      >
+        <circle
+          cx={cx}
+          cy={cy}
+          r={onPointClick ? 6 : 4}
           fill="#22d3ee"
-          fontSize={11}
-          fontWeight={500}
-        >
-          {payload.value}
-        </text>
+          stroke="#22d3ee"
+          strokeWidth={2}
+          className={onPointClick ? "hover:r-8 transition-all" : ""}
+        />
+        {/* Larger invisible hit area for easier clicking */}
+        {onPointClick && (
+          <circle
+            cx={cx}
+            cy={cy}
+            r={12}
+            fill="transparent"
+            stroke="transparent"
+          />
+        )}
+        {showDataLabels && (
+          <text
+            x={cx}
+            y={cy - 12}
+            textAnchor="middle"
+            fill="#22d3ee"
+            fontSize={11}
+            fontWeight={500}
+          >
+            {payload.value}
+          </text>
+        )}
       </g>
     )
-  }
+  }, [onPointClick, showDataLabels])
 
   const maxValue = Math.max(...data.map(d => d.value), 1)
   const yAxisMax = Math.ceil(maxValue * 1.3) // Add 30% headroom for labels
@@ -114,7 +148,7 @@ export function OrdersTrendChart({
                   axisLine={false}
                   domain={[0, yAxisMax]}
                   label={{
-                    value: 'Task (count, in numbers)',
+                    value: 'Orders (count)',
                     angle: -90,
                     position: 'insideLeft',
                     fill: '#6b7280',
@@ -129,7 +163,13 @@ export function OrdersTrendChart({
                   stroke="#22d3ee"
                   strokeWidth={2}
                   dot={<CustomDot />}
-                  activeDot={{ r: 6, fill: '#22d3ee', stroke: '#22d3ee' }}
+                  activeDot={{
+                    r: 8,
+                    fill: '#22d3ee',
+                    stroke: '#0e7490',
+                    strokeWidth: 2,
+                    cursor: onPointClick ? 'pointer' : 'default',
+                  }}
                 />
               </LineChart>
             </ResponsiveContainer>
