@@ -130,20 +130,20 @@ export function OrderTimeline({ orderId }: OrderTimelineProps) {
                   {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
                 </p>
                 {/* Show status change details */}
-                {activity.activity_type === "status_changed" && metadata.old_status && metadata.new_status && (
+                {activity.activity_type === "status_changed" && Boolean(metadata.old_status) && Boolean(metadata.new_status) && (
                   <p className="text-xs text-muted-foreground">
                     From: <span className="font-semibold capitalize">{String(metadata.old_status).replace(/_/g, " ")}</span>{" "}
                     &rarr; To: <span className="font-semibold capitalize">{String(metadata.new_status).replace(/_/g, " ")}</span>
                   </p>
                 )}
                 {/* Show assignment details */}
-                {activity.activity_type === "assigned" && metadata.old_assigned_to_name && (
+                {activity.activity_type === "assigned" && Boolean(metadata.old_assigned_to_name) && (
                   <p className="text-xs text-muted-foreground">
                     Previously: <span className="font-semibold">{String(metadata.old_assigned_to_name)}</span>
                   </p>
                 )}
                 {/* Show document details */}
-                {(activity.activity_type === "document_uploaded" || activity.activity_type === "document_deleted") && metadata.document_type && (
+                {(activity.activity_type === "document_uploaded" || activity.activity_type === "document_deleted") && Boolean(metadata.document_type) && (
                   <p className="text-xs text-muted-foreground">
                     Type: <span className="font-semibold capitalize">{String(metadata.document_type).replace(/_/g, " ")}</span>
                   </p>

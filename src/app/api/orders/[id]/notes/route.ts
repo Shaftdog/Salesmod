@@ -70,8 +70,15 @@ export async function POST(
 ) {
   try {
     const supabase = await createClient();
-    const { orgId, tenantId, profile } = await getAuthenticatedContext(supabase);
+    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
     const { id: orderId } = await params;
+
+    // Get user profile for the name
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('name')
+      .eq('id', orgId)
+      .single();
 
     // Verify order exists and belongs to tenant
     const { data: order, error: orderError } = await supabase
