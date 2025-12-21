@@ -246,7 +246,7 @@ export function MigrationResults({ state, onReset }: MigrationResultsProps) {
           </Button>
         </Link>
 
-        <Link href="/migrations" className="flex-1">
+        <Link href="/admin/migrations" className="flex-1">
           <Button variant="secondary" className="w-full">
             View Import History
           </Button>
