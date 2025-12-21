@@ -16,6 +16,7 @@ import {
   ForbiddenError,
 } from '@/lib/errors/api-errors';
 import { sanitizeText } from '@/lib/utils/sanitize';
+import { withRateLimit, RateLimitPresets } from '@/lib/utils/api-rate-limiter';
 import { logNoteAdded } from '@/lib/services/order-activities';
 
 export const dynamic = 'force-dynamic';
@@ -30,7 +31,7 @@ export async function GET(
 ) {
   try {
     const supabase = await createClient();
-    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
+    const { tenantId } = await getAuthenticatedContext(supabase);
     const { id: orderId } = await params;
 
     // Fetch notes for this order with creator info
@@ -71,14 +72,20 @@ export async function POST(
 ) {
   try {
     const supabase = await createClient();
-    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
+    const { orgId: userId, tenantId } = await getAuthenticatedContext(supabase);
     const { id: orderId } = await params;
+
+    // Rate limit: 20 requests per minute for write operations
+    withRateLimit(userId, {
+      ...RateLimitPresets.write,
+      endpoint: 'orders/notes/POST',
+    });
 
     // Get user profile for the name
     const { data: profile } = await supabase
       .from('profiles')
       .select('name')
-      .eq('id', orgId)
+      .eq('id', userId)
       .single();
 
     // Verify order exists and belongs to tenant
@@ -121,7 +128,7 @@ export async function POST(
         note: sanitizeText(note.trim()),
         note_type,
         is_internal,
-        created_by_id: orgId,
+        created_by_id: userId,
       })
       .select(`
         id,
@@ -146,7 +153,7 @@ export async function POST(
       orderId,
       tenantId,
       note_type,
-      orgId,
+      userId,
       profile?.name || 'Unknown'
     );
 
@@ -166,8 +173,14 @@ export async function DELETE(
 ) {
   try {
     const supabase = await createClient();
-    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
+    const { orgId: userId, tenantId } = await getAuthenticatedContext(supabase);
     const { id: orderId } = await params;
+
+    // Rate limit: 20 requests per minute for write operations
+    withRateLimit(userId, {
+      ...RateLimitPresets.write,
+      endpoint: 'orders/notes/DELETE',
+    });
 
     const { searchParams } = new URL(request.url);
     const noteId = searchParams.get('noteId');
@@ -193,13 +206,13 @@ export async function DELETE(
     const { data: userProfile } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', orgId)
+      .eq('id', userId)
       .single();
 
     const userRole = userProfile?.role || 'user';
 
     // Authorization: user must be the creator OR have admin/owner role
-    const isCreator = note.created_by_id === orgId;
+    const isCreator = note.created_by_id === userId;
     const isAdmin = userRole === 'admin' || userRole === 'owner';
 
     if (!isCreator && !isAdmin) {

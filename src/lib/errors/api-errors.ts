@@ -65,6 +65,13 @@ export class BadRequestError extends ApiError {
   }
 }
 
+export class TooManyRequestsError extends ApiError {
+  constructor(message: string = 'Too many requests', public retryAfter?: number) {
+    super(429, message, 'TOO_MANY_REQUESTS', { retryAfter });
+    this.name = 'TooManyRequestsError';
+  }
+}
+
 // =============================================
 // ERROR RESPONSE INTERFACE
 // =============================================
@@ -196,6 +203,19 @@ export function handleApiError(error: unknown): NextResponse<ErrorResponse> {
   if (error instanceof ZodError) {
     const formatted = formatZodError(error);
     return NextResponse.json(formatted, { status: formatted.error.statusCode });
+  }
+
+  // Rate limit error - include Retry-After header
+  if (error instanceof TooManyRequestsError) {
+    const formatted = formatApiError(error);
+    const headers: HeadersInit = {};
+    if (error.retryAfter) {
+      headers['Retry-After'] = String(error.retryAfter);
+    }
+    return NextResponse.json(formatted, {
+      status: 429,
+      headers,
+    });
   }
 
   // Custom API error

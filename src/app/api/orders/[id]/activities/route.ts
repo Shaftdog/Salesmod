@@ -14,6 +14,7 @@ import {
   BadRequestError,
 } from '@/lib/errors/api-errors';
 import { sanitizeText } from '@/lib/utils/sanitize';
+import { withRateLimit, RateLimitPresets } from '@/lib/utils/api-rate-limiter';
 import { z } from 'zod';
 
 // Maximum allowed pagination limit to prevent memory exhaustion
@@ -111,14 +112,20 @@ export async function POST(
 ) {
   try {
     const supabase = await createClient();
-    const { orgId, tenantId } = await getAuthenticatedContext(supabase);
+    const { orgId: userId, tenantId } = await getAuthenticatedContext(supabase);
     const { id: orderId } = await params;
+
+    // Rate limit: 20 requests per minute for write operations
+    withRateLimit(userId, {
+      ...RateLimitPresets.write,
+      endpoint: 'orders/activities/POST',
+    });
 
     // Get user profile for the name
     const { data: profile } = await supabase
       .from('profiles')
       .select('name')
-      .eq('id', orgId)
+      .eq('id', userId)
       .single();
 
     // Parse and validate body
@@ -146,7 +153,7 @@ export async function POST(
         activity_type,
         description: sanitizeText(description),
         metadata: metadata || {},
-        performed_by: orgId,
+        performed_by: userId,
         performed_by_name: profile?.name || 'Unknown',
         is_system: false,
       })
