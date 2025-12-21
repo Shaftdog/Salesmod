@@ -12,8 +12,10 @@ import {
   Shield,
   ChevronLeft,
   ChevronRight,
+  Database,
+  UserCog,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -21,8 +23,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { useUserAreas } from '@/hooks/use-user-areas'
 
-const adminNavItems = [
+interface AdminNavItem {
+  href: string
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  description: string
+  superAdminOnly?: boolean
+}
+
+const adminNavItems: AdminNavItem[] = [
   {
     href: '/admin',
     icon: LayoutDashboard,
@@ -34,6 +45,19 @@ const adminNavItems = [
     icon: Users,
     label: 'Users',
     description: 'Manage user accounts',
+  },
+  {
+    href: '/admin/roles',
+    icon: UserCog,
+    label: 'Role Management',
+    description: 'Manage roles and permissions',
+    superAdminOnly: true,
+  },
+  {
+    href: '/admin/migrations',
+    icon: Database,
+    label: 'Migrations',
+    description: 'Data migration tools',
   },
   {
     href: '/admin/audit-logs',
@@ -58,6 +82,17 @@ const adminNavItems = [
 export function AdminSidebar() {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const { isSuperAdmin } = useUserAreas()
+
+  // Filter nav items based on user permissions
+  const visibleNavItems = useMemo(() => {
+    return adminNavItems.filter(item => {
+      if (item.superAdminOnly && !isSuperAdmin) {
+        return false
+      }
+      return true
+    })
+  }, [isSuperAdmin])
 
   return (
     <aside
@@ -84,7 +119,7 @@ export function AdminSidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-4">
         <div className="space-y-2">
-          {adminNavItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive = pathname === item.href ||
               (item.href !== '/admin' && pathname.startsWith(item.href))
 

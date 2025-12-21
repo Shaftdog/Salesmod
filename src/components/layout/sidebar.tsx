@@ -16,7 +16,6 @@ import {
   AI_SECTION,
   SYSTEM_ITEMS,
   ADMIN_ITEM,
-  SUPER_ADMIN_ITEM,
   getInitialExpandedState,
   type NavSection,
 } from "@/lib/navigation-config";
@@ -70,12 +69,8 @@ function Sidebar() {
     if (isAdmin) {
       items.push(ADMIN_ITEM);
     }
-    // Add role management link for super admins only
-    if (isSuperAdmin) {
-      items.push(SUPER_ADMIN_ITEM);
-    }
     return items;
-  }, [isAdmin, isSuperAdmin]);
+  }, [isAdmin]);
 
   return (
     <aside className="fixed inset-y-0 left-0 z-10 hidden w-60 flex-col border-r bg-background sm:flex">

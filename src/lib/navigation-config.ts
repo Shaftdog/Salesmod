@@ -1,12 +1,10 @@
 import {
   Home,
   Package as PackageIcon,
-  Settings,
   Briefcase,
   Target,
   CheckSquare,
   Brain,
-  Database,
   Users,
   MapPin,
   Shield,
@@ -176,20 +174,12 @@ export const AI_SECTION: NavSection = {
 
 export const SYSTEM_ITEMS: NavItem[] = [
   { href: "/dashboard", icon: Home, label: "Overview" },
-  { href: "/migrations", icon: Database, label: "Migrations" },
-  { href: "/settings", icon: Settings, label: "Settings" },
 ];
 
 export const ADMIN_ITEM: NavItem = {
   href: "/admin",
   icon: Shield,
   label: "Admin",
-};
-
-export const SUPER_ADMIN_ITEM: NavItem = {
-  href: "/admin/roles",
-  icon: UserCog,
-  label: "Role Management",
 };
 
 // Generate initial expanded state from sections
