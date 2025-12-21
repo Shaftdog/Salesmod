@@ -15,6 +15,7 @@ import {
   BadRequestError,
   ForbiddenError,
 } from '@/lib/errors/api-errors';
+import { sanitizeText } from '@/lib/utils/sanitize';
 import { logNoteAdded } from '@/lib/services/order-activities';
 
 export const dynamic = 'force-dynamic';
@@ -111,13 +112,13 @@ export async function POST(
       throw new BadRequestError(`Invalid note type. Must be one of: ${validNoteTypes.join(', ')}`);
     }
 
-    // Insert note record
+    // Insert note record with sanitized content
     const { data: newNote, error: insertError } = await supabase
       .from('order_notes')
       .insert({
         tenant_id: tenantId,
         order_id: orderId,
-        note: note.trim(),
+        note: sanitizeText(note.trim()),
         note_type,
         is_internal,
         created_by_id: orgId,

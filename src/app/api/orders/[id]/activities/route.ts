@@ -13,7 +13,11 @@ import {
   NotFoundError,
   BadRequestError,
 } from '@/lib/errors/api-errors';
+import { sanitizeText } from '@/lib/utils/sanitize';
 import { z } from 'zod';
+
+// Maximum allowed pagination limit to prevent memory exhaustion
+const MAX_LIMIT = 100;
 
 export const dynamic = 'force-dynamic';
 
@@ -43,10 +47,10 @@ export async function GET(
     const { tenantId } = await getAuthenticatedContext(supabase);
     const { id: orderId } = await params;
 
-    // Get query params for pagination
+    // Get query params for pagination with limit cap
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '50', 10);
-    const offset = parseInt(searchParams.get('offset') || '0', 10);
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), MAX_LIMIT);
+    const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10), 0);
 
     // Verify order exists and belongs to tenant
     const { data: order, error: orderError } = await supabase
@@ -133,14 +137,14 @@ export async function POST(
       throw new NotFoundError('Order');
     }
 
-    // Insert the activity
+    // Insert the activity with sanitized description
     const { data: activity, error: insertError } = await supabase
       .from('order_activities')
       .insert({
         tenant_id: tenantId,
         order_id: orderId,
         activity_type,
-        description,
+        description: sanitizeText(description),
         metadata: metadata || {},
         performed_by: orgId,
         performed_by_name: profile?.name || 'Unknown',
