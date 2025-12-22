@@ -145,10 +145,31 @@ async function checkResearchPolicy(context: PolicyContext): Promise<PolicyResult
  */
 async function checkRateLimitPolicy(context: PolicyContext): Promise<PolicyResult> {
   const rateLimitedActions: Record<string, { type: string; limit: number }> = {
+    // P0 actions
     send_email: { type: 'email_send', limit: 20 },
     reply_to_email: { type: 'email_send', limit: 20 },
     research: { type: 'research', limit: 10 },
     sandbox_job: { type: 'sandbox', limit: 5 },
+
+    // P1.3: Feedback automation
+    send_feedback_request: { type: 'feedback', limit: 10 },
+
+    // P1.4: Deal follow-ups
+    deal_follow_up: { type: 'deal_follow_up', limit: 15 },
+
+    // P1.5: Quote follow-ups
+    send_quote: { type: 'quote', limit: 10 },
+    quote_follow_up: { type: 'quote_follow_up', limit: 10 },
+
+    // P1.6: Opportunity signals
+    action_opportunity_signal: { type: 'opportunity', limit: 10 },
+
+    // P1.7: Compliance
+    compliance_reminder: { type: 'compliance', limit: 20 },
+    escalate_compliance: { type: 'compliance', limit: 10 },
+
+    // P1.2: Broadcasts
+    process_broadcast_batch: { type: 'broadcast', limit: 10 },
   };
 
   const config = rateLimitedActions[context.actionType];

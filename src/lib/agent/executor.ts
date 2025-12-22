@@ -103,6 +103,31 @@ export async function executeCard(cardId: string): Promise<ExecutionResult> {
         result = await executeNeedsHumanResponse(card);
         break;
 
+      // P1 Engine Card Types
+      case 'send_feedback_request':
+        result = await executeSendFeedbackRequest(card);
+        break;
+
+      case 'deal_follow_up':
+        result = await executeDealFollowUp(card);
+        break;
+
+      case 'send_quote':
+        result = await executeSendQuote(card);
+        break;
+
+      case 'quote_follow_up':
+        result = await executeQuoteFollowUp(card);
+        break;
+
+      case 'compliance_reminder':
+        result = await executeComplianceReminder(card);
+        break;
+
+      case 'escalate_compliance':
+        result = await executeEscalateCompliance(card);
+        break;
+
       default:
         result = {
           success: false,
@@ -241,13 +266,16 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
 
   // Validate we have an email address
   if (!recipientEmail) {
+    // Log without sensitive payload data
     console.error('[Email Execution] Missing recipient email:', {
       cardId: card.id,
       cardTitle: card.title,
-      payload: JSON.stringify(payload),
+      hasPayloadTo: !!payload.to,
+      hasContactId: !!card.contact_id,
+      hasClientId: !!card.client_id,
       debugInfo,
     });
-    
+
     return {
       success: false,
       cardId: card.id,
@@ -262,13 +290,13 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
   const emailSubject = payload.subject || card.title || 'No Subject';
 
   if (!emailHtml && !emailText) {
+    // Log without sensitive payload data
     console.error('[Email Execution] Missing email content:', {
       cardId: card.id,
       cardTitle: card.title,
       hasBody: !!payload.body,
       hasHtml: !!payload.html,
       hasText: !!payload.text,
-      payload: JSON.stringify(payload),
     });
     
     return {
@@ -1313,4 +1341,382 @@ async function executeNeedsHumanResponse(card: KanbanCard): Promise<ExecutionRes
   };
 }
 
+// ============================================================================
+// P1 Engine Card Executors
+// ============================================================================
+
+/**
+ * Execute: Send Feedback Request
+ * Sends a feedback request email 7 days after order delivery
+ */
+async function executeSendFeedbackRequest(card: KanbanCard): Promise<ExecutionResult> {
+  const supabase = await createClient();
+  const payload = card.action_payload;
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const tenantId = card.tenant_id;
+    if (!tenantId) throw new Error('Card has no tenant_id assigned');
+
+    // Get contact email
+    let recipientEmail = payload.to;
+    if (!recipientEmail && card.contact_id) {
+      const { data: contact } = await supabase
+        .from('contacts')
+        .select('email, first_name')
+        .eq('id', card.contact_id)
+        .single();
+      recipientEmail = contact?.email;
+    }
+
+    if (!recipientEmail) {
+      return {
+        success: false,
+        cardId: card.id,
+        message: 'No recipient email for feedback request',
+        error: 'Cannot send feedback request without email address',
+      };
+    }
+
+    // Import sendFeedbackRequest from feedback-engine
+    const { sendFeedbackRequest } = await import('./feedback-engine');
+    const result = await sendFeedbackRequest(payload.feedbackRequestId);
+
+    if (result.success) {
+      // Log activity
+      await supabase.from('activities').insert({
+        tenant_id: tenantId,
+        client_id: card.client_id,
+        contact_id: card.contact_id,
+        activity_type: 'email',
+        subject: 'Feedback Request Sent',
+        description: `Automated feedback request sent to ${recipientEmail}`,
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        created_by: user.id,
+      });
+    }
+
+    return {
+      success: result.success,
+      cardId: card.id,
+      message: result.message,
+      error: result.error,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      cardId: card.id,
+      message: 'Feedback request failed',
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Execute: Deal Follow-up
+ * Sends a follow-up email for a stalled deal
+ */
+async function executeDealFollowUp(card: KanbanCard): Promise<ExecutionResult> {
+  const supabase = await createClient();
+  const payload = card.action_payload;
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const tenantId = card.tenant_id;
+    if (!tenantId) throw new Error('Card has no tenant_id assigned');
+
+    // Get deal details
+    const dealId = payload.dealId;
+    if (!dealId) {
+      return {
+        success: false,
+        cardId: card.id,
+        message: 'No deal ID provided',
+        error: 'Cannot process deal follow-up without deal ID',
+      };
+    }
+
+    // Import scheduleFollowUp from deals-engine
+    const { scheduleFollowUp, recordDealActivity } = await import('./deals-engine');
+    const result = await scheduleFollowUp(dealId);
+
+    if (result.success) {
+      // Record the activity
+      await recordDealActivity(dealId, 'email');
+
+      // Log to activities
+      await supabase.from('activities').insert({
+        tenant_id: tenantId,
+        client_id: card.client_id,
+        contact_id: card.contact_id,
+        deal_id: dealId,
+        activity_type: 'email',
+        subject: `Deal Follow-up: ${payload.title || 'Untitled'}`,
+        description: `Automated follow-up for stalled deal`,
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        created_by: user.id,
+      });
+    }
+
+    return {
+      success: result.success,
+      cardId: card.id,
+      message: result.message,
+      error: result.error,
+      metadata: { followUpCardId: result.cardId },
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      cardId: card.id,
+      message: 'Deal follow-up failed',
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Execute: Send Quote
+ * Sends a quote/bid to a client
+ */
+async function executeSendQuote(card: KanbanCard): Promise<ExecutionResult> {
+  const supabase = await createClient();
+  const payload = card.action_payload;
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const tenantId = card.tenant_id;
+    if (!tenantId) throw new Error('Card has no tenant_id assigned');
+
+    const quoteId = payload.quoteId;
+    if (!quoteId) {
+      return {
+        success: false,
+        cardId: card.id,
+        message: 'No quote ID provided',
+        error: 'Cannot send quote without quote ID',
+      };
+    }
+
+    // Import sendQuote from bids-engine
+    const { sendQuote } = await import('./bids-engine');
+    const result = await sendQuote(quoteId);
+
+    if (result.success) {
+      // Log activity
+      await supabase.from('activities').insert({
+        tenant_id: tenantId,
+        client_id: card.client_id,
+        contact_id: card.contact_id,
+        activity_type: 'email',
+        subject: `Quote Sent: ${payload.quoteNumber || 'Untitled'}`,
+        description: `Quote for $${payload.totalAmount?.toLocaleString() || '0'} sent`,
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        created_by: user.id,
+      });
+    }
+
+    return {
+      success: result.success,
+      cardId: card.id,
+      message: result.message,
+      error: result.error,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      cardId: card.id,
+      message: 'Send quote failed',
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Execute: Quote Follow-up
+ * Sends a follow-up for an unanswered quote
+ */
+async function executeQuoteFollowUp(card: KanbanCard): Promise<ExecutionResult> {
+  const supabase = await createClient();
+  const payload = card.action_payload;
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const tenantId = card.tenant_id;
+    if (!tenantId) throw new Error('Card has no tenant_id assigned');
+
+    const quoteId = payload.quoteId;
+    if (!quoteId) {
+      return {
+        success: false,
+        cardId: card.id,
+        message: 'No quote ID provided',
+        error: 'Cannot follow up on quote without quote ID',
+      };
+    }
+
+    // Import followUpQuote from bids-engine
+    const { followUpQuote } = await import('./bids-engine');
+    const result = await followUpQuote(quoteId);
+
+    if (result.success) {
+      // Log activity
+      await supabase.from('activities').insert({
+        tenant_id: tenantId,
+        client_id: card.client_id,
+        contact_id: card.contact_id,
+        activity_type: 'email',
+        subject: `Quote Follow-up: ${payload.quoteNumber || 'Untitled'}`,
+        description: `Follow-up #${(payload.followUpCount || 0) + 1} for quote`,
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        created_by: user.id,
+      });
+    }
+
+    return {
+      success: result.success,
+      cardId: card.id,
+      message: result.message,
+      error: result.error,
+      metadata: { followUpCardId: result.cardId },
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      cardId: card.id,
+      message: 'Quote follow-up failed',
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Execute: Compliance Reminder
+ * Sends a reminder for compliance verification
+ */
+async function executeComplianceReminder(card: KanbanCard): Promise<ExecutionResult> {
+  const supabase = await createClient();
+  const payload = card.action_payload;
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const tenantId = card.tenant_id;
+    if (!tenantId) throw new Error('Card has no tenant_id assigned');
+
+    const checkId = payload.checkId;
+    if (!checkId) {
+      return {
+        success: false,
+        cardId: card.id,
+        message: 'No compliance check ID provided',
+        error: 'Cannot send reminder without check ID',
+      };
+    }
+
+    // Import sendComplianceReminder from compliance-engine
+    const { sendComplianceReminder } = await import('./compliance-engine');
+    const result = await sendComplianceReminder(checkId);
+
+    if (result.success) {
+      // Log activity
+      await supabase.from('activities').insert({
+        tenant_id: tenantId,
+        client_id: card.client_id,
+        activity_type: 'note',
+        subject: `Compliance Reminder: ${payload.complianceType || 'Verification'}`,
+        description: `Reminder sent for ${payload.entityName || 'entity'} - ${payload.complianceType}`,
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        created_by: user.id,
+      });
+    }
+
+    return {
+      success: result.success,
+      cardId: card.id,
+      message: result.message,
+      error: result.error,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      cardId: card.id,
+      message: 'Compliance reminder failed',
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * Execute: Escalate Compliance
+ * Escalates an overdue compliance check
+ */
+async function executeEscalateCompliance(card: KanbanCard): Promise<ExecutionResult> {
+  const supabase = await createClient();
+  const payload = card.action_payload;
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const tenantId = card.tenant_id;
+    if (!tenantId) throw new Error('Card has no tenant_id assigned');
+
+    const checkId = payload.checkId;
+    if (!checkId) {
+      return {
+        success: false,
+        cardId: card.id,
+        message: 'No compliance check ID provided',
+        error: 'Cannot escalate without check ID',
+      };
+    }
+
+    // Import escalateOverdueCompliance from compliance-engine
+    const { escalateOverdueCompliance } = await import('./compliance-engine');
+    const result = await escalateOverdueCompliance(checkId);
+
+    if (result.success) {
+      // Log activity
+      await supabase.from('activities').insert({
+        tenant_id: tenantId,
+        client_id: card.client_id,
+        activity_type: 'note',
+        subject: `Compliance Escalated: ${payload.complianceType || 'Verification'}`,
+        description: `Overdue compliance escalated for ${payload.entityName || 'entity'} after ${payload.reminderCount || 0} reminders`,
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        created_by: user.id,
+      });
+    }
+
+    return {
+      success: result.success,
+      cardId: card.id,
+      message: result.message,
+      error: result.error,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      cardId: card.id,
+      message: 'Compliance escalation failed',
+      error: error.message,
+    };
+  }
+}
 
