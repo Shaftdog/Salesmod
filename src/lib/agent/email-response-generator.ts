@@ -60,7 +60,16 @@ export async function generateEmailResponse(
       throw new Error('Unexpected response type from Claude');
     }
 
-    const response = JSON.parse(content.text);
+    // Strip markdown code blocks if present (Claude sometimes wraps JSON in ```json ... ```)
+    let jsonText = content.text.trim();
+    if (jsonText.startsWith('```')) {
+      // Remove opening code block (```json or ```)
+      jsonText = jsonText.replace(/^```(?:json)?\s*\n?/, '');
+      // Remove closing code block
+      jsonText = jsonText.replace(/\n?```\s*$/, '');
+    }
+
+    const response = JSON.parse(jsonText);
 
     // Determine if should auto-send based on category
     const autoSendCategories: EmailCategory[] = ['STATUS', 'SCHEDULING', 'REMOVE'];

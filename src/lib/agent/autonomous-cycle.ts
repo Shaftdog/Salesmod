@@ -28,6 +28,14 @@ import { processNewOrders, getUnresolvedExceptions } from './order-processor';
 import { isAgentEnabledForTenant, checkRateLimit } from './agent-config';
 import { logCycleStart, logCycleEnd, logAction, evaluateAlerts } from './observability';
 
+// P1 Engine imports
+import { getFeedbackDue, sendFeedbackRequest } from './feedback-engine';
+import { detectStalledDeals, getDealFollowUpsDue, scheduleFollowUp } from './deals-engine';
+import { getQuotesNeedingFollowUp, followUpQuote } from './bids-engine';
+import { getUnactionedSignals, processEnrichmentQueue } from './contact-enricher';
+import { getComplianceDue, sendComplianceReminder, escalateOverdueCompliance } from './compliance-engine';
+import { getBroadcastsDue, getInProgressBroadcasts, processBroadcastBatch } from './broadcast-integration';
+
 export interface CycleResult {
   success: boolean;
   runId: string | null;
@@ -310,6 +318,209 @@ async function executePlanPhase(
     });
   }
 
+  // =========================================================================
+  // P1 ENGINE INTEGRATIONS
+  // =========================================================================
+
+  // P1.3: Feedback requests due (7 days post-delivery)
+  try {
+    const feedbackDue = await getFeedbackDue(tenantId, 10);
+    for (const feedback of feedbackDue) {
+      actions.push({
+        type: 'send_feedback_request',
+        priority: 'medium',
+        targetId: feedback.id,
+        targetType: 'order',
+        data: {
+          feedbackRequestId: feedback.id,
+          orderId: feedback.orderId,
+          clientId: feedback.clientId,
+          contactId: feedback.contactId,
+          contactEmail: feedback.contactEmail,
+          deliveryDate: feedback.deliveryDate,
+        },
+        reason: `Feedback request due for order delivered on ${new Date(feedback.deliveryDate).toLocaleDateString()}`,
+      });
+    }
+  } catch (err) {
+    console.error('[AutonomousCycle] Error checking feedback due:', err);
+  }
+
+  // P1.4: Stalled deals needing follow-up
+  try {
+    const stalledDeals = await detectStalledDeals(tenantId, 10);
+    for (const deal of stalledDeals) {
+      actions.push({
+        type: 'deal_follow_up',
+        priority: deal.daysSinceActivity > 14 ? 'high' : 'medium',
+        targetId: deal.dealId,
+        data: {
+          dealId: deal.dealId,
+          title: deal.title,
+          stage: deal.stage,
+          clientId: deal.clientId,
+          contactId: deal.contactId,
+          contactEmail: deal.contactEmail,
+          daysSinceActivity: deal.daysSinceActivity,
+          value: deal.value,
+        },
+        reason: `Deal stalled for ${deal.daysSinceActivity} days (threshold: ${deal.stalledThreshold})`,
+      });
+    }
+
+    // Also check deals with scheduled follow-ups that are now due
+    const followUpsDue = await getDealFollowUpsDue(tenantId, 10);
+    for (const deal of followUpsDue) {
+      // Avoid duplicates with stalled deals
+      if (!stalledDeals.some(s => s.dealId === deal.dealId)) {
+        actions.push({
+          type: 'deal_follow_up',
+          priority: deal.followUpCount >= 3 ? 'high' : 'medium',
+          targetId: deal.dealId,
+          data: {
+            dealId: deal.dealId,
+            title: deal.title,
+            stage: deal.stage,
+            clientId: deal.clientId,
+            contactId: deal.contactId,
+            contactEmail: deal.contactEmail,
+            followUpCount: deal.followUpCount,
+            value: deal.value,
+          },
+          reason: `Scheduled follow-up #${deal.followUpCount + 1} is due`,
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[AutonomousCycle] Error checking stalled deals:', err);
+  }
+
+  // P1.5: Quotes needing follow-up
+  try {
+    const quotesDue = await getQuotesNeedingFollowUp(tenantId, 10);
+    for (const quote of quotesDue) {
+      actions.push({
+        type: 'quote_follow_up',
+        priority: quote.totalAmount > 10000 ? 'high' : 'medium',
+        targetId: quote.quoteId,
+        data: {
+          quoteId: quote.quoteId,
+          quoteNumber: quote.quoteNumber,
+          title: quote.title,
+          clientId: quote.clientId,
+          contactId: quote.contactId,
+          contactEmail: quote.contactEmail,
+          totalAmount: quote.totalAmount,
+          followUpCount: quote.followUpCount,
+          daysSinceSent: quote.daysSinceSent,
+        },
+        reason: `Quote follow-up #${quote.followUpCount + 1} due (sent ${quote.daysSinceSent} days ago)`,
+      });
+    }
+  } catch (err) {
+    console.error('[AutonomousCycle] Error checking quotes due:', err);
+  }
+
+  // P1.6: Opportunity signals to action
+  try {
+    const signals = await getUnactionedSignals(tenantId, 5);
+    for (const signal of signals) {
+      actions.push({
+        type: 'action_opportunity_signal',
+        priority: signal.signalStrength > 0.7 ? 'high' : 'medium',
+        targetId: signal.id,
+        data: {
+          signalId: signal.id,
+          signalType: signal.signalType,
+          signalStrength: signal.signalStrength,
+          extractedText: signal.extractedText,
+          sourceType: signal.sourceType,
+          clientId: signal.clientId,
+          contactId: signal.contactId,
+        },
+        reason: `Opportunity signal detected: ${signal.signalType} (strength: ${Math.round(signal.signalStrength * 100)}%)`,
+      });
+    }
+
+    // Also process enrichment queue
+    await processEnrichmentQueue(tenantId, 10);
+  } catch (err) {
+    console.error('[AutonomousCycle] Error checking opportunity signals:', err);
+  }
+
+  // P1.7: Compliance checks due
+  try {
+    const complianceDue = await getComplianceDue(tenantId, 10);
+    for (const check of complianceDue) {
+      const isOverdue = check.dueAt < new Date();
+      const isEscalation = isOverdue && check.reminderCount >= 2;
+
+      actions.push({
+        type: isEscalation ? 'escalate_compliance' : 'compliance_reminder',
+        priority: isOverdue ? 'high' : 'medium',
+        targetId: check.id,
+        data: {
+          checkId: check.id,
+          entityType: check.entityType,
+          entityId: check.entityId,
+          entityName: check.entityName,
+          complianceType: check.complianceType,
+          dueAt: check.dueAt,
+          missingFields: check.missingFields,
+          reminderCount: check.reminderCount,
+        },
+        reason: isEscalation
+          ? `Compliance overdue - escalating (${check.reminderCount} reminders sent)`
+          : `Compliance ${isOverdue ? 'overdue' : 'due soon'}: ${check.complianceType} for ${check.entityName}`,
+      });
+    }
+  } catch (err) {
+    console.error('[AutonomousCycle] Error checking compliance due:', err);
+  }
+
+  // P1.2: Scheduled broadcasts
+  try {
+    const broadcastsDue = await getBroadcastsDue(tenantId, 5);
+    for (const broadcast of broadcastsDue) {
+      actions.push({
+        type: 'process_broadcast_batch',
+        priority: 'medium',
+        targetId: broadcast.campaignId,
+        data: {
+          campaignId: broadcast.campaignId,
+          name: broadcast.name,
+          totalRecipients: broadcast.totalRecipients,
+          sentCount: broadcast.sentCount,
+          remainingCount: broadcast.remainingCount,
+        },
+        reason: `Scheduled broadcast ready: ${broadcast.name} (${broadcast.remainingCount} remaining)`,
+      });
+    }
+
+    // Also check in-progress broadcasts
+    const inProgress = await getInProgressBroadcasts(tenantId, 5);
+    for (const broadcast of inProgress) {
+      // Avoid duplicates
+      if (!broadcastsDue.some(b => b.campaignId === broadcast.campaignId)) {
+        actions.push({
+          type: 'process_broadcast_batch',
+          priority: 'low',
+          targetId: broadcast.campaignId,
+          data: {
+            campaignId: broadcast.campaignId,
+            name: broadcast.name,
+            totalRecipients: broadcast.totalRecipients,
+            sentCount: broadcast.sentCount,
+            remainingCount: broadcast.remainingCount,
+          },
+          reason: `Continue broadcast: ${broadcast.name} (${broadcast.remainingCount} remaining)`,
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[AutonomousCycle] Error checking broadcasts:', err);
+  }
+
   // Sort by priority
   const priorityOrder = { high: 0, medium: 1, low: 2 };
   actions.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
@@ -432,21 +643,54 @@ async function executeActPhase(
         }
 
         case 'send_email': {
-          // For engagement follow-ups, create a card instead of sending directly
+          // For engagement follow-ups, create a card with email content
+          const contactName = (action.data.contactName || action.data.clientName || 'there') as string;
+          const firstName = contactName.split(' ')[0];
+          const companyName = (action.data.clientName || 'your company') as string;
+          const daysOverdue = (action.data.daysOverdue || 0) as number;
+
+          // Generate engagement follow-up email content
+          const emailSubject = `Checking in - ${companyName}`;
+          let emailBody: string;
+
+          if (daysOverdue >= 21) {
+            // Long overdue - more direct
+            emailBody = `<p>Hi ${firstName},</p>
+<p>It's been a while since we last connected, and I wanted to reach out to see how things are going with ${companyName}.</p>
+<p>I'd love to catch up and learn about any upcoming appraisal needs you might have. Even if you don't have anything immediate, I'm happy to be a resource.</p>
+<p>Would you have a few minutes for a quick call this week?</p>
+<p>Best regards</p>`;
+          } else if (daysOverdue >= 14) {
+            // Moderately overdue
+            emailBody = `<p>Hi ${firstName},</p>
+<p>I hope this message finds you well. I realized it's been a couple of weeks since we last touched base, and I wanted to check in.</p>
+<p>Is there anything I can help you with regarding appraisals or any questions you might have? I'm here to help.</p>
+<p>Looking forward to hearing from you.</p>
+<p>Best regards</p>`;
+          } else {
+            // Recently overdue
+            emailBody = `<p>Hi ${firstName},</p>
+<p>Just wanted to quickly touch base and see how things are going. Is there anything I can assist you with?</p>
+<p>Feel free to reach out if you have any appraisal needs or questions.</p>
+<p>Best regards</p>`;
+          }
+
           const { data: newCard } = await supabase
             .from('kanban_cards')
             .insert({
               tenant_id: tenantId,
               client_id: action.data.clientId,
               contact_id: action.data.contactId,
-              type: 'follow_up',
-              title: `Follow up with ${action.data.contactName || action.data.clientName}`,
+              type: 'send_email',
+              title: `Follow up with ${contactName}`,
               description: action.reason,
-              rationale: `Engagement overdue by ${action.data.daysOverdue} days`,
+              rationale: `Engagement overdue by ${daysOverdue} days`,
               priority: action.priority,
               state: 'suggested',
               action_payload: {
                 to: action.data.contactEmail,
+                subject: emailSubject,
+                body: emailBody,
                 engagementFollowUp: true,
               },
             })
@@ -479,6 +723,132 @@ async function executeActPhase(
           results.executed++;
           logAction(tenantId, runId, action.type, true, {
             orderId: action.data.orderId,
+          });
+          break;
+        }
+
+        // P1.3: Feedback requests
+        case 'send_feedback_request': {
+          const feedbackResult = await sendFeedbackRequest(action.data.feedbackRequestId as string);
+          if (feedbackResult.success) {
+            results.executed++;
+            results.cardsCreated++;
+          }
+          logAction(tenantId, runId, action.type, feedbackResult.success, {
+            feedbackRequestId: action.data.feedbackRequestId,
+            message: feedbackResult.message,
+          });
+          break;
+        }
+
+        // P1.4: Deal follow-ups
+        case 'deal_follow_up': {
+          const dealResult = await scheduleFollowUp(action.data.dealId as string);
+          if (dealResult.success) {
+            results.executed++;
+            results.cardsCreated++;
+          }
+          logAction(tenantId, runId, action.type, dealResult.success, {
+            dealId: action.data.dealId,
+            message: dealResult.message,
+            cardId: dealResult.cardId,
+          });
+          break;
+        }
+
+        // P1.5: Quote follow-ups
+        case 'quote_follow_up': {
+          const quoteResult = await followUpQuote(action.data.quoteId as string);
+          if (quoteResult.success) {
+            results.executed++;
+            results.cardsCreated++;
+          }
+          logAction(tenantId, runId, action.type, quoteResult.success, {
+            quoteId: action.data.quoteId,
+            message: quoteResult.message,
+            cardId: quoteResult.cardId,
+          });
+          break;
+        }
+
+        // P1.6: Opportunity signals (creates follow-up card)
+        case 'action_opportunity_signal': {
+          // Create a card for the opportunity signal
+          const { data: signalCard } = await supabase
+            .from('kanban_cards')
+            .insert({
+              tenant_id: tenantId,
+              type: 'follow_up',
+              title: `Opportunity: ${action.data.signalType}`,
+              description: `Detected opportunity signal: ${action.data.extractedText}`,
+              rationale: action.reason,
+              priority: action.priority,
+              state: 'suggested',
+              client_id: action.data.clientId || null,
+              contact_id: action.data.contactId || null,
+              action_payload: {
+                signalId: action.data.signalId,
+                signalType: action.data.signalType,
+                sourceType: action.data.sourceType,
+              },
+            })
+            .select('id')
+            .single();
+
+          // Mark signal as actioned
+          if (signalCard) {
+            await supabase
+              .from('opportunity_signals')
+              .update({ actioned: true })
+              .eq('id', action.data.signalId);
+            results.cardsCreated++;
+          }
+          results.executed++;
+          logAction(tenantId, runId, action.type, true, {
+            signalId: action.data.signalId,
+            cardId: signalCard?.id,
+          });
+          break;
+        }
+
+        // P1.7: Compliance reminders
+        case 'compliance_reminder': {
+          const reminderResult = await sendComplianceReminder(action.data.checkId as string);
+          if (reminderResult.success) {
+            results.executed++;
+            results.cardsCreated++;
+          }
+          logAction(tenantId, runId, action.type, reminderResult.success, {
+            checkId: action.data.checkId,
+            message: reminderResult.message,
+          });
+          break;
+        }
+
+        case 'escalate_compliance': {
+          const escalateResult = await escalateOverdueCompliance(action.data.checkId as string);
+          if (escalateResult.success) {
+            results.executed++;
+            results.cardsCreated++;
+          }
+          logAction(tenantId, runId, action.type, escalateResult.success, {
+            checkId: action.data.checkId,
+            message: escalateResult.message,
+          });
+          break;
+        }
+
+        // P1.2: Broadcast batch processing
+        case 'process_broadcast_batch': {
+          const batchResult = await processBroadcastBatch(action.data.campaignId as string, 50);
+          if (batchResult.success) {
+            results.executed++;
+            results.emailsSent += batchResult.sentCount;
+          }
+          logAction(tenantId, runId, action.type, batchResult.success, {
+            campaignId: action.data.campaignId,
+            sentCount: batchResult.sentCount,
+            failedCount: batchResult.failedCount,
           });
           break;
         }

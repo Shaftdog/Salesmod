@@ -467,8 +467,17 @@ export async function classifyEmail(
       throw new Error('Unexpected response type from Claude');
     }
 
+    // Strip markdown code blocks if present (Claude sometimes wraps JSON in ```json ... ```)
+    let jsonText = content.text.trim();
+    if (jsonText.startsWith('```')) {
+      // Remove opening code block (```json or ```)
+      jsonText = jsonText.replace(/^```(?:json)?\s*\n?/, '');
+      // Remove closing code block
+      jsonText = jsonText.replace(/\n?```\s*$/, '');
+    }
+
     // Validate with Zod schema
-    const parsed = JSON.parse(content.text);
+    const parsed = JSON.parse(jsonText);
     const classification = EmailClassificationSchema.parse(parsed);
 
     // Apply 95% confidence rule
