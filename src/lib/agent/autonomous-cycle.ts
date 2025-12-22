@@ -36,6 +36,12 @@ import { getUnactionedSignals, processEnrichmentQueue } from './contact-enricher
 import { getComplianceDue, sendComplianceReminder, escalateOverdueCompliance } from './compliance-engine';
 import { getBroadcastsDue, getInProgressBroadcasts, processBroadcastBatch } from './broadcast-integration';
 
+// P2 Engine imports
+import { getInsightJobsDue, processInsightJob, type JobResult as InsightJobResult } from './insight-jobs';
+import { captureEvent, EVENT_TYPES, EVENT_SOURCES } from './warehouse-writer';
+import { getPendingSandboxJobs, runPendingExecution, type ExecutionResult as SandboxExecutionResult } from '@/lib/sandbox';
+import { getPendingJobs as getBrowserJobsDue, executeJob as executeBrowserJob, type JobExecutionResult } from '@/lib/browser-automation';
+
 export interface CycleResult {
   success: boolean;
   runId: string | null;
@@ -521,6 +527,74 @@ async function executePlanPhase(
     console.error('[AutonomousCycle] Error checking broadcasts:', err);
   }
 
+  // =========================================================================
+  // P2 ENGINE INTEGRATIONS
+  // =========================================================================
+
+  // P2.1: Insight jobs due (hourly, daily, weekly)
+  try {
+    const insightJobs = await getInsightJobsDue(tenantId, 5);
+    for (const job of insightJobs) {
+      actions.push({
+        type: 'process_insight_job',
+        priority: job.jobType === 'weekly_playbook' ? 'low' : 'medium',
+        targetId: job.id,
+        data: {
+          jobId: job.id,
+          jobType: job.jobType,
+          scheduledFor: job.scheduledFor,
+        },
+        reason: `Insight job due: ${job.jobType}`,
+      });
+    }
+  } catch (err) {
+    console.error('[AutonomousCycle] Error checking insight jobs:', err);
+  }
+
+  // P2.2: Pending sandbox jobs
+  try {
+    const sandboxJobs = await getPendingSandboxJobs(tenantId, 3);
+    for (const job of sandboxJobs) {
+      actions.push({
+        type: 'execute_sandbox_job',
+        priority: 'medium',
+        targetId: job.id,
+        data: {
+          executionId: job.id,
+          templateName: job.templateName,
+          inputParams: job.inputParams,
+        },
+        reason: `Sandbox job pending: ${job.templateName}`,
+      });
+    }
+  } catch (err) {
+    console.error('[AutonomousCycle] Error checking sandbox jobs:', err);
+  }
+
+  // P2.3: Browser automation jobs (approved only)
+  try {
+    const browserJobs = await getBrowserJobsDue(tenantId, 2);
+    for (const job of browserJobs) {
+      // Only process approved jobs
+      if (job.status === 'approved') {
+        actions.push({
+          type: 'execute_browser_job',
+          priority: job.jobType === 'accept_order' ? 'high' : 'medium',
+          targetId: job.id,
+          data: {
+            jobId: job.id,
+            jobType: job.jobType,
+            portalConfigId: job.portalConfigId,
+            parameters: job.parameters,
+          },
+          reason: `Browser job approved: ${job.jobType}`,
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[AutonomousCycle] Error checking browser jobs:', err);
+  }
+
   // Sort by priority
   const priorityOrder = { high: 0, medium: 1, low: 2 };
   actions.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
@@ -849,6 +923,89 @@ async function executeActPhase(
             campaignId: action.data.campaignId,
             sentCount: batchResult.sentCount,
             failedCount: batchResult.failedCount,
+          });
+          break;
+        }
+
+        // =====================================================================
+        // P2 ENGINE ACTIONS
+        // =====================================================================
+
+        // P2.1: Process insight job
+        case 'process_insight_job': {
+          const insightResult = await processInsightJob(action.data.jobId as string);
+          if (insightResult.success) {
+            results.executed++;
+
+            // Capture event to warehouse
+            await captureEvent(tenantId, {
+              eventType: EVENT_TYPES.SANDBOX_EXECUTED,
+              eventSource: EVENT_SOURCES.AUTONOMOUS_CYCLE,
+              payload: {
+                jobId: action.data.jobId,
+                jobType: action.data.jobType,
+                summary: insightResult.summary,
+              },
+              runId,
+            });
+          }
+          logAction(tenantId, runId, action.type, insightResult.success, {
+            jobId: action.data.jobId,
+            jobType: action.data.jobType,
+            error: insightResult.error,
+          });
+          break;
+        }
+
+        // P2.2: Execute sandbox job
+        case 'execute_sandbox_job': {
+          const sandboxResult = await runPendingExecution(tenantId, action.data.executionId as string);
+          if (sandboxResult.success) {
+            results.executed++;
+
+            // Capture event to warehouse
+            await captureEvent(tenantId, {
+              eventType: EVENT_TYPES.SANDBOX_EXECUTED,
+              eventSource: EVENT_SOURCES.SANDBOX,
+              payload: {
+                executionId: action.data.executionId,
+                templateName: action.data.templateName,
+                outputData: sandboxResult.outputData,
+              },
+              runId,
+            });
+          }
+          logAction(tenantId, runId, action.type, sandboxResult.success, {
+            executionId: action.data.executionId,
+            templateName: action.data.templateName,
+            error: sandboxResult.error,
+          });
+          break;
+        }
+
+        // P2.3: Execute browser automation job
+        case 'execute_browser_job': {
+          const browserResult = await executeBrowserJob(tenantId, action.data.jobId as string);
+          if (browserResult.success) {
+            results.executed++;
+
+            // Capture event to warehouse
+            await captureEvent(tenantId, {
+              eventType: EVENT_TYPES.BROWSER_JOB_COMPLETED,
+              eventSource: EVENT_SOURCES.BROWSER_AUTOMATION,
+              payload: {
+                jobId: action.data.jobId,
+                jobType: action.data.jobType,
+                extractedData: browserResult.result?.data,
+                screenshots: browserResult.screenshots?.length || 0,
+              },
+              runId,
+            });
+          }
+          logAction(tenantId, runId, action.type, browserResult.success, {
+            jobId: action.data.jobId,
+            jobType: action.data.jobType,
+            error: browserResult.error,
           });
           break;
         }
