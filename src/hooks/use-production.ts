@@ -1020,6 +1020,17 @@ export function useStartTimer() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
+      // Get user's tenant_id for RLS compliance
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile?.tenant_id) {
+        throw new Error('User profile not found or missing tenant')
+      }
+
       // Check for existing active timer
       const { data: existing } = await supabase
         .from('production_time_entries')
@@ -1033,12 +1044,13 @@ export function useStartTimer() {
         throw new Error('Timer already running for this task')
       }
 
-      // Create new time entry
+      // Create new time entry with tenant_id for RLS
       const { data, error } = await supabase
         .from('production_time_entries')
         .insert({
           task_id: taskId,
           user_id: user.id,
+          tenant_id: profile.tenant_id,
           started_at: new Date().toISOString(),
           entry_type: 'stopwatch',
         })
