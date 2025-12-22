@@ -165,60 +165,19 @@ export async function checkRateLimit(
     };
   }
 
-  // Fallback: manual rate limit check
+  // Fallback: Fail closed if database function unavailable
+  // This prevents race conditions in the read-then-write pattern
+  console.warn('[AgentConfig] Rate limit function unavailable, failing closed for safety');
+
   const now = new Date();
   const windowStart = new Date(now);
   windowStart.setMinutes(0, 0, 0);
   const windowEnd = new Date(windowStart);
   windowEnd.setHours(windowEnd.getHours() + 1);
 
-  // Get or create rate limit record
-  const { data: existing } = await supabase
-    .from('agent_rate_limits')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .eq('action_type', actionType)
-    .gte('window_start', windowStart.toISOString())
-    .single();
-
-  if (existing) {
-    if (existing.action_count >= maxAllowed) {
-      return {
-        allowed: false,
-        currentCount: existing.action_count,
-        maxAllowed,
-        windowStart: windowStart.toISOString(),
-        windowEnd: windowEnd.toISOString(),
-      };
-    }
-
-    // Increment
-    await supabase
-      .from('agent_rate_limits')
-      .update({ action_count: existing.action_count + 1 })
-      .eq('id', existing.id);
-
-    return {
-      allowed: true,
-      currentCount: existing.action_count + 1,
-      maxAllowed,
-      windowStart: windowStart.toISOString(),
-      windowEnd: windowEnd.toISOString(),
-    };
-  }
-
-  // Create new record
-  await supabase.from('agent_rate_limits').insert({
-    tenant_id: tenantId,
-    action_type: actionType,
-    action_count: 1,
-    window_start: windowStart.toISOString(),
-    window_end: windowEnd.toISOString(),
-  });
-
   return {
-    allowed: true,
-    currentCount: 1,
+    allowed: false,
+    currentCount: 0,
     maxAllowed,
     windowStart: windowStart.toISOString(),
     windowEnd: windowEnd.toISOString(),
@@ -355,8 +314,9 @@ export async function recordEmailProviderFailure(
       error_message: errorMessage,
       created_at: new Date().toISOString(),
     });
-  } catch {
-    // Table may not exist - just log
+  } catch (error) {
+    // Table may not exist - log the error
+    console.error('[AgentConfig] Failed to record email provider failure:', error);
   }
 
   // Check for failure spike (last 15 minutes)

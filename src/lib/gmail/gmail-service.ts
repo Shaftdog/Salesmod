@@ -343,6 +343,59 @@ export class GmailService {
   }
 
   /**
+   * Downloads an attachment from a Gmail message
+   * @param messageId The Gmail message ID
+   * @param attachmentId The attachment ID from the message
+   * @returns Buffer containing the attachment data, or null if not found
+   */
+  async getAttachment(messageId: string, attachmentId: string): Promise<Buffer | null> {
+    try {
+      // Verify message belongs to this tenant before fetching attachment
+      const supabase = await createClient();
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', this.orgId)
+        .single();
+
+      if (!profile) {
+        console.error(`[Gmail Service] Profile not found for org ${this.orgId}`);
+        return null;
+      }
+
+      const { data: message } = await supabase
+        .from('gmail_messages')
+        .select('id')
+        .eq('gmail_message_id', messageId)
+        .eq('tenant_id', profile.tenant_id)
+        .single();
+
+      if (!message) {
+        console.error(`[Gmail Service] Message ${messageId} not found or unauthorized for tenant`);
+        return null;
+      }
+
+      const { data: attachment } = await this.gmail.users.messages.attachments.get({
+        userId: 'me',
+        messageId,
+        id: attachmentId,
+      });
+
+      if (!attachment.data) {
+        console.error(`[Gmail Service] Attachment ${attachmentId} has no data`);
+        return null;
+      }
+
+      // Gmail returns base64url-encoded data, convert to standard base64
+      const base64Data = attachment.data.replace(/-/g, '+').replace(/_/g, '/');
+      return Buffer.from(base64Data, 'base64');
+    } catch (error) {
+      console.error(`[Gmail Service] Error fetching attachment ${attachmentId}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Gets the watch history ID for incremental sync
    */
   async getHistoryId(): Promise<string | null> {

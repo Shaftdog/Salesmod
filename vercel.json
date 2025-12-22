@@ -1,8 +1,12 @@
 {
   "crons": [
     {
-      "path": "/api/agent/run",
-      "schedule": "0 */2 * * *"
+      "path": "/api/cron/agent",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/gmail",
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/agent/chat/cleanup",
@@ -10,6 +14,12 @@
     }
   ],
   "functions": {
+    "app/api/cron/agent/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/cron/gmail/route.ts": {
+      "maxDuration": 60
+    },
     "app/api/agent/execute-card/route.ts": {
       "maxDuration": 300
     },
