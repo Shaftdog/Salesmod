@@ -1,10 +1,64 @@
 # Project Context for Claude Code
 
+## Before Starting Work
+
+**IMPORTANT: Always check lessons-learned before starting any task:**
+1. Read `.claude/memory/lessons-learned.json` at the start of each session
+2. Review recent `decisions`, `patterns`, and `critical_bugs` sections
+3. Apply relevant learnings to avoid repeating past mistakes
+4. Update lessons-learned.json when discovering new patterns or fixing bugs
+
 ## Agent Memory
 Agents should read/update files in `.claude/memory/`:
 - `preferences.json` - My valuation preferences and standards
 - `market-conditions.json` - Current market data
 - `lessons-learned.json` - Past decisions and improvements
+
+## Database Migrations
+
+**CRITICAL: Never ask the user to run migrations. Execute them directly using credentials from `.env.local`.**
+
+### Migration Procedure
+
+1. **Read database credentials from `.env.local`:**
+   ```bash
+   # The file contains DIRECT_DATABASE_URL for migrations
+   cat .env.local | grep DATABASE_URL
+   ```
+
+2. **Run migration using psql with password:**
+   ```bash
+   PGPASSWORD='<password>' psql -h <host> -p 5432 -U <user> -d <database> -f supabase/migrations/<migration_file>.sql
+   ```
+
+3. **Common issues and fixes:**
+   - **UNIQUE constraint with COALESCE**: Use `CREATE UNIQUE INDEX ... WHERE` instead
+   - **Generated column not immutable**: Use trigger instead of `GENERATED ALWAYS AS`
+   - **ON CONFLICT missing constraint**: Use `ON CONFLICT DO NOTHING` or create matching index first
+
+4. **Verify migration success:**
+   ```bash
+   PGPASSWORD='<password>' psql -h <host> -p 5432 -U <user> -d <database> -c "\dt" | grep <table_name>
+   ```
+
+### Example Migration Command
+```bash
+# Extract from .env.local: postgresql://postgres.xxx:password@host:5432/postgres
+PGPASSWORD='Blaisenpals1!' psql -h aws-0-us-east-1.pooler.supabase.com -p 5432 -U postgres.zqhenxhgcjxslpfezybm -d postgres -f supabase/migrations/20251222000000_p2_system.sql
+```
+
+## Test Credentials
+
+**For E2E tests requiring UI authentication, use these credentials:**
+- **Email:** `rod@myroihome.com`
+- **Password:** `Latter!974`
+
+When writing Playwright tests:
+```typescript
+await page.fill('input[name="email"]', 'rod@myroihome.com');
+await page.fill('input[name="password"]', 'Latter!974');
+await page.click('button[type="submit"]');
+```
 
 ## Project-Specific Instructions
 
