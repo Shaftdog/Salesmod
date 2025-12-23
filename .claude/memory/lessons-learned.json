@@ -1,6 +1,42 @@
 {
   "decisions": [
     {
+      "date": "2025-12-23",
+      "context": "P2 migration failed with UNIQUE constraint on COALESCE expression",
+      "decision": "Use CREATE UNIQUE INDEX with WHERE clause for partial unique constraints, not inline UNIQUE constraints with COALESCE",
+      "rationale": "PostgreSQL doesn't support COALESCE in UNIQUE constraint definitions. Partial unique indexes (CREATE UNIQUE INDEX ... WHERE tenant_id IS NULL) achieve the same goal."
+    },
+    {
+      "date": "2025-12-23",
+      "context": "P2 migration failed with 'generation expression is not immutable' for DATE(occurred_at)",
+      "decision": "Use triggers instead of generated columns when the expression uses non-immutable functions like DATE()",
+      "rationale": "PostgreSQL generated columns require immutable functions. DATE() depends on timezone settings so isn't immutable. Solution: regular column + BEFORE INSERT/UPDATE trigger."
+    },
+    {
+      "date": "2025-12-23",
+      "context": "Rate limit check in access-control.ts was failing open (allowing access on DB error)",
+      "decision": "All security checks must fail-closed: deny access when unable to verify permissions",
+      "rationale": "Fail-open allows credential access during database outages. Fail-closed prevents this: return { allowed: false, reason: 'Unable to verify rate limits - access denied for security' }."
+    },
+    {
+      "date": "2025-12-22",
+      "context": "P1 Phase Review revealed RLS policies missing WITH CHECK clauses",
+      "decision": "All RLS tenant isolation policies must include WITH CHECK clause, not just USING",
+      "rationale": "USING only filters reads (SELECT). Without WITH CHECK, INSERT/UPDATE operations can write data with wrong tenant_id, causing cross-tenant data leakage."
+    },
+    {
+      "date": "2025-12-22",
+      "context": "Code review found JSONB filter fields being passed directly to Supabase query builder",
+      "decision": "Whitelist allowed filter keys for any JSONB field used in dynamic queries",
+      "rationale": "Attackers could craft JSONB with arbitrary column names, bypassing intended filters. Whitelist pattern: const ALLOWED_FILTERS = ['is_active', 'status']; only apply if key in whitelist."
+    },
+    {
+      "date": "2025-12-22",
+      "context": "Security audit identified ReDoS risk in email signature parsing regex",
+      "decision": "Limit input length before any regex parsing (max 10,000 chars for email bodies)",
+      "rationale": "Maliciously crafted strings can cause regex engines to hang. Truncating input prevents DoS while still capturing relevant signature data."
+    },
+    {
       "date": "2025-12-10",
       "context": "Research card execution timing out on Vercel with FUNCTION_INVOCATION_TIMEOUT",
       "decision": "Export maxDuration=300 directly from route.ts file, not vercel.json",
@@ -38,6 +74,36 @@
     }
   ],
   "improvements": [
+    {
+      "date": "2025-12-23",
+      "area": "Phase 2 Compound Advantage",
+      "change": "Implemented complete P2 system: Data Warehouse (event capture, pattern detection, strategy recommendations, insight jobs), Utility Sandbox (8 template scripts with resource limits), Browser Automation (multi-portal framework with approval gates), Credential Manager (AES-256-GCM encryption with purpose-based access)",
+      "impact": "Agent now has data warehouse for pattern learning, sandboxed script execution, browser automation for vendor portals, and secure credential management"
+    },
+    {
+      "date": "2025-12-23",
+      "area": "P2 Database Migration",
+      "change": "Created 11 new tables: warehouse_events, detected_patterns, strategy_recommendations, insight_jobs, sandbox_script_templates, sandbox_executions, vendor_portal_configs, browser_automation_jobs, domain_allowlist, credential_vault, credential_access_log",
+      "impact": "Full schema for P2 Compound Advantage system with RLS policies and tenant isolation"
+    },
+    {
+      "date": "2025-12-22",
+      "area": "Autonomous Agent System",
+      "change": "Implemented 6 P1 automation engines: Feedback (post-delivery), Deals (stall detection), Bids (quote lifecycle), Contact Enricher (signature parsing), Broadcast (campaign automation), Compliance (quarterly checks)",
+      "impact": "Agent can now automatically collect feedback, follow up on stalled deals, manage quote lifecycles, enrich contacts from emails, process campaigns, and handle compliance verification"
+    },
+    {
+      "date": "2025-12-22",
+      "area": "Security Hardening",
+      "change": "Applied 5 security fixes during P1 phase review: RLS WITH CHECK, SQL injection whitelist, ReDoS protection, safe logging, input validation",
+      "impact": "All P1 engines now have defense-in-depth against common attack vectors"
+    },
+    {
+      "date": "2025-12-22",
+      "area": "Test Coverage",
+      "change": "Created 133 unit tests for P1 engines (feedback-engine: 34, contact-enricher: 75, compliance-engine: 24)",
+      "impact": "Critical engine functions have automated regression testing"
+    },
     {
       "date": "2025-12-18",
       "area": "Order Detail Page",
@@ -100,6 +166,26 @@
     }
   ],
   "patterns": [
+    {
+      "name": "P2 Internal vs External Card Types",
+      "description": "P2 card types (process_insight_job, execute_sandbox_job, execute_browser_job) are handled directly in autonomous-cycle.ts executeActPhase, NOT in executor.ts. These are internal agent operations, not user-facing kanban cards.",
+      "files": ["src/lib/agent/autonomous-cycle.ts", "src/lib/agent/executor.ts"]
+    },
+    {
+      "name": "PostgreSQL Partial Unique Indexes",
+      "description": "For conditional uniqueness (e.g., unique domain for global records, unique domain+tenant for tenant records), use CREATE UNIQUE INDEX with WHERE clause: CREATE UNIQUE INDEX idx_name ON table(column) WHERE condition. Cannot use COALESCE in inline UNIQUE constraints.",
+      "files": ["supabase/migrations/20251222000000_p2_system.sql"]
+    },
+    {
+      "name": "PostgreSQL Immutable Function Requirement",
+      "description": "Generated columns (GENERATED ALWAYS AS) require immutable expressions. Functions like DATE(), NOW(), CURRENT_TIMESTAMP are NOT immutable. Solution: use regular column + BEFORE INSERT/UPDATE trigger to set the value.",
+      "files": ["supabase/migrations/20251222000000_p2_system.sql"]
+    },
+    {
+      "name": "Conflict Detection Between Claude Instances",
+      "description": "When another Claude instance may have made conflicting changes: 1) git status --short to see modified files, 2) git diff to compare changes, 3) Check if expected function calls/imports still exist, 4) Verify imported modules exist. Focus on uncommitted changes first.",
+      "files": []
+    },
     {
       "name": "Vercel Function Timeouts (App Router)",
       "description": "For Next.js App Router, export maxDuration directly from route.ts. vercel.json 'functions' config is ignored. Research tasks need 300s due to: web search + Apollo enrichment + AI summarization + action extraction.",
@@ -214,9 +300,44 @@
       "name": "Narrow Panel Layout Pattern",
       "description": "For components used in narrow panels (side sheets, modals): 1) Avoid horizontal flex with justify-between - buttons get cut off by overflow-hidden. 2) Stack vertically instead (space-y-3). 3) Use w-full on buttons to span available width. 4) shrink-0 alone doesn't prevent clipping if container is narrower than content. 5) Always test in the actual container width, not just in isolation.",
       "files": ["src/components/orders/order-documents-section.tsx"]
+    },
+    {
+      "name": "RLS WITH CHECK Clauses",
+      "description": "Row Level Security policies need BOTH 'USING' (for reads) AND 'WITH CHECK' (for writes). USING alone only protects SELECT - INSERT/UPDATE can still leak data across tenants. Always use: CREATE POLICY ... FOR ALL USING (tenant_id = ...) WITH CHECK (tenant_id = ...)",
+      "files": ["supabase/migrations/20251223000000_p1_engines.sql"]
+    },
+    {
+      "name": "SQL Injection via JSONB Filters",
+      "description": "When JSONB fields (like target_filter) contain filter keys passed to Supabase query builder, attackers can inject arbitrary column names. Solution: Create const ALLOWED_FILTERS array and only apply filters whose keys are in the whitelist.",
+      "files": ["src/lib/agent/compliance-engine.ts"]
+    },
+    {
+      "name": "ReDoS Protection Pattern",
+      "description": "Regular expressions on user input can cause Denial of Service if input is maliciously crafted. Solution: 1) Limit input length BEFORE regex (e.g., max 10,000 chars), 2) Truncate from end for signatures (last N chars), 3) Validate input type before processing.",
+      "files": ["src/lib/agent/contact-enricher.ts"]
+    },
+    {
+      "name": "Safe Limit Validation",
+      "description": "When accepting 'limit' parameters for database queries or RPC calls, always validate: const safeLimit = Math.max(1, Math.min(limit, 100)). Prevents DoS from huge limits and errors from negative/zero limits.",
+      "files": ["src/lib/agent/deals-engine.ts", "src/lib/agent/bids-engine.ts"]
+    },
+    {
+      "name": "Sensitive Data in Logs",
+      "description": "Never log full payloads or request bodies - they may contain emails, passwords, or PII. Instead log boolean flags: { hasEmail: !!payload.to, hasBody: !!payload.body }. Also redact tenant_id in production logs to prevent enumeration.",
+      "files": ["src/lib/agent/executor.ts"]
+    },
+    {
+      "name": "Input Validation Pattern for Engines",
+      "description": "All engine functions accepting user data should validate early: 1) Required fields exist, 2) String lengths (title: 500, description: 5000), 3) Numeric ranges (amount: 0 to 999,999,999), 4) Array sizes (lineItems: max 100). Return early with error message, don't throw.",
+      "files": ["src/lib/agent/bids-engine.ts", "src/lib/agent/feedback-engine.ts", "src/lib/agent/compliance-engine.ts"]
+    },
+    {
+      "name": "7-Gate Phase Review Process",
+      "description": "Before merging major features: A) Architecture Review (tenant isolation, RLS), B) Code Review (identify issues), C) Fix Loop (resolve criticals), D) Database Review (migration validation), E) Unit Tests, F) E2E Tests, G) Security Audit. All gates must pass.",
+      "files": ["docs/features/agents/progress.md"]
     }
   ],
-  "last_updated": "2025-12-19",
+  "last_updated": "2025-12-23",
   "critical_bugs": [
     {
       "date": "2025-12-19",
