@@ -4,6 +4,7 @@
  */
 
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { checkRateLimit, getAgentConfig, recordAlert } from '@/lib/agent/agent-config';
 import type {
   SandboxExecution,
   ExecutionResult,
@@ -34,6 +35,36 @@ export async function executeSandboxJob(
 ): Promise<ExecutionResult> {
   const supabase = createServiceRoleClient();
   const startTime = Date.now();
+
+  // Check rate limit for sandbox jobs
+  const config = await getAgentConfig(tenantId);
+  const rateLimitCheck = await checkRateLimit(
+    tenantId,
+    'sandbox_job',
+    config.maxSandboxJobsPerHour
+  );
+
+  if (!rateLimitCheck.allowed) {
+    console.warn(`[sandbox] Rate limit exceeded for tenant ${tenantId}: ${rateLimitCheck.currentCount}/${rateLimitCheck.maxAllowed}`);
+    await recordAlert({
+      type: 'rate_limit_exceeded',
+      severity: 'warning',
+      tenantId,
+      message: `Sandbox job rate limit exceeded: ${rateLimitCheck.currentCount}/${rateLimitCheck.maxAllowed} per hour`,
+      metadata: {
+        actionType: 'sandbox_job',
+        currentCount: rateLimitCheck.currentCount,
+        maxAllowed: rateLimitCheck.maxAllowed,
+        templateName: request.templateName,
+      },
+    });
+    return {
+      success: false,
+      executionId: '',
+      durationMs: Date.now() - startTime,
+      error: `Rate limit exceeded: ${rateLimitCheck.currentCount}/${rateLimitCheck.maxAllowed} sandbox jobs per hour`,
+    };
+  }
 
   // Get template
   const template = await getTemplateByName(request.templateName);

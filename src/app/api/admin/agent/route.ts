@@ -112,7 +112,13 @@ export async function POST(request: NextRequest) {
 
   switch (action) {
     case 'enable_global': {
-      // Only super-admins should be able to do this
+      // SECURITY: Only super_admin can enable global agent
+      if (profile.role !== 'super_admin') {
+        return NextResponse.json(
+          { error: 'super_admin role required for global operations' },
+          { status: 403 }
+        );
+      }
       await serviceClient
         .from('system_config')
         .upsert({
@@ -121,6 +127,7 @@ export async function POST(request: NextRequest) {
           updated_at: new Date().toISOString(),
         });
 
+      console.log(`[AdminAgent] Global agent enabled by user ${user.id}`);
       return NextResponse.json({
         success: true,
         message: 'Agent globally enabled',
@@ -128,6 +135,13 @@ export async function POST(request: NextRequest) {
     }
 
     case 'disable_global': {
+      // SECURITY: Only super_admin can disable global agent
+      if (profile.role !== 'super_admin') {
+        return NextResponse.json(
+          { error: 'super_admin role required for global operations' },
+          { status: 403 }
+        );
+      }
       await serviceClient
         .from('system_config')
         .upsert({
@@ -139,6 +153,7 @@ export async function POST(request: NextRequest) {
           updated_at: new Date().toISOString(),
         });
 
+      console.log(`[AdminAgent] Global agent disabled by user ${user.id}: ${reason || 'No reason'}`);
       return NextResponse.json({
         success: true,
         message: 'Agent globally disabled',

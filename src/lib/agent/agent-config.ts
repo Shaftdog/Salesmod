@@ -20,6 +20,8 @@ export interface AgentConfig {
   maxActionsPerHour: number;
   maxEmailsPerHour: number;
   maxEmailsPerDay: number;
+  maxSandboxJobsPerHour: number;
+  maxBrowserJobsPerHour: number;
 }
 
 export interface RateLimitCheck {
@@ -55,6 +57,8 @@ const DEFAULT_CONFIG: Omit<AgentConfig, 'globalEnabled' | 'tenantEnabled'> = {
   maxActionsPerHour: 100,
   maxEmailsPerHour: 20,
   maxEmailsPerDay: 100,
+  maxSandboxJobsPerHour: 10, // Default: 10 sandbox jobs per hour per tenant
+  maxBrowserJobsPerHour: 5,  // Default: 5 browser automation jobs per hour per tenant
 };
 
 // Alert thresholds
@@ -440,5 +444,7 @@ export async function getAgentConfig(tenantId: string): Promise<AgentConfig> {
     maxActionsPerHour: (settings?.max_actions_per_hour as number) || DEFAULT_CONFIG.maxActionsPerHour,
     maxEmailsPerHour: (settings?.max_emails_per_hour as number) || DEFAULT_CONFIG.maxEmailsPerHour,
     maxEmailsPerDay: (settings?.max_emails_per_day as number) || DEFAULT_CONFIG.maxEmailsPerDay,
+    maxSandboxJobsPerHour: (settings?.max_sandbox_jobs_per_hour as number) || DEFAULT_CONFIG.maxSandboxJobsPerHour,
+    maxBrowserJobsPerHour: (settings?.max_browser_jobs_per_hour as number) || DEFAULT_CONFIG.maxBrowserJobsPerHour,
   };
 }

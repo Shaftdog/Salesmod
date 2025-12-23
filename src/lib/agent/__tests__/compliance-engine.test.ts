@@ -187,10 +187,17 @@ describe('createComplianceSchedule - Date Calculations (P1)', () => {
     expect(mockInsert).toHaveBeenCalled();
     const insertCall = mockInsert.mock.calls[0][0];
     const nextDue = new Date(insertCall.next_due_at);
+    const now = new Date();
 
     // Should be first day of next month
     expect(nextDue.getDate()).toBe(1);
-    expect(nextDue.getMonth()).toBeGreaterThanOrEqual(new Date().getMonth());
+    // In December, next month is January (0) of next year
+    if (now.getMonth() === 11) {
+      expect(nextDue.getMonth()).toBe(0);
+      expect(nextDue.getFullYear()).toBe(now.getFullYear() + 1);
+    } else {
+      expect(nextDue.getMonth()).toBe(now.getMonth() + 1);
+    }
   });
 
   it('should calculate next due date for quarterly', async () => {
@@ -231,10 +238,19 @@ describe('createComplianceSchedule - Date Calculations (P1)', () => {
 
     const insertCall = mockInsert.mock.calls[0][0];
     const nextDue = new Date(insertCall.next_due_at);
+    const now = new Date();
 
-    // Should be June (5) or December (11) - month is 0-indexed
+    // Should be first day of month
     expect(nextDue.getDate()).toBe(1);
-    expect([5, 11]).toContain(nextDue.getMonth());
+    // Semi-annual: June (5) or December (11), but depends on current month
+    // In Dec (11), next semi-annual is June next year (5)
+    // In Jun-Nov, next semi-annual is December (11)
+    // In Jan-May, next semi-annual is June (5)
+    if (now.getMonth() >= 6 && now.getMonth() <= 10) {
+      expect(nextDue.getMonth()).toBe(11); // December
+    } else {
+      expect(nextDue.getMonth()).toBe(5); // June
+    }
   });
 
   it('should calculate next due date for annual (January of next year)', async () => {
