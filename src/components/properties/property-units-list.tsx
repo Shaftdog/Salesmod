@@ -26,6 +26,12 @@ import {
 import { PropertyUnit } from '@/lib/types';
 import { usePropertyUnits, useDeletePropertyUnit } from '@/hooks/use-property-units';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface PropertyUnitsListProps {
   propertyId: string;
@@ -93,7 +99,7 @@ export function PropertyUnitsList({
   }
 
   return (
-    <>
+    <TooltipProvider delayDuration={300}>
       <Table>
         <TableHeader>
           <TableRow>
@@ -140,39 +146,62 @@ export function PropertyUnitsList({
               <TableCell className="text-right">
                 <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                   {onEditUnit && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditUnit(unit);
-                      }}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditUnit(unit);
+                          }}
+                          aria-label={`Edit unit ${unit.unitIdentifier}`}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Edit unit</p>
+                      </TooltipContent>
+                    </Tooltip>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      router.push(`/orders?propertyUnitId=${unit.id}`);
-                    }}
-                    title="View orders for this unit"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteClick(unit);
-                    }}
-                    disabled={deleteMutation.isPending}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/orders?propertyUnitId=${unit.id}`);
+                        }}
+                        aria-label={`View orders for unit ${unit.unitIdentifier}`}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>View orders for this unit</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteClick(unit);
+                        }}
+                        disabled={deleteMutation.isPending}
+                        aria-label={`Delete unit ${unit.unitIdentifier}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Delete unit</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </TableCell>
             </TableRow>
@@ -208,7 +237,7 @@ export function PropertyUnitsList({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </TooltipProvider>
   );
 }
 
@@ -233,18 +262,29 @@ export function ExpandableUnitsRow({
 
   return (
     <>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={onToggle}
-        className="h-6 w-6 p-0"
-      >
-        {isExpanded ? (
-          <ChevronDown className="h-4 w-4" />
-        ) : (
-          <ChevronRight className="h-4 w-4" />
-        )}
-      </Button>
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggle}
+              className="h-6 w-6 p-0"
+              aria-label={isExpanded ? "Collapse units" : "Expand units"}
+              aria-expanded={isExpanded}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{isExpanded ? "Collapse units" : "View units"}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       {unitCount !== undefined && unitCount > 0 && (
         <Badge variant="secondary" className="ml-2">
           {unitCount} {unitCount === 1 ? 'unit' : 'units'}
@@ -253,5 +293,3 @@ export function ExpandableUnitsRow({
     </>
   );
 }
-
-
