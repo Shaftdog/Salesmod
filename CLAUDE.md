@@ -98,7 +98,32 @@ When working on appraisal logic:
 - Tools provide chat interface capabilities
 
 ## Claude Code Sub-Agents
-Use specialized sub-agents via the Task tool for focused expertise:
+
+**CRITICAL: Aggressively delegate to sub-agents to protect the main context window.**
+
+The main context window is precious and finite. Sub-agents have their own 100K token contexts. Delegate early and often:
+
+### Delegation Rules
+
+1. **Code Review**: ALWAYS delegate to `code-reviewer` after writing significant code - don't review yourself
+2. **Testing**: ALWAYS delegate to `playwright-tester` for any UI verification - never ask user to test manually
+3. **Bug Fixes**: When tests fail, delegate to `debugger-specialist` - don't debug in main context
+4. **Exploration**: Use `Explore` agent for codebase searches instead of running multiple Grep/Glob commands
+5. **Architecture**: Delegate to `system-architect` for reviewing plans before implementation
+6. **Security**: Delegate to `security-auditor` when touching auth, credentials, or sensitive data
+
+### Anti-Pattern: Don't Do This
+```
+❌ Write feature → Read files to review → Debug issues → Run more searches
+   (All in main context = context exhaustion)
+```
+
+### Correct Pattern: Do This Instead
+```
+✅ Write feature → delegate to code-reviewer → delegate to playwright-tester
+   → if bugs, delegate to debugger-specialist → report completion
+   (Main context preserved for coordination)
+```
 
 ### When to Use Sub-Agents
 - **appraisal-expert**: For USPAP compliance, valuation logic, adjustment calculations, Florida market analysis
