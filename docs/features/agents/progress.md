@@ -226,7 +226,7 @@ All safety measures required before autonomous operation are now implemented:
   - Default alerts for failure rate, kill switch, lock contention, compliance
   - Structured logging helpers for consistent log format
 
-### P0.7: OAuth & Provider Validation ⚠️ CODE COMPLETE (NOT OPERATIONALLY VALIDATED)
+### P0.7: OAuth & Provider Validation ⚠️ Implemented (Operational Validation Pending)
 
 Email rollout controls implemented Dec 19, 2025. **Infrastructure configuration and production validation still required.**
 
@@ -297,6 +297,7 @@ Email rollout controls implemented Dec 19, 2025. **Infrastructure configuration 
 | Domain verification + DKIM/SPF/DMARC | ❌ NOT DONE | Infrastructure prerequisite for live email |
 | Monitoring/alerts confirm no runaway behavior | ✅ DONE | Alerting system implemented |
 | Setup + troubleshooting docs | ✅ DONE | See `docs/features/agents/P0.7-EMAIL-ROLLOUT-GUIDE.md` |
+| Operational go-live runbook | ✅ DONE | See `docs/operations/AGENT-GO-LIVE-RUNBOOK.md` |
 
 ---
 
