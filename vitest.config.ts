@@ -6,12 +6,14 @@ export default defineConfig({
     environment: 'happy-dom',
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
-    // Exclude e2e tests (Playwright) - they require a running server
+    // Exclude Playwright e2e tests - they require a running server and use different test runner
+    // Unit tests are in: src/**/__tests__/*.test.ts (these ARE included)
+    // E2E tests are in: e2e/**/*.spec.ts and tests/**/*.spec.ts (these are EXCLUDED)
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
-      '**/e2e/**',
-      '**/tests/**',  // Also exclude tests/ dir which contains Playwright specs
+      '**/e2e/**',        // Playwright specs: e2e/*.spec.ts
+      '**/tests/**',      // Playwright specs: tests/*.spec.ts (no unit tests here)
       '**/.{idea,git,cache,output,temp}/**',
     ],
     coverage: {
