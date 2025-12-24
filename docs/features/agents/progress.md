@@ -1,8 +1,8 @@
 ---
 status: current
-last_verified: 2025-12-23
+last_verified: 2025-12-24
 updated_by: Claude Code
-last_updated: 2025-12-23
+last_updated: 2025-12-24
 ---
 
 # vNext Autonomous Agent - Implementation Progress
@@ -1295,6 +1295,10 @@ supabase/migrations/
 
 | Date | Description |
 |------|-------------|
+| Dec 24, 2025 | **Email Central Gate**: All email sending now routes through `sendEmailThroughGate()` - executor, API, campaigns, invoices |
+| Dec 24, 2025 | Migrations applied: `agent_smoke_tests` and `email_send_log` tables created |
+| Dec 24, 2025 | PRs merged: Operational readiness endpoints, Vitest exclusions fix, Email mode enforcement |
+| Dec 24, 2025 | Admin endpoints: `/api/admin/agent/readiness` (comprehensive status) and `/api/admin/agent/smoke-test` (validation) |
 | Dec 22, 2025 | **P2 Complete**: All 4 components implemented (Data Warehouse, Sandbox, Browser Automation, Credentials) |
 | Dec 22, 2025 | P2 Integration: Engines wired into autonomous-cycle.ts Plan/Act phases, executor.ts card handlers |
 | Dec 22, 2025 | P2.4 Credential Manager: AES-256-GCM encryption, purpose-based access control, audit logging |
@@ -1354,7 +1358,7 @@ This checklist summarizes verified items vs. remaining configuration steps for p
 | P2 Components | Sandbox executor with templates | Unit tests + code review |
 | P2 Components | Browser automation engine | Code review |
 | P2 Components | Credential vault (AES-256-GCM) | Code review |
-| Unit Tests | 190/206 passing (92%) | `npm test` (Dec 23, 2025) |
+| Unit Tests | 216/232 passing (93%) | `npm test` (Dec 24, 2025) |
 | Build | TypeScript compiles clean | `npm run build` |
 
 ### ❌ Remaining Configuration Steps (Infrastructure)
