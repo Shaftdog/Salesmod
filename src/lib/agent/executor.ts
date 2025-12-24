@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { sendEmailThroughGate, EmailPayload } from '@/lib/email/email-sender';
 
 export interface KanbanCard {
   id: string;
@@ -313,10 +314,9 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
     source: payload.to ? 'payload' : (card.contact_id ? 'contact' : 'client'),
   });
 
-  // Check for email suppression and bounce tags
+  // Check for bounce tags (early exit before going through gate)
   const contactId = card.contact_id;
   if (contactId) {
-    // Check for bounce tags
     const { data: contact } = await supabase
       .from('contacts')
       .select('tags, first_name, last_name')
@@ -342,127 +342,61 @@ async function executeSendEmail(card: KanbanCard): Promise<ExecutionResult> {
         };
       }
     }
-
-    // Check suppression list
-    const { data: suppression } = await supabase
-      .from('email_suppressions')
-      .select('*')
-      .eq('tenant_id', card.tenant_id)
-      .eq('contact_id', contactId)
-      .single();
-
-    if (suppression) {
-      return {
-        success: false,
-        cardId: card.id,
-        message: 'Email suppressed',
-        error: `Contact is suppressed due to: ${suppression.reason}${suppression.bounce_type ? ` (${suppression.bounce_type} bounce)` : ''}`,
-      };
-    }
   }
 
-  // Send email via Resend directly
-  try {
-    const resendApiKey = process.env.RESEND_API_KEY;
-    
-    if (!resendApiKey || resendApiKey === 're_YOUR_API_KEY_HERE') {
-      // Simulate send if no Resend key
-      console.log('Email send (simulated):', { to: recipientEmail, subject: payload.subject });
-      
-      await supabase
-        .from('activities')
-        .insert({
-          tenant_id: tenantId,
-          client_id: card.client_id,
-          contact_id: card.contact_id,
-          activity_type: 'email',
-          subject: emailSubject,
-          description: `Email sent (simulated) to ${recipientEmail} via agent: ${card.title}`,
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-          outcome: 'sent',
-          created_by: user.id,
-        });
+  // Build email payload for central gate
+  const emailPayload: EmailPayload = {
+    to: recipientEmail,
+    subject: emailSubject,
+    html: emailHtml,
+    text: emailText,
+    replyTo: payload.replyTo,
+    contactId: card.contact_id,
+    cardId: card.id,
+    source: 'agent' as const,
+  };
 
-      return {
-        success: true,
-        cardId: card.id,
-        message: 'Email sent successfully (simulated)',
-        metadata: {
-          messageId: `sim_${Date.now()}`,
-          to: recipientEmail,
-          simulated: true,
-        },
-      };
-    }
+  // Send through central gate (handles mode enforcement, rate limits, logging)
+  const gateResult = await sendEmailThroughGate(tenantId, user.id, emailPayload);
 
-    // Real Resend send
-    const resendPayload: any = {
-      from: 'Admin <Admin@roiappraise.com>', // Use verified Resend domain
-      to: recipientEmail, // Must be a string for verified domain
+  // Log activity for UI visibility
+  await supabase
+    .from('activities')
+    .insert({
+      tenant_id: tenantId,
+      client_id: card.client_id,
+      contact_id: card.contact_id,
+      activity_type: 'email',
       subject: emailSubject,
-      reply_to: payload.replyTo || 'Admin@roiappraise.com',
-    };
-
-    // Add html and/or text content (at least one is required)
-    if (emailHtml) {
-      resendPayload.html = emailHtml;
-    }
-    if (emailText) {
-      resendPayload.text = emailText;
-    }
-
-    const resendResponse = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${resendApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(resendPayload),
+      description: gateResult.success
+        ? `Email ${gateResult.simulated ? 'sent (simulated)' : 'sent'} to ${recipientEmail} via agent: ${card.title}${gateResult.messageId ? ` (ID: ${gateResult.messageId})` : ''}`
+        : `Email failed to ${recipientEmail}: ${gateResult.error}`,
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      outcome: gateResult.success ? 'sent' : (gateResult.blocked ? 'blocked' : 'failed'),
+      created_by: user.id,
     });
 
-    if (!resendResponse.ok) {
-      const error = await resendResponse.json();
-      throw new Error(`Resend API error: ${JSON.stringify(error)}`);
-    }
-
-    const data = await resendResponse.json();
-    const messageId = data.id || `resend_${Date.now()}`;
-
-    // Log activity
-    await supabase
-      .from('activities')
-      .insert({
-        tenant_id: tenantId,
-        client_id: card.client_id,
-        contact_id: card.contact_id,
-        activity_type: 'email',
-        subject: emailSubject,
-        description: `Email sent to ${recipientEmail} via agent: ${card.title} (ID: ${messageId})`,
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-        outcome: 'sent',
-        created_by: user.id,
-      });
-
-    return {
-      success: true,
-      cardId: card.id,
-      message: 'Email sent successfully via Resend',
-      metadata: {
-        messageId,
-        to: recipientEmail,
-        simulated: false,
-      },
-    };
-  } catch (error: any) {
+  if (!gateResult.success) {
     return {
       success: false,
       cardId: card.id,
-      message: 'Email send failed',
-      error: error.message,
+      message: gateResult.blocked ? 'Email blocked by policy' : 'Email send failed',
+      error: gateResult.error,
     };
   }
+
+  return {
+    success: true,
+    cardId: card.id,
+    message: gateResult.simulated ? 'Email sent successfully (simulated)' : 'Email sent successfully',
+    metadata: {
+      messageId: gateResult.messageId,
+      to: recipientEmail,
+      simulated: gateResult.simulated,
+      mode: gateResult.mode,
+    },
+  };
 }
 
 /**

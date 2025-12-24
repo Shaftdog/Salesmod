@@ -18,7 +18,7 @@ import {
   BadRequestError,
   verifyTenantResourceOwnership,
 } from '@/lib/errors/api-errors';
-import { sendEmail } from '@/lib/campaigns/email-sender';
+import { sendEmailThroughGate, EmailPayload } from '@/lib/email/email-sender';
 import {
   generateInvoiceEmailHtml,
   generateInvoiceEmailText,
@@ -167,20 +167,19 @@ export async function POST(
       orgEmail,
     });
 
-    // Send the email
-    const emailResult = await sendEmail({
+    // Build email payload for central gate
+    const emailPayload: EmailPayload = {
       to: recipientEmail,
-      from: process.env.INVOICE_FROM_EMAIL || `${orgName} <invoices@roiappraise.com>`,
       subject: emailSubject,
       html: emailHtml,
       text: emailText,
+      from: process.env.INVOICE_FROM_EMAIL || `${orgName} <invoices@roiappraise.com>`,
       replyTo: orgEmail,
-      metadata: {
-        invoiceId: id,
-        invoiceNumber: invoice.invoice_number,
-        type: 'invoice',
-      },
-    });
+      source: 'invoice' as const,
+    };
+
+    // Send through central gate (handles mode enforcement, rate limits, logging)
+    const emailResult = await sendEmailThroughGate(tenantId, orgId, emailPayload);
 
     if (!emailResult.success) {
       console.error('Failed to send invoice email:', emailResult.error);
@@ -212,8 +211,8 @@ export async function POST(
 
     // Build response message
     let message = `Invoice sent to ${recipientEmail}`;
-    if (emailResult.simulation) {
-      message += ' (email simulated - Resend not configured)';
+    if (emailResult.simulated) {
+      message += ` (email simulated - mode: ${emailResult.mode})`;
     } else if (!emailResult.success) {
       message = `Invoice marked as sent, but email delivery failed: ${emailResult.error}. You can share the invoice link manually.`;
     }
@@ -223,7 +222,8 @@ export async function POST(
         ...updatedInvoice,
         view_url: viewUrl,
         email_sent: emailResult.success,
-        email_simulated: emailResult.simulation || false,
+        email_simulated: emailResult.simulated || false,
+        email_mode: emailResult.mode,
         email_error: emailResult.error,
       },
       message

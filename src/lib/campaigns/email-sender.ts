@@ -1,18 +1,16 @@
 /**
  * Email Sending Service for Campaigns
  *
- * Uses Resend for actual email delivery
- * Falls back to simulation mode if:
- * - RESEND_API_KEY not configured
- * - EMAIL_SERVICE_ENABLED = false
- * - NODE_ENV = test
+ * Routes all email through the central sendEmailThroughGate() which enforces:
+ * - Email mode controls (dry_run, internal_only, limited_live, live)
+ * - Rate limiting per tenant
+ * - Audit logging for all send attempts
+ * - Suppression list checking
  */
 
-import { Resend } from 'resend';
 import { createClient } from '@/lib/supabase/server';
-
-// Initialize Resend client
-const resend = new Resend(process.env.RESEND_API_KEY);
+import { createServiceRoleClient } from '@/lib/supabase/server';
+import { sendEmailThroughGate, EmailPayload, EmailSendResult as GateResult } from '@/lib/email/email-sender';
 
 export interface EmailSendRequest {
   to: string;
@@ -32,57 +30,19 @@ export interface EmailSendResult {
 }
 
 /**
- * Send an email using Resend (or simulation mode)
+ * Send an email using the central email gate
+ * This is a thin wrapper that provides backwards compatibility
+ *
+ * @deprecated Use sendCampaignEmailWithGate for new code
  */
 export async function sendEmail(request: EmailSendRequest): Promise<EmailSendResult> {
-  // Check if we should use simulation mode
-  const useSimulation =
-    !process.env.RESEND_API_KEY ||
-    process.env.EMAIL_SERVICE_ENABLED === 'false' ||
-    process.env.NODE_ENV === 'test';
+  // For backwards compatibility, simulate without tenant context
+  // New code should use sendCampaignEmailWithGate which requires tenant context
+  console.log('[Email Sender] sendEmail() called without tenant context - using simulation mode');
 
-  if (useSimulation) {
-    console.log('[Email Sender] Using simulation mode (RESEND_API_KEY not configured or disabled)');
-    return simulateEmailSend(request);
-  }
+  const messageId = `sim_legacy_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-  // Send via Resend
-  try {
-    const { data, error} = await resend.emails.send({
-      from: request.from || 'Salesmod <campaigns@salesmod.com>',
-      to: request.to,
-      subject: request.subject,
-      html: request.html,
-      text: request.text,
-      replyTo: request.replyTo,
-      tags: request.metadata ? Object.entries(request.metadata).map(([name, value]) => ({
-        name,
-        value: String(value)
-      })) : undefined
-    });
-
-    if (error) {
-      console.error('[Email Sender] Resend error:', error);
-      return { success: false, error: error.message };
-    }
-
-    console.log('[Email Sender] Email sent successfully via Resend:', data?.id);
-    return { success: true, messageId: data?.id, simulation: false };
-  } catch (error: any) {
-    console.error('[Email Sender] Unexpected error:', error);
-    return { success: false, error: error.message || 'Unknown email sending error' };
-  }
-}
-
-/**
- * Simulate email send for development/testing
- */
-function simulateEmailSend(request: EmailSendRequest): EmailSendResult {
-  // Generate fake message ID
-  const messageId = `sim_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-
-  // Log the "send"
-  console.log('📧 [SIMULATION] Email Send:', {
+  console.log('📧 [SIMULATION] Email Send (legacy):', {
     messageId,
     to: request.to,
     subject: request.subject,
@@ -90,9 +50,6 @@ function simulateEmailSend(request: EmailSendRequest): EmailSendResult {
     bodyLength: request.html.length,
     metadata: request.metadata,
   });
-
-  // Simulate slight delay
-  // In real mode, this would be network time
 
   return {
     success: true,
@@ -102,7 +59,8 @@ function simulateEmailSend(request: EmailSendRequest): EmailSendResult {
 }
 
 /**
- * Send campaign email to a recipient
+ * Send campaign email to a recipient with tenant context
+ * Uses the central email gate for mode enforcement and logging
  */
 export async function sendCampaignEmail({
   campaignId,
@@ -121,49 +79,79 @@ export async function sendCampaignEmail({
   jobTaskId: string;
   metadata?: Record<string, any>;
 }): Promise<EmailSendResult> {
-  const result = await sendEmail({
+  const serviceClient = createServiceRoleClient();
+
+  // Get tenant_id from campaign
+  const { data: campaign, error: campaignError } = await serviceClient
+    .from('campaigns')
+    .select('tenant_id, org_id, created_by')
+    .eq('id', campaignId)
+    .single();
+
+  if (campaignError || !campaign?.tenant_id) {
+    console.error('[Campaign Email] Cannot get tenant from campaign:', campaignError);
+    return {
+      success: false,
+      error: 'Cannot determine tenant for campaign',
+    };
+  }
+
+  const tenantId = campaign.tenant_id;
+  const userId = campaign.created_by || 'system'; // Use campaign creator or 'system' for automated sends
+
+  // Build email payload for central gate
+  const emailPayload: EmailPayload = {
     to: recipientEmail,
-    from: process.env.CAMPAIGN_FROM_EMAIL || 'campaigns@salesmod.com',
     subject,
     html: htmlBody,
     text: textBody,
+    from: process.env.CAMPAIGN_FROM_EMAIL || 'campaigns@salesmod.com',
     replyTo: process.env.CAMPAIGN_REPLY_TO_EMAIL,
-    metadata: {
-      campaignId,
-      jobTaskId,
-      ...metadata,
-    },
-  });
+    contactId: metadata.contact_id,
+    source: 'campaign' as const,
+  };
 
-  // Log the send attempt in database
-  if (result.success) {
-    await logEmailSend({
+  // Send through central gate
+  const gateResult = await sendEmailThroughGate(tenantId, userId, emailPayload);
+
+  // Log the send attempt in database (campaign-specific logging)
+  if (gateResult.success) {
+    await logCampaignEmailSend({
       campaignId,
       recipientEmail,
-      messageId: result.messageId!,
+      messageId: gateResult.messageId!,
       jobTaskId,
-      simulation: result.simulation || false,
+      simulation: gateResult.simulated,
+      mode: gateResult.mode,
     });
   }
 
-  return result;
+  // Map gate result to EmailSendResult for backwards compatibility
+  return {
+    success: gateResult.success,
+    messageId: gateResult.messageId,
+    error: gateResult.error,
+    simulation: gateResult.simulated,
+  };
 }
 
 /**
- * Log email send in database
+ * Log campaign email send in database
  */
-async function logEmailSend({
+async function logCampaignEmailSend({
   campaignId,
   recipientEmail,
   messageId,
   jobTaskId,
   simulation,
+  mode,
 }: {
   campaignId: string;
   recipientEmail: string;
   messageId: string;
   jobTaskId: string;
   simulation: boolean;
+  mode: string;
 }) {
   const supabase = await createClient();
 
@@ -187,12 +175,13 @@ async function logEmailSend({
         email_message_id: messageId,
         sent_at: new Date().toISOString(),
         simulation,
+        mode,
       },
       completed_at: new Date().toISOString(),
     })
     .eq('id', jobTaskId);
 
-  console.log(`✅ Logged email send: ${recipientEmail} (${simulation ? 'SIMULATION' : 'REAL'})`);
+  console.log(`✅ Campaign email logged: ${recipientEmail} (${simulation ? `SIMULATION:${mode}` : `REAL:${mode}`})`);
 }
 
 /**
