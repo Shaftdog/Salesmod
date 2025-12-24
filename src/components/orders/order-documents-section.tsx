@@ -5,6 +5,7 @@ import { useOrderDocuments, useDeleteDocument, OrderDocument } from "@/lib/hooks
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -115,7 +116,7 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
 
   // Documents list content
   const documentsContent = (
-    <>
+    <TooltipProvider>
       {documents && documents.length > 0 ? (
         <div className="space-y-3">
           {documents.map((doc) => (
@@ -153,49 +154,75 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
                 <Badge className={getDocumentTypeColor(doc.document_type)}>
                   {getDocumentTypeLabel(doc.document_type)}
                 </Badge>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setDocumentToView(doc)}
-                  title="View"
-                  aria-label={`View ${doc.file_name}`}
-                >
-                  <Eye className="h-4 w-4" />
-                </Button>
-                {doc.url && (
-                  <Button variant="ghost" size="icon" asChild>
-                    <a
-                      href={doc.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Open in new tab"
-                      aria-label={`Open ${doc.file_name} in new tab`}
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setDocumentToView(doc)}
+                      aria-label={`View ${doc.file_name}`}
                     >
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  </Button>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>View</p>
+                  </TooltipContent>
+                </Tooltip>
+
+                {doc.url && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" asChild>
+                        <a
+                          href={doc.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Open ${doc.file_name} in new tab`}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Open in new tab</p>
+                    </TooltipContent>
+                  </Tooltip>
                 )}
                 {doc.url && (
-                  <Button variant="ghost" size="icon" asChild>
-                    <a
-                      href={doc.url}
-                      download={doc.file_name}
-                      title="Download"
-                      aria-label={`Download ${doc.file_name}`}
-                    >
-                      <Download className="h-4 w-4" />
-                    </a>
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" asChild>
+                        <a
+                          href={doc.url}
+                          download={doc.file_name}
+                          aria-label={`Download ${doc.file_name}`}
+                        >
+                          <Download className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Download</p>
+                    </TooltipContent>
+                  </Tooltip>
                 )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setDocumentToDelete(doc)}
-                  title="Delete"
-                  aria-label={`Delete ${doc.file_name}`}
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setDocumentToDelete(doc)}
+                      aria-label={`Delete ${doc.file_name}`}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Delete</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </div>
           ))}
@@ -214,7 +241,7 @@ export function OrderDocumentsSection({ orderId, onUpload, variant = 'card' }: O
           )}
         </div>
       )}
-    </>
+    </TooltipProvider>
   );
 
   // Delete confirmation dialog
