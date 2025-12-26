@@ -419,6 +419,7 @@ export type CaseType = typeof caseTypes[number];
 
 export interface Case {
   id: string;
+  tenantId: string;
   caseNumber: string;
   subject: string;
   description?: string;
@@ -446,6 +447,7 @@ export interface Case {
 
 export interface CaseComment {
   id: string;
+  tenantId: string;
   caseId: string;
   comment: string;
   isInternal: boolean;

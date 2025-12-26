@@ -1,6 +1,18 @@
 {
   "decisions": [
     {
+      "date": "2025-12-26",
+      "context": "Cases table missing tenant_id, created before multi-tenant migration",
+      "decision": "Add tenant_id to cases and case_comments tables with backfill from creator profile, update RLS policies, add auto-set trigger",
+      "rationale": "Tables created before Nov 2025 tenant isolation work lack tenant_id. All business tables must have tenant_id + RLS policies. Backfill from created_by user's profile.tenant_id, then make NOT NULL."
+    },
+    {
+      "date": "2025-12-26",
+      "context": "Cases Kanban board uses 10 statuses but database CHECK constraint only allowed 7",
+      "decision": "Update database CHECK constraint to match TypeScript caseStatuses array and migrate existing data to new status values",
+      "rationale": "Database constraint and TypeScript must stay in sync. Migration maps: open→new, pending→working, in_progress→in_production, resolved/closed→completed, reopened→new"
+    },
+    {
       "date": "2025-12-23",
       "context": "P2 migration failed with UNIQUE constraint on COALESCE expression",
       "decision": "Use CREATE UNIQUE INDEX with WHERE clause for partial unique constraints, not inline UNIQUE constraints with COALESCE",
@@ -347,7 +359,7 @@
       "files": ["src/lib/agent/job-planner.ts", "src/lib/agent/executor.ts", "src/app/api/agent/card/manage/route.ts"]
     }
   ],
-  "last_updated": "2025-12-25",
+  "last_updated": "2025-12-26",
   "session_learnings_2025_12_25": {
     "context": "P0.7 Email Infrastructure Go-Live - DNS configuration, email mode activation, operational validation",
     "learnings": [

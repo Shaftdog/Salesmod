@@ -114,8 +114,8 @@ export function CaseCard({ case: caseItem, onEdit, onDelete }: CaseCardProps) {
             )}
           </div>
 
-          {/* Resolution info for resolved/closed cases */}
-          {(caseItem.status === 'resolved' || caseItem.status === 'closed') && caseItem.resolution && (
+          {/* Resolution info for completed cases */}
+          {caseItem.status === 'completed' && caseItem.resolution && (
             <div className="pt-2 border-t">
               <p className="text-sm text-muted-foreground">
                 <strong>Resolution:</strong> {caseItem.resolution}

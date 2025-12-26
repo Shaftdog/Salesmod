@@ -106,10 +106,10 @@ export function CasesList({ clientId, orderId, defaultView = 'kanban' }: CasesLi
         title: 'Case Deleted',
         description: `"${caseToDelete.subject}" has been deleted.`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Delete Failed',
-        description: error.message || 'Failed to delete case',
+        description: error instanceof Error ? error.message : 'Failed to delete case',
         variant: 'destructive',
       });
     } finally {
