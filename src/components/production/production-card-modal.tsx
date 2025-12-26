@@ -35,6 +35,7 @@ import {
   Trash2,
   ListTodo,
   MessageSquare,
+  Briefcase,
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -102,6 +103,7 @@ function formatLocalDate(dateString: string | null | undefined, formatStr: strin
 }
 import { CorrectionDialog } from './correction-dialog';
 import { TaskAssigneePopover } from './task-assignee-popover';
+import { useCorrectionsByCard } from '@/hooks/use-corrections';
 import { EditTeamDialog } from './edit-team-dialog';
 import { HoldOrderDialog } from './hold-order-dialog';
 import { CancelOrderDialog } from './cancel-order-dialog';
@@ -123,6 +125,7 @@ interface ProductionCardModalProps {
 
 export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCardModalProps) {
   const { data, isLoading, error } = useProductionCard(cardId);
+  const { data: corrections } = useCorrectionsByCard(cardId);
   const moveCard = useMoveProductionCard();
   const completeTask = useCompleteProductionTask();
   const deleteTask = useDeleteProductionTask();
@@ -273,6 +276,23 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
                     </Badge>
                   </Link>
                 )}
+                {/* Linked Cases from Revisions/Corrections */}
+                {corrections && corrections.filter(c => c.case).map(correction => (
+                  <Link key={correction.id} href={`/cases/${correction.case!.id}`}>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "cursor-pointer hover:bg-muted",
+                        correction.request_type === 'revision'
+                          ? "border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                          : "border-amber-300 text-amber-700 hover:bg-amber-50"
+                      )}
+                    >
+                      <Briefcase className="h-3 w-3 mr-1" />
+                      Case: {correction.case!.case_number}
+                    </Badge>
+                  </Link>
+                ))}
               </div>
 
               {/* Inspection Date - Prominent Display with Schedule Button */}
