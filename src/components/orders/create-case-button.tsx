@@ -58,7 +58,7 @@ export function CreateCaseButton({ order, variant = "secondary" }: CreateCaseBut
         onSubmit={handleSubmit}
         clients={clients || []}
         orders={orders || []}
-        case={defaultCase}
+        defaultValues={defaultCase}
         isLoading={createCase.isPending}
       />
     </>

@@ -80,7 +80,10 @@ export function useCreateCase() {
 
       const { data, error } = await supabase
         .from('cases')
-        .insert(caseData)
+        .insert({
+          ...caseData,
+          created_by: user.id, // Required field - set to current user
+        })
         .select(`
           *,
           client:clients(*),

@@ -49,6 +49,7 @@ type CaseFormProps = {
   contacts?: Contact[];
   orders?: Order[];
   case?: Partial<Case>;
+  defaultValues?: Partial<Case>; // For pre-populating new cases without triggering edit mode
   isLoading?: boolean;
 };
 
@@ -60,23 +61,25 @@ export function CaseForm({
   contacts = [],
   orders = [],
   case: caseData,
+  defaultValues: initialValues,
   isLoading
 }: CaseFormProps) {
-  console.log('[CaseForm] Received clients:', clients.length, clients.slice(0, 2));
-  console.log('[CaseForm] Received orders:', orders.length, orders.slice(0, 2));
+  // Use caseData (edit mode) or initialValues (new case with pre-filled values) or empty defaults
+  const sourceData = caseData || initialValues;
+  const isEditMode = !!caseData?.id; // Only edit mode if we have an actual case ID
 
   const form = useForm<CaseFormData>({
     resolver: zodResolver(caseSchema),
-    defaultValues: caseData ? {
-      subject: caseData.subject,
-      description: caseData.description || "",
-      case_type: caseData.caseType,
-      status: caseData.status,
-      priority: caseData.priority,
-      client_id: caseData.clientId || "",
-      contact_id: caseData.contactId || "",
-      order_id: caseData.orderId || "",
-      assigned_to: caseData.assignedTo || "",
+    defaultValues: sourceData ? {
+      subject: sourceData.subject || "",
+      description: sourceData.description || "",
+      case_type: sourceData.caseType || "support",
+      status: sourceData.status || "new",
+      priority: sourceData.priority || "normal",
+      client_id: sourceData.clientId || "",
+      contact_id: sourceData.contactId || "",
+      order_id: sourceData.orderId || "",
+      assigned_to: sourceData.assignedTo || "",
     } : {
       subject: "",
       description: "",
@@ -99,9 +102,9 @@ export function CaseForm({
       order_id: data.order_id || undefined,
       assigned_to: data.assigned_to || undefined,
     };
-    
+
     await onSubmit(cleanedData);
-    if (!caseData) {
+    if (!isEditMode) {
       form.reset();
     }
     onOpenChange(false);
@@ -118,9 +121,9 @@ export function CaseForm({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{caseData ? "Edit Case" : "New Case"}</DialogTitle>
+          <DialogTitle>{isEditMode ? "Edit Case" : "New Case"}</DialogTitle>
           <DialogDescription>
-            {caseData ? "Update case information" : "Create a new support case"}
+            {isEditMode ? "Update case information" : "Create a new support case"}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -288,7 +291,7 @@ export function CaseForm({
               </Button>
               <Button type="submit" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {caseData ? "Update Case" : "Create Case"}
+                {isEditMode ? "Update Case" : "Create Case"}
               </Button>
             </DialogFooter>
           </form>
