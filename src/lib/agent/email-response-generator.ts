@@ -72,7 +72,7 @@ export async function generateEmailResponse(
     const response = JSON.parse(jsonText);
 
     // Determine if should auto-send based on category
-    const autoSendCategories: EmailCategory[] = ['STATUS', 'SCHEDULING', 'REMOVE'];
+    const autoSendCategories: EmailCategory[] = ['STATUS', 'SCHEDULING', 'REMOVE', 'UPDATES'];
     const shouldAutoSend =
       autoSendCategories.includes(category) && classification.confidence >= 0.95;
 

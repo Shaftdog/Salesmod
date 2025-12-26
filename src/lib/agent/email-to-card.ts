@@ -279,12 +279,12 @@ function determineCardStrategy(classification: EmailClassification): {
       };
 
     case 'UPDATES':
-      // Updates may need follow-up → follow_up card
+      // Updates get auto-acknowledgment response → send_email card
       return {
-        cardType: 'follow_up',
-        state: 'in_review',
-        priority: 'medium',
-        autoExecute: false,
+        cardType: 'send_email',
+        state: confidence >= 0.95 ? 'approved' : 'in_review',
+        priority: entities.urgency === 'high' ? 'high' : 'medium',
+        autoExecute: confidence >= 0.95,
       };
 
     case 'AMC_ORDER':

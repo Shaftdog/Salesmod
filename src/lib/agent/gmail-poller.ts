@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { GmailService, GmailMessage } from '@/lib/gmail/gmail-service';
 import { classifyEmail, EmailClassification } from '@/lib/agent/email-classifier';
 import { createCardFromEmail } from '@/lib/agent/email-to-card';
+import { generateEmailResponse } from '@/lib/agent/email-response-generator';
 
 export interface PollResult {
   success: boolean;
@@ -375,7 +376,18 @@ async function processMessage(
     throw new Error(`Card creation failed: ${errorMessage}`);
   }
 
-  // 6. Manage Gmail inbox (label, mark read, archive)
+  // 6. Auto-send response if autoExecute is enabled for this card type
+  if (cardResult.autoExecute && cardResult.type === 'send_email') {
+    try {
+      console.log(`[Gmail Poller] Auto-sending response for message ${message.id}...`);
+      await sendAutoResponse(orgId, message, classification, cardResult.cardId, campaignContext);
+    } catch (error) {
+      console.error(`[Gmail Poller] WARNING: Failed to send auto-response for message ${message.id}:`, error);
+      // Non-fatal - card was created, but auto-response failed
+    }
+  }
+
+  // 7. Manage Gmail inbox (label, mark read, archive)
   try {
     await manageGmailInbox(orgId, message, classification, cardResult);
   } catch (error) {
@@ -383,7 +395,7 @@ async function processMessage(
     // Non-fatal - don't block on inbox management failures
   }
 
-  // 7. If needs escalation, send auto-reply
+  // 8. If needs escalation, send auto-reply
   if (classification.category === 'ESCALATE' || classification.shouldEscalate) {
     try {
       await sendEscalationAutoReply(orgId, message);
@@ -514,6 +526,139 @@ async function manageGmailInbox(
   } catch (error) {
     console.error('Error managing Gmail inbox:', error);
     // Don't throw - inbox management is optional, don't block card creation
+  }
+}
+
+/**
+ * Sends an auto-generated response for high-confidence auto-execute cards
+ * Uses Gmail API to send reply in the same thread
+ */
+async function sendAutoResponse(
+  orgId: string,
+  message: GmailMessage,
+  classification: EmailClassification,
+  cardId: string,
+  campaignContext?: {
+    isCampaignReply: boolean;
+    jobId?: string;
+    taskId?: number;
+    originalMessageId?: string;
+    jobContext?: {
+      jobName: string;
+      jobDescription: string;
+      originalEmailSubject: string;
+      originalEmailBody: string;
+    };
+  } | null
+): Promise<void> {
+  const supabase = await createClient();
+
+  // Get user's tenant_id for multi-tenant isolation
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', orgId)
+    .single();
+
+  const tenantId = profile?.tenant_id;
+  if (!tenantId) {
+    console.error('[Gmail Poller] User has no tenant_id assigned');
+    return;
+  }
+
+  try {
+    // Generate AI-powered response using campaign context if available
+    console.log(`[Gmail Poller] Generating auto-response for message ${message.id}...`);
+    const emailResponse = await generateEmailResponse(
+      orgId,
+      message,
+      classification,
+      undefined, // Let it build business context
+      campaignContext?.jobContext ? {
+        jobName: campaignContext.jobContext.jobName,
+        jobDescription: campaignContext.jobContext.jobDescription,
+        originalEmailSubject: campaignContext.jobContext.originalEmailSubject,
+        originalEmailBody: campaignContext.jobContext.originalEmailBody,
+      } : undefined
+    );
+
+    // Check if response should be auto-sent
+    if (!emailResponse.shouldAutoSend) {
+      console.log(`[Gmail Poller] Response generated but not auto-sendable for message ${message.id}`);
+      return;
+    }
+
+    // Send the response via Gmail API
+    console.log(`[Gmail Poller] Sending auto-response via Gmail for message ${message.id}...`);
+    const gmailService = await GmailService.create(orgId);
+
+    const sentMessageId = await gmailService.sendReply({
+      threadId: message.threadId,
+      to: [message.from.email],
+      subject: emailResponse.subject,
+      bodyHtml: emailResponse.bodyHtml,
+      bodyText: emailResponse.bodyText,
+      inReplyTo: message.id,
+    });
+
+    console.log(`[Gmail Poller] Auto-response sent successfully: ${sentMessageId}`);
+
+    // Update the card with the sent response
+    // First get current action_payload to merge with
+    const { data: currentCard } = await supabase
+      .from('kanban_cards')
+      .select('action_payload')
+      .eq('id', cardId)
+      .single();
+
+    const currentPayload = (currentCard?.action_payload as Record<string, unknown>) || {};
+    const updatedPayload = {
+      ...currentPayload,
+      autoResponseSent: true,
+      sentMessageId,
+      sentAt: new Date().toISOString(),
+      responseSubject: emailResponse.subject,
+      responseBody: emailResponse.bodyText?.substring(0, 500),
+    };
+
+    await supabase
+      .from('kanban_cards')
+      .update({
+        state: 'done',
+        executed_at: new Date().toISOString(),
+        action_payload: updatedPayload,
+      })
+      .eq('id', cardId);
+
+    // Create activity record for the sent email
+    const { data: card } = await supabase
+      .from('kanban_cards')
+      .select('client_id, contact_id')
+      .eq('id', cardId)
+      .single();
+
+    if (card) {
+      await supabase
+        .from('activities')
+        .insert({
+          tenant_id: tenantId,
+          client_id: card.client_id,
+          contact_id: card.contact_id,
+          gmail_message_id: sentMessageId,
+          activity_type: 'email',
+          subject: `Sent: ${emailResponse.subject}`,
+          description: `Auto-response sent to ${message.from.email}\n\nCategory: ${classification.category}\n\n${emailResponse.bodyText?.substring(0, 500) || ''}`,
+          status: 'completed',
+          outcome: 'auto_response_sent',
+          created_by: orgId,
+          created_at: new Date().toISOString(),
+        });
+    }
+
+    console.log(`[Gmail Poller] Auto-response complete for message ${message.id}`);
+  } catch (error) {
+    console.error(`[Gmail Poller] Error sending auto-response for message ${message.id}:`, error);
+    throw error;
   }
 }
 
