@@ -369,8 +369,47 @@ export interface Task {
 // CASE MANAGEMENT
 // =============================================
 
-export const caseStatuses = ['new', 'open', 'pending', 'in_progress', 'resolved', 'closed', 'reopened'] as const;
+export const caseStatuses = [
+  'new',
+  'working',
+  'in_production',
+  'correction',
+  'impeded',
+  'workshop_meeting',
+  'review',
+  'deliver',
+  'completed',
+  'process_improvement'
+] as const;
 export type CaseStatus = typeof caseStatuses[number];
+
+// Labels for display
+export const CASE_STATUS_LABELS: Record<CaseStatus, string> = {
+  new: 'New',
+  working: 'Working',
+  in_production: 'In Production',
+  correction: 'Correction',
+  impeded: 'Impeded',
+  workshop_meeting: 'Workshop Meeting',
+  review: 'Review',
+  deliver: 'Deliver',
+  completed: 'Completed',
+  process_improvement: 'Process Improvement',
+};
+
+// Colors for each status column
+export const CASE_STATUS_COLORS: Record<CaseStatus, string> = {
+  new: 'bg-slate-50 border-slate-200',
+  working: 'bg-blue-50 border-blue-200',
+  in_production: 'bg-purple-50 border-purple-200',
+  correction: 'bg-orange-50 border-orange-200',
+  impeded: 'bg-red-50 border-red-200',
+  workshop_meeting: 'bg-yellow-50 border-yellow-200',
+  review: 'bg-indigo-50 border-indigo-200',
+  deliver: 'bg-teal-50 border-teal-200',
+  completed: 'bg-green-50 border-green-200',
+  process_improvement: 'bg-pink-50 border-pink-200',
+};
 
 export const casePriorities = ['low', 'normal', 'high', 'urgent', 'critical'] as const;
 export type CasePriority = typeof casePriorities[number];

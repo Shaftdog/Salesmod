@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,22 +17,29 @@ import {
 } from "@/components/ui/alert-dialog";
 import { CaseCard } from "./case-card";
 import { CaseForm } from "./case-form";
+import { CasesKanbanBoard } from "./cases-kanban-board";
 import { useCases, useCreateCase, useUpdateCase, useDeleteCase } from "@/hooks/use-cases";
 import { useClients } from "@/hooks/use-clients";
 import { useOrders } from "@/hooks/use-orders";
 import { useCurrentUser } from "@/hooks/use-appraisers";
-import type { Case } from "@/lib/types";
-import { Plus, Search, Filter } from "lucide-react";
+import type { Case, CaseStatus } from "@/lib/types";
+import { Plus, Search, LayoutGrid, Kanban } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { caseStatuses, casePriorities, caseTypes } from "@/lib/types";
+import { caseStatuses, casePriorities, caseTypes, CASE_STATUS_LABELS } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+
+type ViewMode = 'grid' | 'kanban';
 
 type CasesListProps = {
   clientId?: string;
   orderId?: string;
+  defaultView?: ViewMode;
 };
 
-export function CasesList({ clientId, orderId }: CasesListProps) {
+export function CasesList({ clientId, orderId, defaultView = 'kanban' }: CasesListProps) {
+  const router = useRouter();
+  const [viewMode, setViewMode] = useState<ViewMode>(defaultView);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCase, setEditingCase] = useState<Case | undefined>();
   const [caseToDelete, setCaseToDelete] = useState<Case | null>(null);
@@ -39,6 +47,7 @@ export function CasesList({ clientId, orderId }: CasesListProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [defaultStatus, setDefaultStatus] = useState<CaseStatus | undefined>();
 
   // Fetch data
   const { data: cases = [], isLoading } = useCases({ clientId, orderId });
@@ -50,15 +59,9 @@ export function CasesList({ clientId, orderId }: CasesListProps) {
   const deleteCase = useDeleteCase();
   const { toast } = useToast();
 
-  // Debug logging
-  console.log('[CasesList] clients count:', clients.length);
-  console.log('[CasesList] orders count:', orders.length);
-  console.log('[CasesList] clients sample:', clients[0]);
-  console.log('[CasesList] orders sample:', orders[0]);
-
   const handleSubmit = async (data: any) => {
     if (!currentUser) return;
-    
+
     if (editingCase) {
       await updateCase.mutateAsync({
         id: editingCase.id,
@@ -71,6 +74,7 @@ export function CasesList({ clientId, orderId }: CasesListProps) {
       });
     }
     setEditingCase(undefined);
+    setDefaultStatus(undefined);
   };
 
   const handleEdit = (caseItem: Case) => {
@@ -81,6 +85,16 @@ export function CasesList({ clientId, orderId }: CasesListProps) {
   const handleCloseForm = () => {
     setIsFormOpen(false);
     setEditingCase(undefined);
+    setDefaultStatus(undefined);
+  };
+
+  const handleCardClick = (caseItem: Case) => {
+    router.push(`/cases/${caseItem.id}`);
+  };
+
+  const handleCreateCase = (status?: CaseStatus) => {
+    setDefaultStatus(status);
+    setIsFormOpen(true);
   };
 
   const handleDeleteCase = async () => {
@@ -103,12 +117,12 @@ export function CasesList({ clientId, orderId }: CasesListProps) {
     }
   };
 
-  // Filter cases
+  // Filter cases (only for grid view)
   const filteredCases = cases.filter((caseItem) => {
     const matchesSearch = caseItem.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          caseItem.caseNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          (caseItem.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false);
-    
+
     const matchesStatus = statusFilter === "all" || caseItem.status === statusFilter;
     const matchesPriority = priorityFilter === "all" || caseItem.priority === priorityFilter;
     const matchesType = typeFilter === "all" || caseItem.caseType === typeFilter;
@@ -118,7 +132,7 @@ export function CasesList({ clientId, orderId }: CasesListProps) {
 
   // Helper function to format case type for display
   const formatCaseType = (type: string) => {
-    return type.split('_').map(word => 
+    return type.split('_').map(word =>
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
   };
@@ -139,92 +153,129 @@ export function CasesList({ clientId, orderId }: CasesListProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Cases</h2>
-        <Button onClick={() => setIsFormOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Case
-        </Button>
-      </div>
-
-      {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="md:col-span-2 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search cases..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
+        <div className="flex items-center gap-2">
+          {/* View Toggle */}
+          <div className="flex items-center border rounded-lg p-1 bg-muted/30">
+            <Button
+              variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+              size="sm"
+              className={cn('h-8 px-3', viewMode === 'grid' && 'shadow-sm')}
+              onClick={() => setViewMode('grid')}
+            >
+              <LayoutGrid className="h-4 w-4 mr-1" />
+              Grid
+            </Button>
+            <Button
+              variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+              size="sm"
+              className={cn('h-8 px-3', viewMode === 'kanban' && 'shadow-sm')}
+              onClick={() => setViewMode('kanban')}
+            >
+              <Kanban className="h-4 w-4 mr-1" />
+              Kanban
+            </Button>
+          </div>
+          <Button onClick={() => handleCreateCase()}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Case
+          </Button>
         </div>
-
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger>
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {caseStatuses.map((status) => (
-              <SelectItem key={status} value={status} className="capitalize">
-                {status.replace('_', ' ')}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-          <SelectTrigger>
-            <SelectValue placeholder="Priority" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Priorities</SelectItem>
-            {casePriorities.map((priority) => (
-              <SelectItem key={priority} value={priority} className="capitalize">
-                {priority}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger>
-            <SelectValue placeholder="Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {caseTypes.map((type) => (
-              <SelectItem key={type} value={type}>
-                {formatCaseType(type)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
-      {/* Results summary */}
-      <div className="text-sm text-muted-foreground">
-        Showing {filteredCases.length} of {cases.length} cases
-      </div>
+      {/* Filters - Only show in grid view */}
+      {viewMode === 'grid' && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="md:col-span-2 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search cases..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
 
-      {/* Cases Grid */}
-      {filteredCases.length === 0 ? (
-        <div className="text-center py-12 border rounded-lg bg-muted/20">
-          <p className="text-muted-foreground">
-            {searchQuery || statusFilter !== "all" || priorityFilter !== "all" || typeFilter !== "all" 
-              ? "No cases match your filters"
-              : "No cases yet. Create your first case to get started."}
-          </p>
-        </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                {caseStatuses.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {CASE_STATUS_LABELS[status]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Priorities</SelectItem>
+                {casePriorities.map((priority) => (
+                  <SelectItem key={priority} value={priority} className="capitalize">
+                    {priority}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {caseTypes.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {formatCaseType(type)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Results summary */}
+          <div className="text-sm text-muted-foreground">
+            Showing {filteredCases.length} of {cases.length} cases
+          </div>
+        </>
+      )}
+
+      {/* Content based on view mode */}
+      {viewMode === 'kanban' ? (
+        <CasesKanbanBoard
+          onCardClick={handleCardClick}
+          onCreateCase={handleCreateCase}
+        />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredCases.map((caseItem) => (
-            <CaseCard
-              key={caseItem.id}
-              case={caseItem}
-              onEdit={handleEdit}
-              onDelete={setCaseToDelete}
-            />
-          ))}
-        </div>
+        <>
+          {/* Cases Grid */}
+          {filteredCases.length === 0 ? (
+            <div className="text-center py-12 border rounded-lg bg-muted/20">
+              <p className="text-muted-foreground">
+                {searchQuery || statusFilter !== "all" || priorityFilter !== "all" || typeFilter !== "all"
+                  ? "No cases match your filters"
+                  : "No cases yet. Create your first case to get started."}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredCases.map((caseItem) => (
+                <CaseCard
+                  key={caseItem.id}
+                  case={caseItem}
+                  onEdit={handleEdit}
+                  onDelete={setCaseToDelete}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Form Dialog */}
@@ -236,6 +287,7 @@ export function CasesList({ clientId, orderId }: CasesListProps) {
         clients={clients}
         orders={orders}
         isLoading={createCase.isPending || updateCase.isPending}
+        defaultStatus={defaultStatus}
       />
 
       {/* Delete Confirmation Dialog */}
@@ -258,4 +310,3 @@ export function CasesList({ clientId, orderId }: CasesListProps) {
     </div>
   );
 }
-

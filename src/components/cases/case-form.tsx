@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -24,8 +25,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
-import { caseStatuses, casePriorities, caseTypes } from "@/lib/types";
-import type { Case, Client, Contact, Order } from "@/lib/types";
+import { caseStatuses, casePriorities, caseTypes, CASE_STATUS_LABELS } from "@/lib/types";
+import type { Case, CaseStatus, Client, Contact, Order } from "@/lib/types";
 
 const caseSchema = z.object({
   subject: z.string().min(1, "Subject is required"),
@@ -50,6 +51,7 @@ type CaseFormProps = {
   orders?: Order[];
   case?: Partial<Case>;
   isLoading?: boolean;
+  defaultStatus?: CaseStatus;
 };
 
 export function CaseForm({
@@ -60,11 +62,9 @@ export function CaseForm({
   contacts = [],
   orders = [],
   case: caseData,
-  isLoading
+  isLoading,
+  defaultStatus,
 }: CaseFormProps) {
-  console.log('[CaseForm] Received clients:', clients.length, clients.slice(0, 2));
-  console.log('[CaseForm] Received orders:', orders.length, orders.slice(0, 2));
-
   const form = useForm<CaseFormData>({
     resolver: zodResolver(caseSchema),
     defaultValues: caseData ? {
@@ -81,7 +81,7 @@ export function CaseForm({
       subject: "",
       description: "",
       case_type: "support",
-      status: "new",
+      status: defaultStatus || "new",
       priority: "normal",
       client_id: "",
       contact_id: "",
@@ -89,6 +89,23 @@ export function CaseForm({
       assigned_to: "",
     },
   });
+
+  // Reset form when dialog opens with different defaultStatus
+  useEffect(() => {
+    if (open && !caseData) {
+      form.reset({
+        subject: "",
+        description: "",
+        case_type: "support",
+        status: defaultStatus || "new",
+        priority: "normal",
+        client_id: "",
+        contact_id: "",
+        order_id: "",
+        assigned_to: "",
+      });
+    }
+  }, [open, defaultStatus, caseData, form]);
 
   const handleSubmit = async (data: CaseFormData) => {
     // Convert empty strings to undefined
@@ -99,7 +116,7 @@ export function CaseForm({
       order_id: data.order_id || undefined,
       assigned_to: data.assigned_to || undefined,
     };
-    
+
     await onSubmit(cleanedData);
     if (!caseData) {
       form.reset();
@@ -109,7 +126,7 @@ export function CaseForm({
 
   // Helper function to format case type for display
   const formatCaseType = (type: string) => {
-    return type.split('_').map(word => 
+    return type.split('_').map(word =>
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
   };
@@ -160,7 +177,7 @@ export function CaseForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Type *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue />
@@ -185,7 +202,7 @@ export function CaseForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Priority *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue />
@@ -210,7 +227,7 @@ export function CaseForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Status *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue />
@@ -218,8 +235,8 @@ export function CaseForm({
                       </FormControl>
                       <SelectContent>
                         {caseStatuses.map((status) => (
-                          <SelectItem key={status} value={status} className="capitalize">
-                            {status.replace('_', ' ')}
+                          <SelectItem key={status} value={status}>
+                            {CASE_STATUS_LABELS[status]}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -297,4 +314,3 @@ export function CaseForm({
     </Dialog>
   );
 }
-
