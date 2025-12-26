@@ -335,9 +335,72 @@
       "name": "7-Gate Phase Review Process",
       "description": "Before merging major features: A) Architecture Review (tenant isolation, RLS), B) Code Review (identify issues), C) Fix Loop (resolve criticals), D) Database Review (migration validation), E) Unit Tests, F) E2E Tests, G) Security Audit. All gates must pass.",
       "files": ["docs/features/agents/progress.md"]
+    },
+    {
+      "name": "Email Infrastructure Checklist",
+      "description": "For production email sending: 1) DMARC record (_dmarc TXT: v=DMARC1; p=none), 2) DKIM record (provider._domainkey TXT with public key), 3) SPF record (@ TXT: v=spf1 include:provider.com ~all), 4) Central gate routing (all paths through sendEmailThroughGate), 5) Audit logging (email_send_log table), 6) Progressive rollout (dry_run → internal_only → limited_live → live)",
+      "files": ["src/lib/email/email-sender.ts", "docs/features/agents/P0.7-EMAIL-ROLLOUT-GUIDE.md"]
+    },
+    {
+      "name": "Review Mode Card Flow",
+      "description": "With Review Mode ON: job-planner creates cards with state='suggested' → user reviews in UI → approve changes state to 'approved' → executor only runs if state==='approved'. Two protection layers: creation state + execution check.",
+      "files": ["src/lib/agent/job-planner.ts", "src/lib/agent/executor.ts", "src/app/api/agent/card/manage/route.ts"]
     }
   ],
-  "last_updated": "2025-12-23",
+  "last_updated": "2025-12-25",
+  "session_learnings_2025_12_25": {
+    "context": "P0.7 Email Infrastructure Go-Live - DNS configuration, email mode activation, operational validation",
+    "learnings": [
+      {
+        "topic": "SPF Record Placement",
+        "issue": "SPF record was on 'send' subdomain instead of '@' root domain - only covered send.roiappraise.com",
+        "solution": "SPF TXT record must have Name='@' (or blank) to cover root domain email sending",
+        "files": ["DNS configuration"]
+      },
+      {
+        "topic": "SPF Record Format for GoDaddy",
+        "issue": "GoDaddy rejected SPF record with 'Record data is invalid' error",
+        "solution": "Edit existing record instead of adding new one. Value format: v=spf1 include:amazonses.com include:resend.com ~all (no quotes needed)",
+        "files": ["DNS configuration"]
+      },
+      {
+        "topic": "DNS Propagation Verification",
+        "issue": "Need to verify DNS changes actually propagated",
+        "solution": "Use dig @8.8.8.8 TXT domain.com +short | grep spf to check Google DNS, or query authoritative NS directly",
+        "files": []
+      },
+      {
+        "topic": "Email Mode in Tenant Settings",
+        "issue": "email_mode is stored in tenant.settings JSONB, not a direct column",
+        "solution": "Update via: UPDATE tenants SET settings = jsonb_set(COALESCE(settings, '{}'), '{email_mode}', '\"live\"') WHERE id = ...",
+        "files": ["scripts/enable-live-email.js"]
+      },
+      {
+        "topic": "Review Mode Protection",
+        "issue": "User concerned about emails sending without approval",
+        "solution": "Review Mode ON creates cards in 'suggested' state. Executor explicitly checks state === 'approved' before executing. Double protection layer.",
+        "files": ["src/lib/agent/job-planner.ts:329", "src/lib/agent/executor.ts:54-61"]
+      },
+      {
+        "topic": "Central Email Gate Pattern",
+        "issue": "Email sending was scattered across 4 different code paths with inconsistent behavior",
+        "solution": "All email paths now route through sendEmailThroughGate() which enforces: mode controls, rate limiting, audit logging, suppression checking",
+        "files": ["src/lib/email/email-sender.ts", "src/lib/agent/executor.ts", "src/app/api/email/send/route.ts", "src/lib/campaigns/email-sender.ts", "src/app/api/invoices/[id]/send/route.ts"]
+      },
+      {
+        "topic": "Database Table Discovery",
+        "issue": "Assumed table names (cards, tasks) didn't match actual schema (kanban_cards, production_tasks)",
+        "solution": "Query information_schema.tables to discover actual table names before writing queries",
+        "files": []
+      },
+      {
+        "topic": "Node.js pg Package for Migrations",
+        "issue": "psql command not available on macOS, can't run SQL migrations directly",
+        "solution": "Create Node.js script using 'pg' package with pooler connection string. Run with: node scripts/run-migrations.js",
+        "files": ["scripts/run-migrations.js", "scripts/p07-operational-validation.js"]
+      }
+    ]
+  },
   "session_learnings_2025_12_23_evening": {
     "context": "Reconciling 'Project Complete' claims with actual verified status, adding operational runbook, fixing CI",
     "learnings": [
