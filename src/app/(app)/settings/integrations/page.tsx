@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   Clock,
   MailCheck,
+  MessageSquare,
 } from 'lucide-react';
 
 interface GmailStatus {
@@ -68,6 +69,15 @@ interface ProcessedMessage {
   } | null;
 }
 
+interface SlackStatus {
+  connected: boolean;
+  configured: boolean;
+  enabled?: boolean;
+  teamName?: string;
+  teamId?: string;
+  installedAt?: string;
+}
+
 const CATEGORY_COLORS: Record<string, string> = {
   AMC_ORDER: 'bg-blue-100 text-blue-800',
   OPPORTUNITY: 'bg-green-100 text-green-800',
@@ -102,6 +112,10 @@ export default function IntegrationsPage() {
   const [lastAutoSync, setLastAutoSync] = useState<Date | null>(null);
   const [nextSyncIn, setNextSyncIn] = useState<number>(0);
 
+  // Slack state
+  const [slackStatus, setSlackStatus] = useState<SlackStatus | null>(null);
+  const [slackDisconnecting, setSlackDisconnecting] = useState(false);
+
   // Processed messages state
   const [messages, setMessages] = useState<ProcessedMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -112,6 +126,7 @@ export default function IntegrationsPage() {
 
   useEffect(() => {
     fetchGmailStatus();
+    fetchSlackStatus();
   }, []);
 
   // Auto-poll every 2 minutes when Gmail is connected and auto-poll is enabled
@@ -266,6 +281,46 @@ export default function IntegrationsPage() {
       alert('Error syncing Gmail');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  // Slack handlers
+  const fetchSlackStatus = async () => {
+    try {
+      const response = await fetch('/api/integrations/slack/status');
+      const data = await response.json();
+      setSlackStatus(data);
+    } catch (error) {
+      console.error('Error fetching Slack status:', error);
+      setSlackStatus({ connected: false, configured: false });
+    }
+  };
+
+  const handleSlackConnect = () => {
+    window.location.href = '/api/integrations/slack/connect';
+  };
+
+  const handleSlackDisconnect = async () => {
+    if (!confirm('Are you sure you want to disconnect Slack? The bot will stop responding to messages.')) {
+      return;
+    }
+
+    try {
+      setSlackDisconnecting(true);
+      const response = await fetch('/api/integrations/slack/disconnect', {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        await fetchSlackStatus();
+      } else {
+        alert('Failed to disconnect Slack');
+      }
+    } catch (error) {
+      console.error('Error disconnecting Slack:', error);
+      alert('Error disconnecting Slack');
+    } finally {
+      setSlackDisconnecting(false);
     }
   };
 
@@ -524,6 +579,140 @@ export default function IntegrationsPage() {
                   <h4 className="font-medium mb-2">Full Tracking</h4>
                   <p className="text-sm text-muted-foreground">
                     All emails and responses logged in your activity feed and kanban board
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Slack Integration Card */}
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <MessageSquare className="h-6 w-6" />
+              <div>
+                <CardTitle>Slack Integration</CardTitle>
+                <CardDescription>
+                  Chat with your AI agent directly from Slack
+                </CardDescription>
+              </div>
+            </div>
+            {slackStatus?.connected ? (
+              <Badge variant="default" className="flex items-center gap-1">
+                <CheckCircle className="h-3 w-3" />
+                Connected
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <XCircle className="h-3 w-3" />
+                Not Connected
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {slackStatus?.connected ? (
+            <>
+              {/* Connection Info */}
+              <div className="bg-muted p-4 rounded-lg space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Workspace:</span>
+                  <span className="text-sm">{slackStatus.teamName}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Installed:</span>
+                  <span className="text-sm">
+                    {slackStatus.installedAt
+                      ? new Date(slackStatus.installedAt).toLocaleDateString()
+                      : 'Unknown'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Status:</span>
+                  <Badge variant={slackStatus.enabled ? 'default' : 'secondary'}>
+                    {slackStatus.enabled ? 'Active' : 'Disabled'}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* How to use */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-900 mb-2">How to use</h4>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• Mention the bot with <code className="bg-blue-100 px-1 rounded">@Salesmod</code> in any channel</li>
+                  <li>• Or send a direct message to the bot</li>
+                  <li>• Ask questions like &quot;What&apos;s the status of the Jones deal?&quot;</li>
+                </ul>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-4">
+                <Button
+                  onClick={handleSlackDisconnect}
+                  disabled={slackDisconnecting}
+                  variant="destructive"
+                  className="w-full"
+                >
+                  {slackDisconnecting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Disconnecting...
+                    </>
+                  ) : (
+                    'Disconnect Slack'
+                  )}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Not Connected State */}
+              <div className="text-center py-8">
+                <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-medium mb-2">Connect Your Slack Workspace</h3>
+                <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+                  Chat with your AI agent directly from Slack. Ask about clients, deals,
+                  tasks, and more - the same agent you use in the app.
+                </p>
+                {slackStatus?.configured ? (
+                  <Button onClick={handleSlackConnect} size="lg">
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Add to Slack
+                  </Button>
+                ) : (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
+                    Slack integration is not configured. Contact your administrator to set up Slack credentials.
+                  </div>
+                )}
+              </div>
+
+              {/* Features */}
+              <div className="grid md:grid-cols-2 gap-4 mt-6">
+                <div className="bg-muted p-4 rounded-lg">
+                  <h4 className="font-medium mb-2">Two-Way Chat</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Have full conversations with your AI agent - ask questions, get answers, take actions
+                  </p>
+                </div>
+                <div className="bg-muted p-4 rounded-lg">
+                  <h4 className="font-medium mb-2">Same Agent Brain</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Uses the same AI and tools as the web app - search clients, create cards, and more
+                  </p>
+                </div>
+                <div className="bg-muted p-4 rounded-lg">
+                  <h4 className="font-medium mb-2">Channel or DM</h4>
+                  <p className="text-sm text-muted-foreground">
+                    @mention the bot in channels or send direct messages for private conversations
+                  </p>
+                </div>
+                <div className="bg-muted p-4 rounded-lg">
+                  <h4 className="font-medium mb-2">Threaded Replies</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Responses appear in threads to keep your channels organized
                   </p>
                 </div>
               </div>
