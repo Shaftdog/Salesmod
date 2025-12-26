@@ -22,6 +22,7 @@ export function useCorrections(filters?: CorrectionFilters) {
 
   return useQuery({
     queryKey: ['corrections', filters],
+    enabled: filters !== undefined, // Don't fetch until filters are provided
     queryFn: async () => {
       let query = supabase
         .from('correction_requests')
