@@ -294,7 +294,7 @@ Email rollout controls implemented Dec 19, 2025. **Infrastructure configuration 
 |-----------|--------|-------|
 | Gmail OAuth configured on 1+ tenant inbox | ✅ DONE | 1 Google OAuth token active, 208 messages synced |
 | Email sending verified: dry-run → internal-only → limited live | ⚠️ PARTIAL | dry_run mode verified; infrastructure needed for live modes |
-| Domain verification + DKIM/SPF/DMARC | ⚠️ PARTIAL | DMARC ✅, DKIM ✅ (Resend), SPF ❌ needs record |
+| Domain verification + DKIM/SPF/DMARC | ✅ DONE | DMARC ✅, DKIM ✅, SPF ✅ |
 | Central email gate routing | ✅ DONE | All 4 paths use `sendEmailThroughGate()` |
 | Email audit logging | ✅ DONE | `email_send_log` table created and wired |
 | Monitoring/alerts confirm no runaway behavior | ✅ DONE | Alerting system implemented |
@@ -352,9 +352,9 @@ Tasks created: 0
 - `/api/invoices/[id]/send` → `sendEmailThroughGate()` ✅
 
 **DNS Status (roiappraise.com):**
-- DMARC: ✅ `v=DMARC1; p=none;` configured
+- DMARC: ✅ `v=DMARC1; p=none;`
 - DKIM: ✅ Resend selector present
-- SPF: ❌ **MISSING** - Need: `v=spf1 include:_spf.google.com include:resend.com ~all`
+- SPF: ✅ `v=spf1 include:amazonses.com include:resend.com ~all`
 
 **Gmail Ingestion Verified:**
 - OAuth tokens: 1 active (Google)
@@ -1438,8 +1438,8 @@ This checklist summarizes verified items vs. remaining configuration steps for p
 | ~~Gmail OAuth~~ | ~~Google Cloud project setup~~ | ✅ DONE - OAuth working |
 | ~~Gmail OAuth~~ | ~~OAuth credentials for production~~ | ✅ DONE - 1 token active |
 | ~~Gmail OAuth~~ | ~~Connect at least 1 tenant inbox~~ | ✅ DONE - 208 messages synced |
-| Email Sending | Domain verification | Verify sending domain with provider |
-| Email Sending | SPF record for roiappraise.com | `v=spf1 include:_spf.google.com include:resend.com ~all` |
+| ~~Email Sending~~ | ~~Domain verification~~ | ✅ DONE - DKIM verified |
+| ~~Email Sending~~ | ~~SPF record for roiappraise.com~~ | ✅ DONE - `v=spf1 include:amazonses.com include:resend.com ~all` |
 | Email Sending | Production send test (dry→internal→live) | Progressive rollout validation |
 | Environment | `CRON_SECRET` configured | Required for cron endpoint auth |
 | Environment | `RESEND_API_KEY` or SMTP credentials | Email provider credentials |
@@ -1475,5 +1475,5 @@ PGPASSWORD='...' psql -h <host> -p 5432 -U <user> -d <database> -f supabase/migr
 | **Build** | ✅ Clean - TypeScript compiles without errors |
 | **Database** | ✅ Ready - Migrations verified |
 | **Gmail OAuth** | ✅ Working - 1 token active, 208 messages synced |
-| **Email Sending** | ⚠️ Partial - SPF record needed for roiappraise.com |
-| **Go-Live** | ⚠️ Ready after SPF record added |
+| **Email Sending** | ✅ Ready - DMARC/DKIM/SPF all configured |
+| **Go-Live** | ✅ Ready for progressive rollout (dry_run → internal_only → live) |
