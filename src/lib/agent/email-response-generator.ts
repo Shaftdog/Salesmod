@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
 import { EmailCategory, EmailClassification } from '@/lib/agent/email-classifier';
 import { GmailMessage } from '@/lib/gmail/gmail-service';
+import { lookupOrderStatus, buildStatusResponseContext, OrderStatusResult } from '@/lib/agent/order-status-lookup';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -115,7 +116,13 @@ function buildResponsePrompt(
   const { category, entities } = classification;
 
   const categoryInstructions: Record<EmailCategory, string> = {
-    STATUS: `Generate a status update email. Look up the order information and provide current status, progress percentage, and expected completion date. Be specific and helpful.`,
+    STATUS: `Generate a DETAILED status update email using the order information provided below. Include:
+- Current status and what it means
+- Progress percentage
+- Expected completion date or timeline
+- Next steps in the process
+- Recent activity if available
+Be specific with real data - never make up information. If order not found, apologize and ask for clarifying details.`,
 
     SCHEDULING: `Generate a scheduling confirmation email. Confirm the appointment details, provide date/time, and include any preparation instructions. Be clear and professional.`,
 
@@ -154,7 +161,11 @@ Entities: ${JSON.stringify(entities, null, 2)}
 
 BUSINESS CONTEXT:
 ${context.isExistingClient ? `This is an existing client: ${context.clientName}` : 'This is a new contact'}
-${context.orderInfo ? `Order Information:\n${JSON.stringify(context.orderInfo, null, 2)}` : 'No active orders found'}
+${context.statusContext ? `
+=== DETAILED ORDER STATUS (USE THIS DATA) ===
+${context.statusContext}
+=== END ORDER STATUS ===
+` : context.orderInfo ? `Order Information:\n${JSON.stringify(context.orderInfo, null, 2)}` : 'No active orders found'}
 ${context.propertyInfo ? `Property Information:\n${JSON.stringify(context.propertyInfo, null, 2)}` : ''}
 
 ${campaignContext ? `CAMPAIGN CONTEXT (IMPORTANT - This is a reply to our outreach):
@@ -203,6 +214,7 @@ Generate the response now:`;
 
 /**
  * Builds business context for response generation
+ * Enhanced with intelligent order status lookup for STATUS requests
  */
 async function buildBusinessContext(
   orgId: string,
@@ -225,29 +237,69 @@ async function buildBusinessContext(
     return context;
   }
 
-  // Find contact and client
+  // For STATUS requests, use intelligent order lookup
+  if (classification.category === 'STATUS') {
+    console.log('[Email Response] STATUS request - using intelligent order lookup');
+    try {
+      const statusResult = await lookupOrderStatus(tenantId, {
+        orderNumber: classification.entities.orderNumber,
+        propertyAddress: classification.entities.propertyAddress,
+        senderEmail: email.from.email,
+        borrowerName: classification.entities.requestedAction?.includes('borrower')
+          ? classification.entities.requestedAction
+          : undefined,
+        emailBody: email.bodyText,
+      });
+
+      context.statusLookup = statusResult;
+      context.statusContext = buildStatusResponseContext(statusResult);
+
+      if (statusResult.found && statusResult.order) {
+        // Also populate basic context for backwards compatibility
+        context.isExistingClient = true;
+        context.orderInfo = {
+          orderNumber: statusResult.order.orderNumber,
+          status: statusResult.order.status,
+          propertyAddress: statusResult.order.propertyAddress,
+          dueDate: statusResult.order.dueDate,
+          progress: statusResult.order.progressPercent,
+        };
+
+        console.log(`[Email Response] Found order ${statusResult.order.orderNumber} - ${statusResult.order.statusLabel}`);
+      } else if (statusResult.possibleMatches && statusResult.possibleMatches.length > 0) {
+        console.log(`[Email Response] Found ${statusResult.possibleMatches.length} possible order matches`);
+      } else {
+        console.log('[Email Response] No matching order found for STATUS request');
+      }
+    } catch (error) {
+      console.error('[Email Response] Error in status lookup:', error);
+      // Fall through to basic context
+    }
+  }
+
+  // Find contact and client (for all categories)
   const { data: contact } = await supabase
     .from('contacts')
-    .select('id, name, client_id')
+    .select('id, first_name, last_name, client_id')
     .eq('tenant_id', tenantId)
     .eq('email', email.from.email)
     .single();
 
   if (contact) {
-    context.isExistingClient = !!contact.client_id;
+    context.isExistingClient = context.isExistingClient || !!contact.client_id;
 
     if (contact.client_id) {
       // Get client info
       const { data: client } = await supabase
         .from('clients')
-        .select('name')
+        .select('company_name')
         .eq('id', contact.client_id)
         .single();
 
-      context.clientName = client?.name;
+      context.clientName = client?.company_name;
 
-      // Get order info if order number mentioned
-      if (classification.entities.orderNumber) {
+      // Get order info if order number mentioned (and not already looked up for STATUS)
+      if (classification.entities.orderNumber && !context.orderInfo) {
         const { data: order } = await supabase
           .from('orders')
           .select('*')
@@ -267,7 +319,7 @@ async function buildBusinessContext(
       }
 
       // Get property info if address mentioned
-      if (classification.entities.propertyAddress) {
+      if (classification.entities.propertyAddress && !context.propertyInfo) {
         const { data: property } = await supabase
           .from('properties')
           .select('*')
@@ -338,4 +390,7 @@ export interface BusinessContext {
     state?: string;
     zip?: string;
   };
+  // Enhanced status context from intelligent lookup
+  statusLookup?: OrderStatusResult;
+  statusContext?: string;
 }
