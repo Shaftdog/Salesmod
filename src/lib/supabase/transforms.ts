@@ -64,8 +64,8 @@ export function transformProperty(dbProperty: any): Property {
   return {
     id: dbProperty.id,
     orgId: dbProperty.org_id,
-    addressLine1: dbProperty.address_line_1,
-    addressLine2: dbProperty.address_line_2,
+    addressLine1: dbProperty.address_line1,
+    addressLine2: dbProperty.address_line2,
     city: dbProperty.city,
     state: dbProperty.state,
     postalCode: dbProperty.postal_code,
