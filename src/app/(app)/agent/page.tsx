@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { KanbanBoard } from '@/components/agent/kanban-board';
 import { AgentPanel } from '@/components/agent/agent-panel';
 import { EmailDraftSheet } from '@/components/agent/email-draft-sheet';
@@ -12,16 +13,34 @@ import { JobsFilterBar } from '@/components/agent/jobs-filter-bar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { KanbanCard, useAgentStats } from '@/hooks/use-agent';
+import { KanbanCard, useAgentStats, useKanbanCard } from '@/hooks/use-agent';
 import { Bot, BarChart3, Mail, Target, CheckCircle, Brain, Kanban, Settings, Zap } from 'lucide-react';
 
 export default function AgentPage() {
+  const searchParams = useSearchParams();
+  const cardIdFromUrl = searchParams.get('card');
+
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isDraftSheetOpen, setIsDraftSheetOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const { data: stats } = useAgentStats(30);
+
+  // Fetch card from URL parameter if present
+  const { data: cardFromUrl } = useKanbanCard(cardIdFromUrl);
+
+  // Auto-open card detail sheet when navigating with card ID in URL
+  useEffect(() => {
+    if (cardFromUrl && cardIdFromUrl) {
+      setSelectedCard(cardFromUrl);
+      if (cardFromUrl.type === 'send_email') {
+        setIsDraftSheetOpen(true);
+      } else {
+        setIsDetailSheetOpen(true);
+      }
+    }
+  }, [cardFromUrl, cardIdFromUrl]);
 
   const handleCardClick = (card: KanbanCard) => {
     setSelectedCard(card);

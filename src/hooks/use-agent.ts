@@ -181,7 +181,7 @@ export function useKanbanCards(state?: string, clientId?: string, jobId?: string
 // QUERY: Fetch Single Card
 // =============================================
 
-export function useKanbanCard(cardId: string) {
+export function useKanbanCard(cardId: string | null | undefined) {
   return useQuery({
     queryKey: ['kanban-cards', cardId],
     queryFn: async () => {
@@ -193,12 +193,13 @@ export function useKanbanCard(cardId: string) {
           client:clients(id, company_name, primary_contact, email),
           contact:contacts!kanban_cards_contact_id_fkey(id, first_name, last_name, email)
         `)
-        .eq('id', cardId)
+        .eq('id', cardId!)
         .single();
 
       if (error) throw error;
       return data as KanbanCard;
     },
+    enabled: !!cardId, // Only fetch when cardId is provided
   });
 }
 
