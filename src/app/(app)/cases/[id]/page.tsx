@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useCase, useUpdateCase, useCaseComments, useCreateCaseComment } from "@/hooks/use-cases";
+import { useCorrections } from "@/hooks/use-corrections";
 import { useClients } from "@/hooks/use-clients";
 import { useCurrentUser } from "@/hooks/use-appraisers";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
-import { Loader2, Building2, FileText, User, Calendar, MessageSquare, CheckCircle, AlertCircle, ArrowLeft } from "lucide-react";
+import { Loader2, Building2, FileText, User, Calendar, MessageSquare, CheckCircle, AlertCircle, ArrowLeft, LayoutGrid } from "lucide-react";
 import { caseStatuses, casePriorities } from "@/lib/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -33,6 +34,7 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
 
   const { data: caseData, isLoading, error } = useCase(caseId || "");
   const { data: comments = [] } = useCaseComments(caseId || "");
+  const { data: corrections = [] } = useCorrections(caseId ? { case_id: caseId } : undefined);
   const { clients } = useClients();
   const { data: currentUser } = useCurrentUser();
   const updateCase = useUpdateCase();
@@ -347,7 +349,7 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
           </Card>
 
           {/* Related Items */}
-          {(caseData.client || caseData.order) && (
+          {(caseData.client || caseData.order || corrections.length > 0) && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Related Items</CardTitle>
@@ -369,6 +371,22 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
                     </div>
                   </Link>
                 )}
+                {/* Production Cards from Revisions */}
+                {corrections.filter(c => c.production_card).map((correction) => (
+                  <Link key={correction.id} href="/production/board">
+                    <div className="flex items-center gap-2 p-2 rounded hover:bg-muted cursor-pointer">
+                      <LayoutGrid className="h-4 w-4 text-indigo-500" />
+                      <div className="flex-1">
+                        <span className="text-sm text-indigo-600">
+                          Production: {correction.production_card?.order?.order_number || 'View Board'}
+                        </span>
+                        <Badge variant="outline" className="ml-2 text-xs">
+                          {correction.request_type === 'revision' ? 'Revision' : 'Correction'}
+                        </Badge>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
               </CardContent>
             </Card>
           )}
