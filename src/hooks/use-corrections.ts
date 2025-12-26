@@ -49,17 +49,17 @@ export function useCorrections(filters?: CorrectionFilters) {
           ),
           assigned_profile:profiles!correction_requests_assigned_to_fkey(
             id,
-            full_name,
+            name,
             avatar_url
           ),
           reviewer_profile:profiles!correction_requests_reviewer_id_fkey(
             id,
-            full_name,
+            name,
             avatar_url
           ),
           requested_by_profile:profiles!correction_requests_requested_by_fkey(
             id,
-            full_name,
+            name,
             avatar_url
           )
         `)
@@ -139,17 +139,17 @@ export function useCorrection(id: string) {
           ),
           assigned_profile:profiles!correction_requests_assigned_to_fkey(
             id,
-            full_name,
+            name,
             avatar_url
           ),
           reviewer_profile:profiles!correction_requests_reviewer_id_fkey(
             id,
-            full_name,
+            name,
             avatar_url
           ),
           requested_by_profile:profiles!correction_requests_requested_by_fkey(
             id,
-            full_name,
+            name,
             avatar_url
           )
         `)
@@ -200,7 +200,7 @@ export function useMyCorrectionsToReview() {
           ),
           assigned_profile:profiles!correction_requests_assigned_to_fkey(
             id,
-            full_name,
+            name,
             avatar_url
           )
         `)

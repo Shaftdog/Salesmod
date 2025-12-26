@@ -36,12 +36,6 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
   const { data: comments = [] } = useCaseComments(caseId || "");
   const { data: corrections = [], isLoading: correctionsLoading, error: correctionsError } = useCorrections(caseId ? { case_id: caseId } : undefined);
 
-  // Debug logging
-  console.log('[CaseDetail] caseId:', caseId);
-  console.log('[CaseDetail] corrections:', corrections);
-  console.log('[CaseDetail] correctionsLoading:', correctionsLoading);
-  console.log('[CaseDetail] correctionsError:', correctionsError);
-  console.log('[CaseDetail] corrections with production_card:', corrections.filter(c => c.production_card));
   const { clients } = useClients();
   const { data: currentUser } = useCurrentUser();
   const updateCase = useUpdateCase();
