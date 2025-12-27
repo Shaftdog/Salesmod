@@ -1,8 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { createClient } from '@/lib/supabase/client'
-import type { Case, CaseComment } from '@/lib/types'
+import type { Case, CaseComment, CaseStatus } from '@/lib/types'
+import { caseStatuses, CASE_STATUS_LABELS } from '@/lib/types'
 import { useToast } from './use-toast'
 import { transformCase, transformCaseComment } from '@/lib/supabase/transforms'
+
+// Kanban board types
+export interface CasesBoardColumn {
+  id: CaseStatus;
+  label: string;
+  count: number;
+  cases: Case[];
+}
+
+export interface CasesBoardData {
+  columns: CasesBoardColumn[];
+  totalCases: number;
+}
 
 export function useCases(filters?: { clientId?: string; orderId?: string; status?: string }) {
   const supabase = createClient()
@@ -271,6 +285,101 @@ export function useDeleteCaseComment() {
         variant: "destructive",
         title: "Error",
         description: "Failed to delete comment. Please try again.",
+      })
+    },
+  })
+}
+
+// ==================== KANBAN BOARD HOOKS ====================
+
+export function useCasesBoardData() {
+  const supabase = createClient()
+
+  return useQuery({
+    queryKey: ['cases-board'],
+    queryFn: async (): Promise<CasesBoardData> => {
+      const { data, error } = await supabase
+        .from('cases')
+        .select(`
+          *,
+          client:clients(*),
+          contact:contacts(*),
+          order:orders(*),
+          assignee:profiles!cases_assigned_to_fkey(*),
+          creator:profiles!cases_created_by_fkey(*)
+        `)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      const cases = (data || []).map(transformCase)
+
+      // Group cases by status into columns
+      const columns: CasesBoardColumn[] = caseStatuses.map((status) => ({
+        id: status,
+        label: CASE_STATUS_LABELS[status],
+        count: 0,
+        cases: [],
+      }))
+
+      // Distribute cases into columns
+      cases.forEach((caseItem) => {
+        const column = columns.find((col) => col.id === caseItem.status)
+        if (column) {
+          column.cases.push(caseItem)
+          column.count++
+        } else {
+          // If status doesn't match any column, put in 'new'
+          const newColumn = columns.find((col) => col.id === 'new')
+          if (newColumn) {
+            newColumn.cases.push(caseItem)
+            newColumn.count++
+          }
+        }
+      })
+
+      return {
+        columns,
+        totalCases: cases.length,
+      }
+    },
+    staleTime: 1000 * 30, // 30 seconds
+  })
+}
+
+export function useMoveCase() {
+  const supabase = createClient()
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+
+  return useMutation({
+    mutationFn: async ({
+      caseId,
+      targetStatus,
+    }: {
+      caseId: string
+      targetStatus: CaseStatus
+    }) => {
+      const { data, error } = await supabase
+        .from('cases')
+        .update({ status: targetStatus, updated_at: new Date().toISOString() })
+        .eq('id', caseId)
+        .select()
+        .single()
+
+      if (error) throw error
+      return transformCase(data)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cases-board'] })
+      queryClient.invalidateQueries({ queryKey: ['cases'] })
+    },
+    onError: (error) => {
+      console.error('Move case error:', error)
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to move case. Please try again.',
       })
     },
   })

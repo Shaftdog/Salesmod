@@ -316,6 +316,7 @@ export function transformTask(dbTask: any): Task {
 export function transformCase(dbCase: any): Case {
   return {
     id: dbCase.id,
+    tenantId: dbCase.tenant_id,
     caseNumber: dbCase.case_number,
     subject: dbCase.subject,
     description: dbCase.description,
@@ -343,6 +344,7 @@ export function transformCase(dbCase: any): Case {
 export function transformCaseComment(dbComment: any): CaseComment {
   return {
     id: dbComment.id,
+    tenantId: dbComment.tenant_id,
     caseId: dbComment.case_id,
     comment: dbComment.comment,
     isInternal: dbComment.is_internal,

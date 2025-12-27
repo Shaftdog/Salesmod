@@ -1,6 +1,18 @@
 import { Badge } from "@/components/ui/badge";
 import type { CaseStatus, CasePriority } from "@/lib/types";
-import { AlertCircle, CheckCircle, Circle, Clock, Pause, XCircle, RefreshCw } from "lucide-react";
+import { CASE_STATUS_LABELS } from "@/lib/types";
+import {
+  Circle,
+  Wrench,
+  Factory,
+  AlertTriangle,
+  Ban,
+  Users,
+  Eye,
+  Truck,
+  CheckCircle,
+  TrendingUp,
+} from "lucide-react";
 
 type CaseStatusBadgeProps = {
   status: CaseStatus;
@@ -8,41 +20,56 @@ type CaseStatusBadgeProps = {
 };
 
 export function CaseStatusBadge({ status, className }: CaseStatusBadgeProps) {
-  const statusConfig = {
+  const statusConfig: Record<CaseStatus, { label: string; className: string; icon: React.ComponentType<{ className?: string }> }> = {
     new: {
-      label: "New",
-      className: "bg-blue-100 text-blue-700 hover:bg-blue-100",
+      label: CASE_STATUS_LABELS.new,
+      className: "bg-slate-100 text-slate-700 hover:bg-slate-100",
       icon: Circle,
     },
-    open: {
-      label: "Open",
+    working: {
+      label: CASE_STATUS_LABELS.working,
+      className: "bg-blue-100 text-blue-700 hover:bg-blue-100",
+      icon: Wrench,
+    },
+    in_production: {
+      label: CASE_STATUS_LABELS.in_production,
       className: "bg-purple-100 text-purple-700 hover:bg-purple-100",
-      icon: AlertCircle,
+      icon: Factory,
     },
-    pending: {
-      label: "Pending",
+    correction: {
+      label: CASE_STATUS_LABELS.correction,
+      className: "bg-orange-100 text-orange-700 hover:bg-orange-100",
+      icon: AlertTriangle,
+    },
+    impeded: {
+      label: CASE_STATUS_LABELS.impeded,
+      className: "bg-red-100 text-red-700 hover:bg-red-100",
+      icon: Ban,
+    },
+    workshop_meeting: {
+      label: CASE_STATUS_LABELS.workshop_meeting,
       className: "bg-yellow-100 text-yellow-700 hover:bg-yellow-100",
-      icon: Pause,
+      icon: Users,
     },
-    in_progress: {
-      label: "In Progress",
+    review: {
+      label: CASE_STATUS_LABELS.review,
       className: "bg-indigo-100 text-indigo-700 hover:bg-indigo-100",
-      icon: Clock,
+      icon: Eye,
     },
-    resolved: {
-      label: "Resolved",
+    deliver: {
+      label: CASE_STATUS_LABELS.deliver,
+      className: "bg-teal-100 text-teal-700 hover:bg-teal-100",
+      icon: Truck,
+    },
+    completed: {
+      label: CASE_STATUS_LABELS.completed,
       className: "bg-green-100 text-green-700 hover:bg-green-100",
       icon: CheckCircle,
     },
-    closed: {
-      label: "Closed",
-      className: "bg-gray-100 text-gray-700 hover:bg-gray-100",
-      icon: XCircle,
-    },
-    reopened: {
-      label: "Reopened",
-      className: "bg-orange-100 text-orange-700 hover:bg-orange-100",
-      icon: RefreshCw,
+    process_improvement: {
+      label: CASE_STATUS_LABELS.process_improvement,
+      className: "bg-pink-100 text-pink-700 hover:bg-pink-100",
+      icon: TrendingUp,
     },
   };
 
@@ -94,6 +121,3 @@ export function CasePriorityBadge({ priority, className }: CasePriorityBadgeProp
     </Badge>
   );
 }
-
-
-
