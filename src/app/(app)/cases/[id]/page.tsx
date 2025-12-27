@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useCase, useUpdateCase, useCaseComments, useCreateCaseComment } from "@/hooks/use-cases";
-import { useCorrections } from "@/hooks/use-corrections";
+import { useCorrections, useCreateRevisionFromCase } from "@/hooks/use-corrections";
 import { useClients } from "@/hooks/use-clients";
 import { useCurrentUser } from "@/hooks/use-appraisers";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,8 +14,16 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { format } from "date-fns";
-import { Loader2, Building2, FileText, User, Calendar, MessageSquare, CheckCircle, AlertCircle, ArrowLeft, LayoutGrid } from "lucide-react";
+import { Loader2, Building2, FileText, User, Calendar, MessageSquare, CheckCircle, AlertCircle, ArrowLeft, LayoutGrid, Plus } from "lucide-react";
 import { caseStatuses, casePriorities } from "@/lib/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -25,6 +33,8 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
   const [newComment, setNewComment] = useState("");
   const [isInternalComment, setIsInternalComment] = useState(false);
   const [resolution, setResolution] = useState("");
+  const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
+  const [revisionDescription, setRevisionDescription] = useState("");
 
   const router = useRouter();
 
@@ -40,6 +50,7 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
   const { data: currentUser } = useCurrentUser();
   const updateCase = useUpdateCase();
   const createComment = useCreateCaseComment();
+  const createRevision = useCreateRevisionFromCase();
 
   const handleStatusChange = async (newStatus: string) => {
     if (!caseData) return;
@@ -76,6 +87,20 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
       created_by: currentUser.id,
     });
     setNewComment("");
+  };
+
+  const handleCreateRevision = async () => {
+    if (!caseId || !revisionDescription.trim()) return;
+    try {
+      await createRevision.mutateAsync({
+        case_id: caseId,
+        description: revisionDescription.trim(),
+      });
+      setRevisionDescription("");
+      setRevisionDialogOpen(false);
+    } catch (error) {
+      // Error is handled by the hook's onError
+    }
   };
 
   // Helper function to format case type for display
@@ -329,8 +354,8 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
 
               <div>
                 <label className="text-sm font-semibold text-muted-foreground">Priority</label>
-                <Select 
-                  value={caseData.priority} 
+                <Select
+                  value={caseData.priority}
                   onValueChange={handlePriorityChange}
                   disabled={updateCase.isPending}
                 >
@@ -346,6 +371,20 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Create Revision Button - only show if case has an order */}
+              {caseData.order && (
+                <div className="pt-2 border-t">
+                  <Button
+                    onClick={() => setRevisionDialogOpen(true)}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Revision
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -393,6 +432,47 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
           )}
         </div>
       </div>
+
+      {/* Create Revision Dialog */}
+      <Dialog open={revisionDialogOpen} onOpenChange={setRevisionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Revision Request</DialogTitle>
+            <DialogDescription>
+              Create a revision request for order {caseData.order?.orderNumber}. This will add a correction task to the production board.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">What needs to be revised?</label>
+              <Textarea
+                placeholder="Describe what needs to be corrected or revised..."
+                value={revisionDescription}
+                onChange={(e) => setRevisionDescription(e.target.value)}
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRevisionDialogOpen(false);
+                setRevisionDescription("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateRevision}
+              disabled={!revisionDescription.trim() || createRevision.isPending}
+            >
+              {createRevision.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create Revision
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
