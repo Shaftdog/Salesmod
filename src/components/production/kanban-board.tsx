@@ -10,6 +10,12 @@ import { Loader2, Calendar, CalendarCheck, User, AlertTriangle, CheckCircle2 } f
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   ProductionCardWithOrder,
   ProductionStage,
   PRODUCTION_STAGES,
@@ -245,21 +251,29 @@ function AssignedResourcesDisplay({ card }: { card: ProductionCardWithOrder }) {
 
   return (
     <div className="flex flex-wrap gap-1">
-      {assignments.map(({ role, user }) => (
-        <div
-          key={role}
-          className={cn(
-            'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs',
-            ROLE_COLORS[role]
-          )}
-          title={`${ROLE_ABBREV[role]}: ${user?.name || user?.email}`}
-        >
-          <span className="font-medium">{ROLE_ABBREV[role]}</span>
-          <span className="max-w-[60px] truncate">
-            {user?.name?.split(' ')[0] || user?.email?.split('@')[0]}
-          </span>
-        </div>
-      ))}
+      <TooltipProvider>
+        {assignments.map(({ role, user }) => (
+          <Tooltip key={role}>
+            <TooltipTrigger asChild>
+              <div
+                tabIndex={0}
+                className={cn(
+                  'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs cursor-help focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+                  ROLE_COLORS[role]
+                )}
+              >
+                <span className="font-medium">{ROLE_ABBREV[role]}</span>
+                <span className="max-w-[60px] truncate">
+                  {user?.name?.split(' ')[0] || user?.email?.split('@')[0]}
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{`${ROLE_ABBREV[role]}: ${user?.name || user?.email}`}</p>
+            </TooltipContent>
+          </Tooltip>
+        ))}
+      </TooltipProvider>
     </div>
   );
 }
