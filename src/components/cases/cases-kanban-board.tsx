@@ -79,7 +79,7 @@ export function CasesKanbanBoard({ onCardClick, onCreateCase }: CasesKanbanBoard
       {boardData?.columns.map((column) => (
         <div
           key={column.id}
-          className="flex-shrink-0 w-72"
+          className="flex-shrink-0 w-80"
           onDragOver={handleDragOver}
           onDrop={() => handleDrop(column.id)}
         >
@@ -95,10 +95,11 @@ export function CasesKanbanBoard({ onCardClick, onCreateCase }: CasesKanbanBoard
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-5 w-5"
+                      className="h-6 w-6 hover:bg-primary/10"
                       onClick={() => onCreateCase(column.id)}
+                      title="Create case in this column"
                     >
-                      <Plus className="h-3 w-3" />
+                      <Plus className="h-4 w-4" />
                     </Button>
                   )}
                 </div>

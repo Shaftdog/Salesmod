@@ -357,6 +357,16 @@
       "name": "Review Mode Card Flow",
       "description": "With Review Mode ON: job-planner creates cards with state='suggested' → user reviews in UI → approve changes state to 'approved' → executor only runs if state==='approved'. Two protection layers: creation state + execution check.",
       "files": ["src/lib/agent/job-planner.ts", "src/lib/agent/executor.ts", "src/app/api/agent/card/manage/route.ts"]
+    },
+    {
+      "name": "CHECK Constraint Value Migration",
+      "description": "When changing allowed values in a CHECK constraint: 1) DROP old constraint first, 2) UPDATE existing data to map old→new values, 3) ADD new constraint with updated values. Order is critical - constraint violations occur if you add constraint before migrating data.",
+      "files": ["supabase/migrations/20251226000000_add_tenant_id_to_cases.sql"]
+    },
+    {
+      "name": "Retroactive Tenant Isolation",
+      "description": "Tables created before multi-tenant migration (Nov 2025) lack tenant_id. Checklist: 1) Add nullable tenant_id column, 2) Backfill from created_by user's profile.tenant_id, 3) Fallback to default tenant for orphans, 4) Make NOT NULL, 5) Create tenant-scoped RLS policies, 6) Add auto-set trigger for new records.",
+      "files": ["supabase/migrations/20251226000000_add_tenant_id_to_cases.sql"]
     }
   ],
   "last_updated": "2025-12-26",
@@ -451,6 +461,41 @@
         "issue": "Failing tests due to mock infrastructure issues blocking CI",
         "solution": "Use describe.skip() or it.skip() with dated comment explaining why (mock issues, not code bugs)",
         "files": ["src/lib/agent/__tests__/feedback-engine.test.ts", "src/lib/agent/__tests__/contact-enricher.test.ts"]
+      }
+    ]
+  },
+  "session_learnings_2025_12_26": {
+    "context": "Cases Kanban Board - tenant isolation migration and status constraint update",
+    "learnings": [
+      {
+        "topic": "CHECK Constraint Migration Order",
+        "issue": "Status updates happened AFTER adding new CHECK constraint, causing constraint violations",
+        "solution": "Always: 1) DROP old constraint, 2) UPDATE data to new values, 3) ADD new constraint. Never add constraint before data migration.",
+        "files": ["supabase/migrations/20251226000000_add_tenant_id_to_cases.sql"]
+      },
+      {
+        "topic": "PL/pgSQL Functions Break Statement Splitters",
+        "issue": "Migration script split on semicolons inside function body, breaking the CREATE FUNCTION statement",
+        "solution": "Run migrations with PL/pgSQL functions as single transactions, not split by statement. Use psql -f or execute entire file at once.",
+        "files": ["supabase/migrations/20251226000000_add_tenant_id_to_cases.sql"]
+      },
+      {
+        "topic": "SECURITY DEFINER Trigger Validation",
+        "issue": "Trigger function using SECURITY DEFINER didn't validate that user has tenant_id, could allow NULL tenant_id",
+        "solution": "In SECURITY DEFINER functions that auto-set tenant_id: explicitly check IF user_tenant_id IS NULL THEN RAISE EXCEPTION",
+        "files": ["supabase/migrations/20251226000000_add_tenant_id_to_cases.sql"]
+      },
+      {
+        "topic": "Pre-Multi-Tenant Tables Need Retroactive Isolation",
+        "issue": "Cases table created Oct 2024 before Nov 2025 multi-tenant migration, had no tenant_id",
+        "solution": "Check all business tables for tenant_id. Tables created before Nov 2025 likely need: 1) Add nullable tenant_id, 2) Backfill from creator's profile, 3) Make NOT NULL, 4) Add RLS policies",
+        "files": ["supabase/migrations/20251226000000_add_tenant_id_to_cases.sql"]
+      },
+      {
+        "topic": "Merge Conflicts from Parallel Features",
+        "issue": "Main had 'defaultValues' prop for email processing, feature branch had 'defaultStatus' for Kanban - both valid",
+        "solution": "When merging feature branches, both features should be preserved. Read conflict carefully to identify independent features that can coexist.",
+        "files": ["src/components/cases/case-form.tsx"]
       }
     ]
   },
