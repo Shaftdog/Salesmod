@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useCase, useUpdateCase, useCaseComments, useCreateCaseComment } from "@/hooks/use-cases";
 import { useCorrections, useCreateRevisionFromCase } from "@/hooks/use-corrections";
 import { useClients } from "@/hooks/use-clients";
@@ -23,10 +23,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { format } from "date-fns";
-import { Loader2, Building2, FileText, User, Calendar, MessageSquare, CheckCircle, AlertCircle, ArrowLeft, LayoutGrid, Plus } from "lucide-react";
+import { Loader2, Building2, FileText, User, Calendar, MessageSquare, CheckCircle, AlertCircle, ArrowLeft, LayoutGrid, Plus, Sparkles, CheckCircle2, ListTodo } from "lucide-react";
 import { caseStatuses, casePriorities } from "@/lib/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
+interface ParsedTask {
+  title: string;
+  description: string;
+}
 
 export default function CaseDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const [caseId, setCaseId] = React.useState<string | null>(null);
@@ -35,6 +40,15 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
   const [resolution, setResolution] = useState("");
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
   const [revisionDescription, setRevisionDescription] = useState("");
+
+  // AI state
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiReasoning, setAiReasoning] = useState<string | null>(null);
+  const [parsedTasks, setParsedTasks] = useState<ParsedTask[]>([]);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const lastProcessedDescRef = useRef<string | null>(null);
 
   const router = useRouter();
 
@@ -95,13 +109,115 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
       await createRevision.mutateAsync({
         case_id: caseId,
         description: revisionDescription.trim(),
+        ai_summary: aiSummary || undefined,
       });
+      // Reset all revision dialog state
       setRevisionDescription("");
+      setAiSummary(null);
+      setAiReasoning(null);
+      setParsedTasks([]);
+      setAiError(null);
+      lastProcessedDescRef.current = null;
       setRevisionDialogOpen(false);
     } catch (error) {
       // Error is handled by the hook's onError
     }
   };
+
+  // AI generation for revision dialog
+  const generateAIAnalysis = useCallback(async (descriptionText: string) => {
+    if (!descriptionText || descriptionText.length < 20 || !caseData) return;
+
+    // Skip if we already processed this exact description
+    if (lastProcessedDescRef.current === descriptionText) return;
+
+    // Cancel any pending request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
+    setIsGeneratingAI(true);
+    setAiError(null);
+
+    try {
+      // Call both APIs in parallel
+      const [summaryRes, tasksRes] = await Promise.all([
+        fetch("/api/ai/corrections/summarize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userDescription: descriptionText,
+            taskTitle: caseData.subject,
+            taskDescription: caseData.description,
+            orderContext: {
+              order_number: caseData.order?.orderNumber,
+              property_address: caseData.order?.propertyAddress,
+              client_name: caseData.client?.companyName,
+            },
+          }),
+          signal: abortControllerRef.current.signal,
+        }),
+        fetch("/api/ai/corrections/parse-tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            description: descriptionText,
+            requestType: "revision",
+            orderContext: {
+              order_number: caseData.order?.orderNumber,
+              property_address: caseData.order?.propertyAddress,
+            },
+          }),
+          signal: abortControllerRef.current.signal,
+        }),
+      ]);
+
+      // Process summary response
+      if (summaryRes.ok) {
+        const summaryData = await summaryRes.json();
+        setAiSummary(summaryData.summary);
+        setAiReasoning(summaryData.reasoning);
+      }
+
+      // Process tasks response
+      if (tasksRes.ok) {
+        const tasksData = await tasksRes.json();
+        if (tasksData.tasks && Array.isArray(tasksData.tasks)) {
+          setParsedTasks(tasksData.tasks);
+        }
+      }
+
+      lastProcessedDescRef.current = descriptionText;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return; // Ignore aborted requests
+      }
+      console.error("AI analysis error:", error);
+      setAiError("Could not generate AI analysis. You can still submit manually.");
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  }, [caseData]);
+
+  // Generate AI analysis when user has typed enough (debounced)
+  useEffect(() => {
+    if (revisionDialogOpen && revisionDescription.length >= 20 && !isGeneratingAI) {
+      const debounce = setTimeout(() => {
+        generateAIAnalysis(revisionDescription);
+      }, 1000);
+      return () => clearTimeout(debounce);
+    }
+  }, [revisionDescription, revisionDialogOpen, isGeneratingAI, generateAIAnalysis]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   // Helper function to format case type for display
   const formatCaseType = (type: string) => {
@@ -434,41 +550,132 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* Create Revision Dialog */}
-      <Dialog open={revisionDialogOpen} onOpenChange={setRevisionDialogOpen}>
-        <DialogContent>
+      <Dialog open={revisionDialogOpen} onOpenChange={(open) => {
+        setRevisionDialogOpen(open);
+        if (!open) {
+          // Reset state when dialog closes
+          setRevisionDescription("");
+          setAiSummary(null);
+          setAiReasoning(null);
+          setParsedTasks([]);
+          setAiError(null);
+          lastProcessedDescRef.current = null;
+        }
+      }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create Revision Request</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-indigo-500" />
+              Create Revision Request
+            </DialogTitle>
             <DialogDescription>
               Create a revision request for order {caseData.order?.orderNumber}. This will add a correction task to the production board.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+
+          {/* Case Info */}
+          <div className="rounded-lg border bg-muted/50 p-3 space-y-1">
+            <p className="text-sm font-medium">{caseData.subject}</p>
+            <p className="text-xs text-muted-foreground">
+              {caseData.order?.orderNumber} - {caseData.order?.propertyAddress}
+            </p>
+          </div>
+
+          <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">What needs to be revised?</label>
+              <label className="text-sm font-medium">What needs to be revised? *</label>
               <Textarea
-                placeholder="Describe what needs to be corrected or revised..."
+                placeholder="Describe what needs to be corrected or revised. Be specific about what's wrong and how it should be fixed..."
                 value={revisionDescription}
                 onChange={(e) => setRevisionDescription(e.target.value)}
                 rows={4}
               />
+              <p className="text-xs text-muted-foreground">
+                Type at least 20 characters for AI analysis
+              </p>
             </div>
+
+            {/* AI Summary */}
+            {(isGeneratingAI || aiSummary) && (
+              <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/30 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="h-4 w-4 text-blue-500" />
+                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                    AI Summary
+                  </span>
+                  {isGeneratingAI && (
+                    <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                  )}
+                </div>
+                {aiSummary && (
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    {aiSummary}
+                  </p>
+                )}
+                {aiReasoning && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-2 italic">
+                    {aiReasoning}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Parsed Tasks */}
+            {parsedTasks.length > 0 && (
+              <div className="rounded-lg border bg-green-50 dark:bg-green-950/30 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <ListTodo className="h-4 w-4 text-green-600" />
+                  <span className="text-sm font-medium text-green-700 dark:text-green-300">
+                    Tasks to Create ({parsedTasks.length})
+                  </span>
+                </div>
+                <ul className="space-y-2">
+                  {parsedTasks.map((task, index) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                          {task.title}
+                        </p>
+                        {task.description && (
+                          <p className="text-xs text-green-600 dark:text-green-400">
+                            {task.description}
+                          </p>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* AI Error */}
+            {aiError && (
+              <div className="rounded-lg border bg-amber-50 dark:bg-amber-950/30 p-3">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-500" />
+                  <span className="text-sm text-amber-700 dark:text-amber-300">
+                    {aiError}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
+
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => {
-                setRevisionDialogOpen(false);
-                setRevisionDescription("");
-              }}
+              onClick={() => setRevisionDialogOpen(false)}
             >
               Cancel
             </Button>
             <Button
               onClick={handleCreateRevision}
               disabled={!revisionDescription.trim() || createRevision.isPending}
+              className="bg-indigo-600 hover:bg-indigo-700"
             >
               {createRevision.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create Revision
+              Create Revision{parsedTasks.length > 0 ? ` (${parsedTasks.length} tasks)` : ''}
             </Button>
           </DialogFooter>
         </DialogContent>
