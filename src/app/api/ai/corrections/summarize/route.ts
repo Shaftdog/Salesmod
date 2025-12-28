@@ -62,14 +62,15 @@ export async function POST(request: Request) {
     const { userDescription, taskTitle, taskDescription, orderContext } = validationResult.data
 
     // Sanitize inputs for prompt injection protection
-    const sanitize = (str: string | null | undefined) =>
-      str ? str.replace(/[<>{}[\]]/g, '').slice(0, 500) : 'N/A'
+    // User description can be longer (up to 4500 chars), other fields limited
+    const sanitize = (str: string | null | undefined, maxLen = 500) =>
+      str ? str.replace(/[<>{}[\]]/g, '').slice(0, maxLen) : 'N/A'
 
     const prompt = `You are an appraisal quality assurance specialist. Analyze this correction request and provide a structured summary.
 
 TASK INFORMATION:
 - Task: ${sanitize(taskTitle)}
-- Description: ${sanitize(taskDescription)}
+- Description: ${sanitize(taskDescription, 1000)}
 
 ORDER CONTEXT:
 - Order Number: ${sanitize(orderContext?.order_number)}
@@ -77,7 +78,7 @@ ORDER CONTEXT:
 - Client: ${sanitize(orderContext?.client_name)}
 
 USER'S DESCRIPTION OF THE ISSUE:
-${sanitize(userDescription)}
+${sanitize(userDescription, 4500)}
 
 Based on this information, provide:
 1. A clear, professional summary of the issue (2-3 sentences max)

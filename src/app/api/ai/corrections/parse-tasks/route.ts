@@ -57,8 +57,9 @@ export async function POST(request: Request) {
     const { description, requestType, orderContext } = validationResult.data
 
     // Sanitize inputs for prompt injection protection
-    const sanitize = (str: string | null | undefined) =>
-      str ? str.replace(/[<>{}[\]]/g, '').slice(0, 500) : 'N/A'
+    // Description can be longer (up to 4500 chars), other fields limited to 500
+    const sanitize = (str: string | null | undefined, maxLen = 500) =>
+      str ? str.replace(/[<>{}[\]]/g, '').slice(0, maxLen) : 'N/A'
 
     const prompt = `You are an appraisal workflow assistant. Analyze this ${requestType} request and break it down into specific, actionable tasks.
 
@@ -67,7 +68,7 @@ ORDER CONTEXT:
 - Property Address: ${sanitize(orderContext?.property_address)}
 
 ${requestType.toUpperCase()} DESCRIPTION:
-${sanitize(description)}
+${sanitize(description, 4500)}
 
 Based on this description, create a list of specific tasks that need to be completed. Each task should be:
 - Clear and actionable
@@ -89,12 +90,12 @@ Respond with JSON only:
       messages: [
         {
           role: 'system',
-          content: 'You are an expert appraisal workflow assistant. Break down correction and revision requests into specific, actionable tasks. Always respond with valid JSON.'
+          content: 'You are an expert appraisal workflow assistant. Break down correction and revision requests into specific, actionable tasks. Create one task for each distinct issue mentioned. Always respond with valid JSON.'
         },
         { role: 'user', content: prompt }
       ],
       temperature: 0.3,
-      max_tokens: 1000,
+      max_tokens: 2500, // Increased to handle more tasks
       response_format: { type: 'json_object' },
     })
 
