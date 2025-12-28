@@ -464,6 +464,29 @@
       }
     ]
   },
+  "session_learnings_2025_12_27": {
+    "context": "Create Revision from Case - AI analysis and subtask structure",
+    "learnings": [
+      {
+        "topic": "AI Input/Output Limits Must Match Use Cases",
+        "issue": "User pasted 7-item revision request but AI only returned 3 tasks. Sanitize function truncated to 500 chars, max_tokens was 1000",
+        "solution": "Increase input sanitize limit to 4500 chars for description fields. Increase max_tokens to 2500 for complex multi-item outputs. Validate limits against realistic user inputs.",
+        "files": ["src/app/api/ai/corrections/parse-tasks/route.ts", "src/app/api/ai/corrections/summarize/route.ts"]
+      },
+      {
+        "topic": "Parent/Subtask Structure for Multi-Item Requests",
+        "issue": "Flat task list was hard to manage for complex revision requests with 7+ items",
+        "solution": "Create parent task with AI summary, then subtasks for each item using parent_task_id. Provides better organization and allows completing items individually while tracking overall progress.",
+        "files": ["src/app/(app)/cases/[id]/page.tsx"]
+      },
+      {
+        "topic": "Check Existing Infrastructure Before Building",
+        "issue": "Needed parent/subtask relationship for production tasks",
+        "solution": "production_tasks already had parent_task_id column - just needed to use it. Always check existing schema/code before adding new features.",
+        "files": ["supabase/migrations/20251124000000_create_production_system.sql"]
+      }
+    ]
+  },
   "session_learnings_2025_12_26": {
     "context": "Cases Kanban Board - tenant isolation migration and status constraint update",
     "learnings": [
