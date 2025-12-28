@@ -299,6 +299,29 @@ export async function GET(request: NextRequest) {
         .not('delivered_date', 'is', null),
     ]);
 
+    // Log any query errors (graceful degradation - continue with available data)
+    const queryNames = [
+      'filesDueToClient', 'allDue', 'filesOverdue', 'productionDue',
+      'filesInReview', 'filesNotInReview', 'filesWithIssues', 'filesWithCorrection',
+      'correctionReview', 'casesInProgress', 'casesImpeded', 'casesInReview',
+      'casesDelivered', 'readyForDelivery', 'ordersDeliveredToday',
+      'valueDeliveredToday', 'deliveredPast7Days', 'valueDeliveredPast7Days',
+      'avgTurnTime1Week', 'avgTurnTime30Days'
+    ];
+    const allResults = [
+      filesDueToClientResult, allDueResult, filesOverdueResult, productionDueResult,
+      filesInReviewResult, filesNotInReviewResult, filesWithIssuesResult, filesWithCorrectionResult,
+      correctionReviewResult, casesInProgressResult, casesImpededResult, casesInReviewResult,
+      casesDeliveredResult, readyForDeliveryResult, ordersDeliveredTodayResult,
+      valueDeliveredTodayResult, deliveredPast7DaysResult, valueDeliveredPast7DaysResult,
+      avgTurnTime1WeekResult, avgTurnTime30DaysResult
+    ];
+    allResults.forEach((result, i) => {
+      if (result.error) {
+        console.warn(`Dashboard metrics query '${queryNames[i]}' failed:`, result.error.message);
+      }
+    });
+
     // Calculate value delivered today
     const valueDeliveredToday = (valueDeliveredTodayResult.data || [])
       .reduce((sum, order) => sum + (parseFloat(order.total_amount) || 0), 0);

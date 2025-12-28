@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
         client:clients(id, company_name, email)
       `)
       .in('id', body.invoice_ids)
-      .eq('tenant_id', tenantId);
+      .eq('tenant_id', orgId);
 
     if (fetchError) {
       console.error('Error fetching invoices:', fetchError);

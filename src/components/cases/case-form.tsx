@@ -39,7 +39,7 @@ const caseSchema = z.object({
   assigned_to: z.string().optional(),
 });
 
-type CaseFormData = z.infer<typeof caseSchema>;
+export type CaseFormData = z.infer<typeof caseSchema>;
 
 type CaseFormProps = {
   open: boolean;
@@ -62,9 +62,6 @@ export function CaseForm({
   case: caseData,
   isLoading
 }: CaseFormProps) {
-  console.log('[CaseForm] Received clients:', clients.length, clients.slice(0, 2));
-  console.log('[CaseForm] Received orders:', orders.length, orders.slice(0, 2));
-
   const form = useForm<CaseFormData>({
     resolver: zodResolver(caseSchema),
     defaultValues: caseData ? {

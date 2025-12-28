@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CaseCard } from "./case-card";
-import { CaseForm } from "./case-form";
+import { CaseForm, type CaseFormData } from "./case-form";
 import { useCases, useCreateCase, useUpdateCase, useDeleteCase } from "@/hooks/use-cases";
 import { useClients } from "@/hooks/use-clients";
 import { useOrders } from "@/hooks/use-orders";
@@ -50,13 +50,7 @@ export function CasesList({ clientId, orderId }: CasesListProps) {
   const deleteCase = useDeleteCase();
   const { toast } = useToast();
 
-  // Debug logging
-  console.log('[CasesList] clients count:', clients.length);
-  console.log('[CasesList] orders count:', orders.length);
-  console.log('[CasesList] clients sample:', clients[0]);
-  console.log('[CasesList] orders sample:', orders[0]);
-
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = async (data: CaseFormData) => {
     if (!currentUser) return;
     
     if (editingCase) {

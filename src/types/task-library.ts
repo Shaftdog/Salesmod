@@ -19,6 +19,8 @@ export const PRODUCTION_STAGES = [
   'CORRECTION',
   'REVISION',
   'WORKFILE',
+  'ON_HOLD',
+  'CANCELLED',
 ] as const;
 
 export type ProductionStage = typeof PRODUCTION_STAGES[number];
@@ -272,6 +274,8 @@ export const STAGE_DISPLAY_NAMES: Record<ProductionStage, string> = {
   CORRECTION: 'Correction',
   REVISION: 'Revision',
   WORKFILE: 'Workfile',
+  ON_HOLD: 'On Hold',
+  CANCELLED: 'Cancelled',
 };
 
 /**
@@ -302,4 +306,6 @@ export const STAGE_COLORS: Record<ProductionStage, string> = {
   CORRECTION: 'bg-orange-100 text-orange-800',
   REVISION: 'bg-rose-100 text-rose-800',
   WORKFILE: 'bg-slate-100 text-slate-800',
+  ON_HOLD: 'bg-yellow-100 text-yellow-800',
+  CANCELLED: 'bg-red-100 text-red-800',
 };
