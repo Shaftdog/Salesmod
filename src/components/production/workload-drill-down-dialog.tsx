@@ -86,8 +86,11 @@ export function WorkloadDrillDownDialog() {
       });
 
       fetch(`/api/production/workload/drill-down?${params}`)
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch task details");
+        .then(async (res) => {
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP ${res.status}: Failed to fetch task details`);
+          }
           return res.json();
         })
         .then((result) => {
