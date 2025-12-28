@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useCase, useUpdateCase, useCaseComments, useCreateCaseComment } from "@/hooks/use-cases";
 import { useCorrections, useCreateRevisionFromCase } from "@/hooks/use-corrections";
+import { createClient } from "@/lib/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { useClients } from "@/hooks/use-clients";
 import { useCurrentUser } from "@/hooks/use-appraisers";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -65,6 +67,7 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
   const updateCase = useUpdateCase();
   const createComment = useCreateCaseComment();
   const createRevision = useCreateRevisionFromCase();
+  const queryClient = useQueryClient();
 
   const handleStatusChange = async (newStatus: string) => {
     if (!caseData) return;
@@ -106,11 +109,68 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
   const handleCreateRevision = async () => {
     if (!caseId || !revisionDescription.trim()) return;
     try {
-      await createRevision.mutateAsync({
+      const supabase = createClient();
+
+      // Create the revision - the DB function creates the parent task
+      // Pass AI summary as description for the parent task
+      const correction = await createRevision.mutateAsync({
         case_id: caseId,
-        description: revisionDescription.trim(),
+        description: aiSummary || revisionDescription.trim(), // Use AI summary for parent
         ai_summary: aiSummary || undefined,
       });
+
+      // If we have parsed tasks, create them as subtasks under the parent
+      if (parsedTasks.length > 0 && correction) {
+        // Find the parent task that was just created (most recent REVISION task for this production card)
+        const { data: parentTask } = await supabase
+          .from('production_tasks')
+          .select('id, tenant_id, production_card_id, assigned_to')
+          .eq('production_card_id', correction.production_card_id)
+          .eq('stage', 'REVISION')
+          .is('parent_task_id', null) // Parent tasks have no parent
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (parentTask) {
+          // Update parent task title to be a summary
+          await supabase
+            .from('production_tasks')
+            .update({
+              title: `REVISION: ${caseData?.subject || 'Case Revision'}`,
+              description: aiSummary || revisionDescription.trim(),
+            })
+            .eq('id', parentTask.id);
+
+          // Create subtasks for each parsed task
+          const subtasks = parsedTasks.map((task, index) => ({
+            tenant_id: parentTask.tenant_id,
+            production_card_id: parentTask.production_card_id,
+            parent_task_id: parentTask.id,
+            title: task.title,
+            description: task.description,
+            stage: 'REVISION',
+            status: 'pending',
+            assigned_to: parentTask.assigned_to,
+            role: 'appraiser',
+            is_required: true,
+            sort_order: index,
+          }));
+
+          const { error: subtasksError } = await supabase
+            .from('production_tasks')
+            .insert(subtasks);
+
+          if (subtasksError) {
+            console.error('Error creating subtasks:', subtasksError);
+          }
+
+          // Invalidate queries to refresh the UI
+          queryClient.invalidateQueries({ queryKey: ['production-tasks'] });
+          queryClient.invalidateQueries({ queryKey: ['production-cards'] });
+        }
+      }
+
       // Reset all revision dialog state
       setRevisionDescription("");
       setAiSummary(null);
