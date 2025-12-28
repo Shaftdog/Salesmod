@@ -40,7 +40,7 @@ const caseSchema = z.object({
   assigned_to: z.string().optional(),
 });
 
-type CaseFormData = z.infer<typeof caseSchema>;
+export type CaseFormData = z.infer<typeof caseSchema>;
 
 type CaseFormProps = {
   open: boolean;

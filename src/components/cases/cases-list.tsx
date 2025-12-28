@@ -16,7 +16,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CaseCard } from "./case-card";
-import { CaseForm } from "./case-form";
+import { CaseForm, type CaseFormData } from "./case-form";
 import { CasesKanbanBoard } from "./cases-kanban-board";
 import { useCases, useCreateCase, useUpdateCase, useDeleteCase } from "@/hooks/use-cases";
 import { useClients } from "@/hooks/use-clients";
@@ -59,7 +59,7 @@ export function CasesList({ clientId, orderId, defaultView = 'kanban' }: CasesLi
   const deleteCase = useDeleteCase();
   const { toast } = useToast();
 
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = async (data: CaseFormData) => {
     if (!currentUser) return;
 
     if (editingCase) {

@@ -306,6 +306,6 @@ export const STAGE_COLORS: Record<ProductionStage, string> = {
   CORRECTION: 'bg-orange-100 text-orange-800',
   REVISION: 'bg-rose-100 text-rose-800',
   WORKFILE: 'bg-slate-100 text-slate-800',
-  ON_HOLD: 'bg-gray-100 text-gray-800',
+  ON_HOLD: 'bg-yellow-100 text-yellow-800',
   CANCELLED: 'bg-red-100 text-red-800',
 };
