@@ -85,13 +85,6 @@ export function WorkloadDrillDownDialog() {
         endDate: config.endDate,
       });
 
-      console.log("Workload drill-down fetch:", {
-        userId: config.userId,
-        startDate: config.startDate,
-        endDate: config.endDate,
-        url: `/api/production/workload/drill-down?${params}`,
-      });
-
       fetch(`/api/production/workload/drill-down?${params}`)
         .then(async (res) => {
           if (!res.ok) {

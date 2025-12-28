@@ -53,20 +53,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Parse dates to match database format
-    // The main workload query uses toISOString() directly, so we do the same
-    const startDateParsed = new Date(startDate);
-    const endDateParsed = new Date(endDate);
-
-    console.log("Workload drill-down request:", {
-      userId,
-      startDate,
-      endDate,
-      startDateParsed: startDateParsed.toISOString(),
-      endDateParsed: endDateParsed.toISOString(),
-      tenantId,
-    });
-
     // Fetch tasks for this user in the date range (only parent tasks)
     // Note: Don't filter by tenant_id explicitly - RLS will handle it
     const { data: tasks, error: tasksError } = await supabase
@@ -86,12 +72,6 @@ export async function GET(request: NextRequest) {
       .in("status", ["pending", "in_progress"])
       .order("due_date", { ascending: true })
       .limit(100);
-
-    console.log("Tasks query result:", {
-      count: tasks?.length || 0,
-      error: tasksError?.message,
-      firstTask: tasks?.[0],
-    });
 
     if (tasksError) {
       console.error("Tasks fetch error:", tasksError);
