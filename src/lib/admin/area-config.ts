@@ -52,7 +52,6 @@ export const AREA_ROUTE_MAP: Record<AreaCode, string[]> = {
 export const PUBLIC_ROUTES: string[] = [
   '/dashboard',
   '/settings',
-  '/migrations',
   '/login',
   '/auth',
   '/reset-password',

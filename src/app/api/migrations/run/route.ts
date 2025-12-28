@@ -17,7 +17,7 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 /**
  * POST /api/migrations/run
- * Execute the migration with actual data import
+ * Execute the migration with actual data import (admin only)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -26,6 +26,17 @@ export async function POST(request: NextRequest) {
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Verify admin role
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile || (profile.role !== 'admin' && profile.role !== 'super_admin')) {
+      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
     const body = await request.json();

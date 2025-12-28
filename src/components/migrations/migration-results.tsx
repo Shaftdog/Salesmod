@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -10,6 +10,34 @@ import { CheckCircle2, AlertCircle, Download, RotateCcw, ExternalLink } from "lu
 import { WizardState } from "./migration-wizard";
 import ImportRunMetrics from "./import-run-metrics";
 import Link from "next/link";
+import { ImportMetrics } from "@/lib/migrations/types";
+
+/** Error record from a failed migration row */
+interface MigrationError {
+  row_index: number;
+  error_message: string;
+  field?: string;
+}
+
+/** Totals summary for migration job */
+interface MigrationTotals {
+  total: number;
+  inserted: number;
+  updated: number;
+  skipped: number;
+  errors: number;
+}
+
+/** Status of a migration job */
+interface MigrationJobStatus {
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  totals: MigrationTotals;
+  progress: number;
+  metrics?: ImportMetrics;
+}
+
+/** Maximum number of errors to display in the table */
+const MAX_DISPLAYED_ERRORS = 25;
 
 interface MigrationResultsProps {
   state: WizardState;
@@ -17,17 +45,13 @@ interface MigrationResultsProps {
 }
 
 export function MigrationResults({ state, onReset }: MigrationResultsProps) {
-  const [errors, setErrors] = useState<any[]>([]);
-  const [jobStatus, setJobStatus] = useState<any>(null);
+  const [errors, setErrors] = useState<MigrationError[]>([]);
+  const [jobStatus, setJobStatus] = useState<MigrationJobStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (state.jobId) {
-      fetchJobData();
-    }
-  }, [state.jobId]);
+  const fetchJobData = useCallback(async () => {
+    if (!state.jobId) return;
 
-  const fetchJobData = async () => {
     try {
       // Fetch both status and errors
       const [statusResponse, errorsResponse] = await Promise.all([
@@ -38,10 +62,10 @@ export function MigrationResults({ state, onReset }: MigrationResultsProps) {
       // Handle 404 - job not found (likely completed and cleaned up)
       if (statusResponse.status === 404) {
         console.log('Job not found (404) - assuming completed');
-        setJobStatus({ 
-          status: 'completed', 
-          totals: { total: 0, inserted: 0, updated: 0, skipped: 0, errors: 0 }, 
-          progress: 100 
+        setJobStatus({
+          status: 'completed',
+          totals: { total: 0, inserted: 0, updated: 0, skipped: 0, errors: 0 },
+          progress: 100
         });
         setErrors([]);
         setLoading(false);
@@ -58,7 +82,11 @@ export function MigrationResults({ state, onReset }: MigrationResultsProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [state.jobId]);
+
+  useEffect(() => {
+    fetchJobData();
+  }, [fetchJobData]);
 
   const handleDownloadErrors = async () => {
     try {
@@ -212,7 +240,7 @@ export function MigrationResults({ state, onReset }: MigrationResultsProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {errors.slice(0, 25).map((error, index) => (
+                  {errors.slice(0, MAX_DISPLAYED_ERRORS).map((error, index) => (
                     <TableRow key={index}>
                       <TableCell className="font-medium">{error.row_index}</TableCell>
                       <TableCell className="text-sm">{error.error_message}</TableCell>
@@ -223,9 +251,9 @@ export function MigrationResults({ state, onReset }: MigrationResultsProps) {
               </Table>
             </div>
 
-            {errors.length > 25 && (
+            {errors.length > MAX_DISPLAYED_ERRORS && (
               <p className="text-sm text-muted-foreground mt-3">
-                Showing first 25 of {errors.length} errors. Download the full report to see all errors.
+                Showing first {MAX_DISPLAYED_ERRORS} of {errors.length} errors. Download the full report to see all errors.
               </p>
             )}
           </CardContent>
@@ -246,7 +274,7 @@ export function MigrationResults({ state, onReset }: MigrationResultsProps) {
           </Button>
         </Link>
 
-        <Link href="/migrations" className="flex-1">
+        <Link href="/admin/migrations" className="flex-1">
           <Button variant="secondary" className="w-full">
             View Import History
           </Button>
