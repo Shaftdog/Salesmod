@@ -92,6 +92,7 @@ __pycache__/
 /test-results/
 /test-reports/
 /test-screenshots/
+/tests/screenshots/
 /e2e/*.png
 /e2e/*.webm
 
