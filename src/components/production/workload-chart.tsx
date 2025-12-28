@@ -39,6 +39,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { useWorkloadData } from '@/hooks/use-production';
 import type { WorkloadMetric, WorkloadPeriod, ResourceWorkload } from '@/types/production';
 import { PRODUCTION_ROLE_LABELS } from '@/types/production';
+import { useWorkloadDrillDown } from './workload-drill-down-context';
 
 // Constants for capacity calculations (must match use-production.ts)
 const BUSINESS_DAYS_PER_WEEK = 5;
@@ -66,6 +67,7 @@ export function WorkloadChart() {
   const [period, setPeriod] = useState<WorkloadPeriod>('week');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const { openDrillDown } = useWorkloadDrillDown();
 
   // Calculate date range based on period
   const dateRange = useMemo(() => {
@@ -167,6 +169,21 @@ export function WorkloadChart() {
       case 'month':
         return format(selectedDate, 'MMMM yyyy');
     }
+  };
+
+  // Handle resource click to open drill-down
+  const handleResourceClick = (resource: ResourceWorkload) => {
+    openDrillDown({
+      userId: resource.userId,
+      userName: resource.userName || 'Unknown',
+      period,
+      startDate: dateRange.start.toISOString(),
+      endDate: dateRange.end.toISOString(),
+      taskCount: resource.taskCount,
+      estimatedHours: resource.estimatedHours,
+      capacityUsedPercent: resource.capacityUsedPercent,
+      isOverloaded: resource.isOverloaded,
+    });
   };
 
   if (error) {
@@ -352,6 +369,15 @@ export function WorkloadChart() {
                 <Bar
                   dataKey="value"
                   radius={[0, 4, 4, 0]}
+                  className="cursor-pointer"
+                  onClick={(data) => {
+                    if (data && workloadData?.resources) {
+                      const resource = workloadData.resources.find(r => r.userId === data.userId);
+                      if (resource) {
+                        handleResourceClick(resource);
+                      }
+                    }
+                  }}
                 >
                   {chartData.map((entry, index) => (
                     <Cell
@@ -360,6 +386,7 @@ export function WorkloadChart() {
                         ? 'hsl(var(--destructive))'
                         : 'hsl(var(--primary))'
                       }
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
                     />
                   ))}
                 </Bar>
@@ -400,7 +427,11 @@ export function WorkloadChart() {
                 </thead>
                 <tbody>
                   {workloadData.resources.map((resource) => (
-                    <tr key={resource.userId} className="border-b hover:bg-muted/50">
+                    <tr
+                      key={resource.userId}
+                      className="border-b hover:bg-muted/50 cursor-pointer transition-colors"
+                      onClick={() => handleResourceClick(resource)}
+                    >
                       <td className="py-2 px-3 font-medium">{resource.userName}</td>
                       <td className="py-2 px-3">
                         <div className="flex flex-wrap gap-1">

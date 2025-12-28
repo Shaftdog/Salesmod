@@ -5,6 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProductionKanbanBoard } from './kanban-board';
 import { CalendarView } from './calendar-view';
 import { WorkloadChart } from './workload-chart';
+import { WorkloadDrillDownProvider } from './workload-drill-down-context';
+import { WorkloadDrillDownDialog } from './workload-drill-down-dialog';
 import { LayoutGrid, Calendar, BarChart3 } from 'lucide-react';
 import type { ProductionCardWithOrder } from '@/types/production';
 
@@ -43,7 +45,10 @@ export function ProductionBoardTabs({ onCardClick }: ProductionBoardTabsProps) {
       </TabsContent>
 
       <TabsContent value="workload" className="mt-0">
-        <WorkloadChart />
+        <WorkloadDrillDownProvider>
+          <WorkloadChart />
+          <WorkloadDrillDownDialog />
+        </WorkloadDrillDownProvider>
       </TabsContent>
     </Tabs>
   );
