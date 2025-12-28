@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 interface TaskDetail {
   id: string;
-  name: string;
+  title: string;
   status: string;
   due_date: string | null;
   estimated_minutes: number | null;
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
       .from("production_tasks")
       .select(`
         id,
-        name,
+        title,
         status,
         due_date,
         estimated_minutes,
@@ -170,7 +170,7 @@ export async function GET(request: NextRequest) {
 
       return {
         id: task.id,
-        name: task.name,
+        title: task.title,
         status: task.status,
         due_date: task.due_date,
         estimated_minutes: task.estimated_minutes,

@@ -28,7 +28,7 @@ import { format } from "date-fns";
 
 interface TaskDetail {
   id: string;
-  name: string;
+  title: string;
   status: string;
   due_date: string | null;
   estimated_minutes: number | null;
@@ -123,7 +123,7 @@ export function WorkloadDrillDownDialog() {
     csv += data.tasks
       .map(
         (t) =>
-          `"${t.name}","${t.status}","${formatDate(t.due_date)}","${formatMinutes(t.estimated_minutes)}","${t.order_number || ""}","${t.property_address || ""}","${t.stage_name || ""}"`
+          `"${t.title}","${t.status}","${formatDate(t.due_date)}","${formatMinutes(t.estimated_minutes)}","${t.order_number || ""}","${t.property_address || ""}","${t.stage_name || ""}"`
       )
       .join("\n");
 
@@ -277,7 +277,7 @@ function TasksTable({ tasks }: { tasks: TaskDetail[] }) {
         {tasks.map((task) => (
           <TableRow key={task.id} className="border-zinc-800 hover:bg-zinc-800/50">
             <TableCell className="font-medium text-white max-w-[200px] truncate">
-              {task.name}
+              {task.title}
             </TableCell>
             <TableCell className="text-zinc-300">
               {task.order_number || "-"}
