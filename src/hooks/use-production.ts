@@ -1776,10 +1776,11 @@ export function useWorkloadData(period: WorkloadPeriod, selectedDate: Date) {
 
       if (resourcesError) throw resourcesError
 
-      // Fetch all tasks in the date range (including subtasks for accurate workload)
+      // Fetch only main tasks (parent tasks) in the date range - excludes subtasks
       const { data: tasks, error: tasksError } = await supabase
         .from('production_tasks')
         .select('id, assigned_to, estimated_minutes, status, due_date')
+        .is('parent_task_id', null) // Only count main tasks, not subtasks
         .gte('due_date', startDate.toISOString())
         .lte('due_date', endDate.toISOString())
         .in('status', ['pending', 'in_progress'])
