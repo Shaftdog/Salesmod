@@ -367,9 +367,14 @@
       "name": "Retroactive Tenant Isolation",
       "description": "Tables created before multi-tenant migration (Nov 2025) lack tenant_id. Checklist: 1) Add nullable tenant_id column, 2) Backfill from created_by user's profile.tenant_id, 3) Fallback to default tenant for orphans, 4) Make NOT NULL, 5) Create tenant-scoped RLS policies, 6) Add auto-set trigger for new records.",
       "files": ["supabase/migrations/20251226000000_add_tenant_id_to_cases.sql"]
+    },
+    {
+      "name": "Supabase Batch Query Pattern for RLS",
+      "description": "Supabase query joins (e.g., client:clients(company_name)) may return empty results with authenticated client + RLS. Solution: 1) Query main table without joins, 2) Collect foreign key IDs into Sets, 3) Batch query related tables with .in('id', [...ids]), 4) Create Maps for O(1) lookup, 5) Map results together. This pattern is more verbose but works reliably with RLS.",
+      "files": ["src/app/api/production/dashboard-metrics/drill-down/route.ts"]
     }
   ],
-  "last_updated": "2025-12-26",
+  "last_updated": "2025-12-28",
   "session_learnings_2025_12_25": {
     "context": "P0.7 Email Infrastructure Go-Live - DNS configuration, email mode activation, operational validation",
     "learnings": [
@@ -484,6 +489,31 @@
         "issue": "Needed parent/subtask relationship for production tasks",
         "solution": "production_tasks already had parent_task_id column - just needed to use it. Always check existing schema/code before adding new features.",
         "files": ["supabase/migrations/20251124000000_create_production_system.sql"]
+      }
+    ]
+  },
+  "session_learnings_2025_12_28": {
+    "context": "Production Dashboard Drill-Down - fixing empty results from Supabase query joins with RLS",
+    "learnings": [
+      {
+        "topic": "Supabase Query Joins Don't Work with Authenticated Client + RLS",
+        "issue": "Drill-down API returned 0 orders despite dashboard showing 27. Query used joins like `client:clients(company_name)` which returned empty results with authenticated client (anon key + cookies)",
+        "root_cause": "Supabase query joins appear to have compatibility issues with RLS policies when using the authenticated client. The same query works fine with service_role key.",
+        "solution": "Use batch queries instead of joins: 1) Query main table without joins, 2) Collect all foreign key IDs into arrays, 3) Query related tables separately with .in('id', ids), 4) Map results together using Maps for O(1) lookup",
+        "example": "Created enrichOrdersWithDetails() helper that fetches orders first, then batch-queries clients and properties separately, then maps them together",
+        "files": ["src/app/api/production/dashboard-metrics/drill-down/route.ts"]
+      },
+      {
+        "topic": "Date Calculation Consistency Across API Routes",
+        "issue": "Drill-down API date strings didn't match main dashboard-metrics API, causing filter mismatches",
+        "solution": "Always use consistent date calculation pattern: 1) Create Date object, 2) Call setHours(0,0,0,0) to normalize to midnight, 3) Use toISOString().split('T')[0] for date-only string. Copy exact date calculation logic from reference route.",
+        "files": ["src/app/api/production/dashboard-metrics/drill-down/route.ts", "src/app/api/production/dashboard-metrics/route.ts"]
+      },
+      {
+        "topic": "Debugging RLS-Related Empty Results",
+        "issue": "API returned empty array but direct database query returned 27 rows",
+        "technique": "Create test script using service_role key to verify data exists, then compare authenticated query behavior. If service_role works but authenticated doesn't, the issue is RLS or join compatibility.",
+        "files": []
       }
     ]
   },
