@@ -105,39 +105,23 @@ export async function GET(request: NextRequest) {
     // Get order IDs
     const orderIds = [...new Set([...cardsMap.values()].map((c) => c.order_id).filter(Boolean))];
 
-    // Fetch orders for order numbers and property info
-    let ordersMap = new Map<string, { order_number: string; property_id: string | null }>();
+    // Fetch orders for order numbers and property address (address is stored directly on orders)
+    let ordersMap = new Map<string, { order_number: string; property_address: string | null }>();
     if (orderIds.length > 0) {
       const { data: orders } = await supabase
         .from("orders")
-        .select("id, order_number, property_id")
+        .select("id, order_number, property_address, property_city, property_state")
         .in("id", orderIds as string[]);
 
       if (orders) {
         orders.forEach((o) => {
+          const address = [o.property_address, o.property_city, o.property_state]
+            .filter(Boolean)
+            .join(", ");
           ordersMap.set(o.id, {
             order_number: o.order_number,
-            property_id: o.property_id,
+            property_address: address || null,
           });
-        });
-      }
-    }
-
-    // Get property IDs
-    const propertyIds = [...new Set([...ordersMap.values()].map((o) => o.property_id).filter(Boolean))];
-
-    // Fetch properties for addresses
-    let propertiesMap = new Map<string, string>();
-    if (propertyIds.length > 0) {
-      const { data: properties } = await supabase
-        .from("properties")
-        .select("id, street_address, city, state")
-        .in("id", propertyIds as string[]);
-
-      if (properties) {
-        properties.forEach((p) => {
-          const address = [p.street_address, p.city, p.state].filter(Boolean).join(", ");
-          propertiesMap.set(p.id, address);
         });
       }
     }
@@ -146,7 +130,6 @@ export async function GET(request: NextRequest) {
     const enrichedTasks: TaskDetail[] = (tasks || []).map((task) => {
       const cardInfo = task.production_card_id ? cardsMap.get(task.production_card_id) : null;
       const orderInfo = cardInfo?.order_id ? ordersMap.get(cardInfo.order_id) : null;
-      const propertyAddress = orderInfo?.property_id ? propertiesMap.get(orderInfo.property_id) : null;
 
       return {
         id: task.id,
@@ -155,7 +138,7 @@ export async function GET(request: NextRequest) {
         due_date: task.due_date,
         estimated_minutes: task.estimated_minutes,
         order_number: orderInfo?.order_number || null,
-        property_address: propertyAddress || null,
+        property_address: orderInfo?.property_address || null,
         stage_name: cardInfo?.stage_name || null,
         card_id: task.production_card_id,
       };
