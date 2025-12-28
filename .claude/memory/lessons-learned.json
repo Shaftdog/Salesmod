@@ -375,6 +375,47 @@
     }
   ],
   "last_updated": "2025-12-28",
+  "session_learnings_2025_12_28_phase_review": {
+    "context": "Admin Panel Reorganization - Phase Review for sidebar and route changes",
+    "learnings": [
+      {
+        "topic": "Branch Staleness Check Before Phase Review",
+        "issue": "Started phase review on branch that was 50+ commits behind main - would have reverted P0/P1/P2 agent systems, Cases Kanban, etc.",
+        "solution": "Always run `git log main..origin/branch` before starting phase review to verify branch is current. If massively behind, ask user if branch is stale or needs rebase.",
+        "files": []
+      },
+      {
+        "topic": "API Authentication vs Authorization Gap",
+        "issue": "Migrations API routes checked for authentication (logged-in user) but NOT authorization (admin role). Any authenticated user could run data migrations.",
+        "solution": "Always verify admin API routes have BOTH authn AND authz: 1) Check user exists (401), 2) Check user has admin/super_admin role (403). Pattern: query profiles table for role after auth.getUser().",
+        "files": ["src/app/api/migrations/run/route.ts", "src/app/api/migrations/history/route.ts"]
+      },
+      {
+        "topic": "PUBLIC_ROUTES Cleanup When Moving to Admin",
+        "issue": "Moved /migrations to /admin/migrations but forgot to remove /migrations from PUBLIC_ROUTES array in area-config.ts",
+        "solution": "When moving routes to admin area: 1) Move the page, 2) Remove from PUBLIC_ROUTES, 3) Update any links/redirects, 4) Verify middleware protection applies",
+        "files": ["src/lib/admin/area-config.ts"]
+      },
+      {
+        "topic": "React.memo for Navigation Items",
+        "issue": "AdminSidebar re-rendered all nav items on every route change",
+        "solution": "Extract nav item rendering into memoized components (CollapsedNavItem, ExpandedNavItem) that only re-render when their specific props change (item, isActive)",
+        "files": ["src/components/admin/admin-sidebar.tsx"]
+      },
+      {
+        "topic": "Import Existing Types Instead of Redefining",
+        "issue": "Defined local ImportMetrics interface that conflicted with existing type from @/lib/migrations/types",
+        "solution": "Before defining new interfaces, search codebase for existing types: grep 'interface TypeName' or check related imports. Import existing types to avoid conflicts and ensure consistency.",
+        "files": ["src/components/migrations/migration-results.tsx"]
+      },
+      {
+        "topic": "Path Matching Edge Case in Active Nav Detection",
+        "issue": "pathname.startsWith(item.href) would match /admin/users-deleted for /admin/users item",
+        "solution": "Use pathname.startsWith(item.href + '/') to require trailing slash, preventing partial path matches",
+        "files": ["src/components/admin/admin-sidebar.tsx"]
+      }
+    ]
+  },
   "session_learnings_2025_12_25": {
     "context": "P0.7 Email Infrastructure Go-Live - DNS configuration, email mode activation, operational validation",
     "learnings": [
