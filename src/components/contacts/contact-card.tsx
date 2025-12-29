@@ -114,6 +114,7 @@ export function ContactCard({ contact, onEdit, onDelete }: ContactCardProps) {
               <Button 
                 variant="ghost" 
                 size="icon"
+                aria-label="Contact actions"
                 onClick={(e) => e.stopPropagation()}
               >
                 <MoreHorizontal className="h-4 w-4" />
