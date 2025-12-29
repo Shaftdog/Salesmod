@@ -87,6 +87,14 @@ export const anthropicTools: Anthropic.Messages.Tool[] = [
       required: ['clientId'],
     },
   },
+  {
+    name: 'getCompanyInfo',
+    description: 'Get information about your company (ROI Home Services) including services, contact details, service areas, and team. Use this when users ask about "you", "your company", "us", or what services are offered.',
+    input_schema: {
+      type: 'object',
+      properties: {},
+    },
+  },
 
   // ===== Contact Management =====
   {

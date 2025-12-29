@@ -315,6 +315,43 @@ export async function executeAnthropicTool(
       };
     }
 
+    case 'getCompanyInfo': {
+      // SECURITY: Get user's tenant_id for proper multi-tenant isolation
+      const { data: companyProfile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', userId)
+        .single();
+
+      const companyTenantId = companyProfile?.tenant_id;
+      if (!companyTenantId) {
+        return { error: 'User has no tenant_id assigned - cannot get company info' };
+      }
+
+      // Fetch company knowledge for this tenant
+      const { data: companyData, error: companyError } = await supabase
+        .from('agent_memories')
+        .select('content')
+        .eq('tenant_id', companyTenantId)
+        .eq('scope', 'company_knowledge')
+        .eq('key', 'company_profile')
+        .single();
+
+      if (companyError || !companyData) {
+        return {
+          success: false,
+          error: 'Company information not configured for this account',
+          hint: 'Please contact your administrator to set up company knowledge'
+        };
+      }
+
+      return {
+        success: true,
+        company: companyData.content,
+        message: 'Company information retrieved successfully'
+      };
+    }
+
     // ===== Contact Management =====
     case 'createContact': {
       const { clientId, firstName, lastName, email, phone, mobile, title, department, isPrimary, notes } = toolInput;

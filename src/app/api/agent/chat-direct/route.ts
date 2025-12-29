@@ -3,8 +3,51 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@/lib/supabase/server';
 import { anthropicTools } from '@/lib/agent/anthropic-tool-registry';
 import { executeAnthropicTool } from '@/lib/agent/anthropic-tool-executor';
+import { CompanyKnowledge } from '@/lib/agent/context-builder';
 
 export const maxDuration = 60;
+
+/**
+ * Build company knowledge section for the system prompt
+ */
+function buildCompanyKnowledgeSection(company: CompanyKnowledge): string {
+  const services = company.services.map(s => `  - ${s.name}: ${s.description}`).join('\n');
+  const areas = company.serviceAreas.join(', ');
+  const team = company.team?.map(t => `  - ${t.name} (${t.role})`).join('\n') || 'Not specified';
+  const specializations = company.specializations?.join(', ') || 'Full-service appraisal';
+
+  return `
+## YOUR COMPANY - ${company.name}
+${company.tagline || ''}
+
+**Contact Information:**
+- Address: ${company.address}
+- Phone: ${company.phone}
+- Email: ${company.email || 'Not specified'}
+- Website: ${company.website}
+
+**About Us:**
+${company.description}
+
+**Our Services:**
+${services}
+
+**Service Areas:**
+${areas}
+
+**Our Team:**
+${team}
+
+**Specializations:**
+${specializations}
+
+**Business Hours:**
+${company.businessHours || 'Monday-Friday, 9am-5pm EST'}
+
+IMPORTANT: When clients ask about "you", "your company", "us", or "we" - they mean ${company.name}.
+You represent this company and should answer questions about our services, pricing inquiries, and capabilities accordingly.
+`;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,6 +61,29 @@ export async function POST(request: NextRequest) {
 
     if (authError || !user) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's tenant_id for multi-tenant isolation
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    const tenantId = profile?.tenant_id;
+
+    // Fetch company knowledge for this tenant
+    let companyKnowledge: CompanyKnowledge | null = null;
+    if (tenantId) {
+      const { data: companyData } = await supabase
+        .from('agent_memories')
+        .select('content')
+        .eq('tenant_id', tenantId)
+        .eq('scope', 'company_knowledge')
+        .eq('key', 'company_profile')
+        .single();
+
+      companyKnowledge = companyData?.content || null;
     }
 
     const anthropic = new Anthropic({
@@ -38,7 +104,16 @@ export async function POST(request: NextRequest) {
       timeZoneName: 'short'
     });
 
-    const systemPrompt = `You are an AI Account Manager assistant for a property appraisal management company. You help manage client relationships, track goals, and coordinate outreach.
+    // Build company-specific intro or use default
+    const companyIntro = companyKnowledge
+      ? `You are an AI Account Manager assistant for ${companyKnowledge.name}. You help manage client relationships, track goals, and coordinate outreach.`
+      : `You are an AI Account Manager assistant for a property appraisal management company. You help manage client relationships, track goals, and coordinate outreach.`;
+
+    const companySection = companyKnowledge
+      ? buildCompanyKnowledgeSection(companyKnowledge)
+      : '';
+
+    const systemPrompt = `${companyIntro}
 
 ## Current Date & Time (Eastern Time - New York)
 ${currentDate.toISOString()}
@@ -108,7 +183,8 @@ Guidelines:
 
 CRITICAL: Never claim to "check" something without actually using a tool. If you need current data, use the appropriate tool first.
 
-Remember: You're helping achieve business goals. Be strategic and data-driven.`;
+Remember: You're helping achieve business goals. Be strategic and data-driven.
+${companySection}`;
 
     console.log('[Direct API] Starting conversation with', messages.length, 'messages');
 

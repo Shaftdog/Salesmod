@@ -2,6 +2,28 @@ import { createClient } from '@/lib/supabase/server';
 import { Client, Order, Deal, Goal, Activity, Contact, Case } from '@/lib/types';
 import { calculateGoalProgress } from '@/hooks/use-goals';
 
+export interface CompanyKnowledge {
+  name: string;
+  tagline?: string;
+  address: string;
+  phone: string;
+  email?: string;
+  website: string;
+  description: string;
+  services: Array<{
+    name: string;
+    description: string;
+    category?: string;
+  }>;
+  serviceAreas: string[];
+  team?: Array<{
+    name: string;
+    role: string;
+  }>;
+  businessHours?: string;
+  specializations?: string[];
+}
+
 export interface AgentContext {
   goals: Array<{
     goal: Goal;
@@ -36,6 +58,7 @@ export interface AgentContext {
     content: any;
     importance: number;
   }>;
+  companyKnowledge: CompanyKnowledge | null; // Tenant's company information
   orgId: string;
   currentTime: Date;
 }
@@ -170,6 +193,22 @@ export async function buildContext(orgId: string): Promise<AgentContext> {
   // Combine: all feedback rules + top 50 other memories
   const memoriesData = [...(feedbackMemories || []), ...(otherMemories || [])];
 
+  // Fetch company knowledge for this tenant (stored separately for quick access)
+  const { data: companyKnowledgeData, error: companyError } = await supabase
+    .from('agent_memories')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('scope', 'company_knowledge')
+    .eq('key', 'company_profile')
+    .single();
+
+  // Don't throw on company error - it's optional, just log it
+  if (companyError && companyError.code !== 'PGRST116') {
+    console.log(`[Context] No company knowledge found for tenant ${tenantId}:`, companyError.message);
+  }
+
+  const companyKnowledge: CompanyKnowledge | null = companyKnowledgeData?.content || null;
+
   // Process goals with progress
   const goals = (goalsData || []).map((goal: any) => {
     const goalObj: Goal = {
@@ -265,6 +304,7 @@ export async function buildContext(orgId: string): Promise<AgentContext> {
     allOrders: (ordersData || []).map(transformOrder),
     signals,
     memories,
+    companyKnowledge,
     orgId,
     currentTime: now,
   };
