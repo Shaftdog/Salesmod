@@ -533,6 +533,36 @@
       }
     ]
   },
+  "session_learnings_2025_12_28_workload_drilldown": {
+    "context": "Resource Workload Drill-Down - implementing clickable chart with task details",
+    "learnings": [
+      {
+        "topic": "production_tasks Uses 'title' Not 'name' Column",
+        "issue": "API query failed with 'column production_tasks.name does not exist'",
+        "solution": "Always verify column names against schema before writing queries. The production_tasks table uses 'title' for task names, not 'name'.",
+        "files": ["src/app/api/production/workload/drill-down/route.ts"]
+      },
+      {
+        "topic": "Property Address Stored Directly on Orders Table",
+        "issue": "Property column showed '-' for all tasks. Was trying to look up through property_id foreign key.",
+        "root_cause": "Orders table has property_address, property_city, property_state columns directly - the property_id FK was added later and isn't populated for most orders",
+        "solution": "Get property address directly from orders table, not through properties table: SELECT property_address, property_city, property_state FROM orders",
+        "files": ["src/app/api/production/workload/drill-down/route.ts"]
+      },
+      {
+        "topic": "Playwright Browser Testing for API Debugging",
+        "issue": "Needed to see actual error messages from API calls in production context",
+        "solution": "Use Playwright MCP tools to automate browser: login, navigate, click elements, capture screenshots. Much faster than asking user to test manually. Can see actual error messages in UI.",
+        "files": []
+      },
+      {
+        "topic": "Batch Query Pattern for Drill-Down APIs",
+        "issue": "Need to enrich task data with order numbers, property addresses, stage names from related tables",
+        "solution": "Use batch query pattern: 1) Query main table (tasks), 2) Collect foreign key IDs, 3) Query related tables with .in('id', ids), 4) Use Maps for O(1) lookups during enrichment. Avoids Supabase join + RLS issues.",
+        "files": ["src/app/api/production/workload/drill-down/route.ts"]
+      }
+    ]
+  },
   "session_learnings_2025_12_28": {
     "context": "Production Dashboard Drill-Down - fixing empty results from Supabase query joins with RLS",
     "learnings": [
