@@ -39,7 +39,8 @@ const stageColors = {
 export function PipelineBoard({ deals, clients, isLoading }: PipelineBoardProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
-  
+  const [draggedDeal, setDraggedDeal] = useState<Deal | null>(null);
+
   const { mutateAsync: createDeal, isPending: isCreating } = useCreateDeal();
   const { mutateAsync: updateDeal, isPending: isUpdating } = useUpdateDeal();
   const { mutateAsync: deleteDeal } = useDeleteDeal();
@@ -74,6 +75,26 @@ export function PipelineBoard({ deals, clients, isLoading }: PipelineBoardProps)
       id: deal.id,
       stage: newStage,
     });
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (deal: Deal) => {
+    setDraggedDeal(deal);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = async (stage: string) => {
+    if (draggedDeal && draggedDeal.stage !== stage) {
+      await handleStageChange(draggedDeal, stage);
+    }
+    setDraggedDeal(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedDeal(null);
   };
 
   const handleSubmit = async (data: any) => {
@@ -139,7 +160,12 @@ export function PipelineBoard({ deals, clients, isLoading }: PipelineBoardProps)
           const weightedValue = calculateWeightedValue(stage);
 
           return (
-            <div key={stage} className="flex flex-col">
+            <div
+              key={stage}
+              className="flex flex-col"
+              onDragOver={handleDragOver}
+              onDrop={() => handleDrop(stage)}
+            >
               <div className={`rounded-t-lg p-3 ${stageColors[stage]}`}>
                 <h3 className="font-semibold capitalize">{stageLabels[stage]}</h3>
                 <div className="text-sm mt-1">
@@ -152,7 +178,7 @@ export function PipelineBoard({ deals, clients, isLoading }: PipelineBoardProps)
                   )}
                 </div>
               </div>
-              <div className="flex-1 bg-muted/30 rounded-b-lg p-2 space-y-2 min-h-[200px]">
+              <div className={`flex-1 bg-muted/30 rounded-b-lg p-2 space-y-2 min-h-[200px] ${draggedDeal ? 'ring-2 ring-primary/20' : ''}`}>
                 {stageDeals.map((deal) => (
                   <DealCard
                     key={deal.id}
@@ -160,6 +186,9 @@ export function PipelineBoard({ deals, clients, isLoading }: PipelineBoardProps)
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     onStageChange={handleStageChange}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    isDragging={draggedDeal?.id === deal.id}
                   />
                 ))}
                 {stageDeals.length === 0 && (

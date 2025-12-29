@@ -27,9 +27,12 @@ type DealCardProps = {
   onEdit?: (deal: Deal) => void;
   onDelete?: (deal: Deal) => void;
   onStageChange?: (deal: Deal, newStage: string) => void;
+  onDragStart?: (deal: Deal) => void;
+  onDragEnd?: () => void;
+  isDragging?: boolean;
 };
 
-export function DealCard({ deal, onEdit, onDelete, onStageChange }: DealCardProps) {
+export function DealCard({ deal, onEdit, onDelete, onStageChange, onDragStart, onDragEnd, isDragging }: DealCardProps) {
   const router = useRouter();
   const weightedValue = deal.value ? (deal.value * deal.probability) / 100 : 0;
 
@@ -42,7 +45,13 @@ export function DealCard({ deal, onEdit, onDelete, onStageChange }: DealCardProp
   };
 
   return (
-    <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={handleCardClick}>
+    <Card
+      draggable
+      onDragStart={() => onDragStart?.(deal)}
+      onDragEnd={onDragEnd}
+      className={`hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-50 ring-2 ring-primary' : ''}`}
+      onClick={handleCardClick}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex-1">
