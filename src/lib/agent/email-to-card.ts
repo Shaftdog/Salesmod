@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { GmailMessage } from '@/lib/gmail/gmail-service';
 import { EmailClassification, EmailCategory } from '@/lib/agent/email-classifier';
+import { generateEmailResponse, EmailResponse } from '@/lib/agent/email-response-generator';
 
 // Valid card types from database schema
 // CHECK constraint: type IN ('send_email', 'schedule_call', 'research', 'create_task', 'follow_up', 'create_deal')
@@ -97,12 +98,30 @@ export async function createCardFromEmail(
     clientId = null; // Non-fatal, continue without client
   }
 
+  // Generate email response for send_email cards
+  let emailResponse: EmailResponse | undefined;
+  if (cardType === 'send_email') {
+    console.log('[Email-to-Card] Generating email response for send_email card...');
+    try {
+      emailResponse = await generateEmailResponse(orgId, email, classification);
+      console.log('[Email-to-Card] Email response generated:', {
+        subject: emailResponse.subject,
+        bodyLength: emailResponse.bodyHtml?.length || 0,
+        confidence: emailResponse.confidence,
+      });
+    } catch (error) {
+      console.error('[Email-to-Card] WARNING: Failed to generate email response:', error);
+      // Continue without response - card can still be created for manual review
+    }
+  }
+
   // Build card title and description
   console.log('[Email-to-Card] Building card content...');
   const { title, description, rationale, actionPayload } = buildCardContent(
     email,
     classification,
-    cardType
+    cardType,
+    emailResponse
   );
 
   // Create the card
@@ -340,7 +359,8 @@ function determineCardStrategy(classification: EmailClassification): {
 function buildCardContent(
   email: GmailMessage,
   classification: EmailClassification,
-  cardType: CardType
+  cardType: CardType,
+  emailResponse?: EmailResponse
 ): {
   title: string;
   description: string;
@@ -396,12 +416,20 @@ ${classification.shouldEscalate ? 'Escalated for human review due to low confide
 
   // Add card-type-specific payload data
   if (cardType === 'send_email') {
-    // For email reply cards, include response template hints
+    // For email reply cards, include the generated response
     actionPayload = {
       ...actionPayload,
+      // Recipient is the original sender
+      to: email.from.email,
+      // Include the generated email response if available
+      subject: emailResponse?.subject || `Re: ${email.subject}`,
+      body: emailResponse?.bodyHtml || '',
+      bodyText: emailResponse?.bodyText || '',
+      // Metadata
       category,
       entities,
-      shouldAutoSend: classification.confidence >= 0.95,
+      shouldAutoSend: emailResponse?.shouldAutoSend ?? (classification.confidence >= 0.95),
+      responseConfidence: emailResponse?.confidence || 0,
     };
   } else if (cardType === 'schedule_call') {
     // For scheduling cards, include time/date entities
