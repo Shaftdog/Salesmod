@@ -728,6 +728,61 @@
       "description": "Having both a React Query hook that queries Supabase directly AND an API endpoint for the same data. When you update one, the other gets stale.",
       "solution": "Use API endpoints consistently. Hooks should call fetch('/api/...') not query Supabase directly. This ensures all enhancements (subtasks, timers, relations) are available to the frontend.",
       "example": "useMyProductionTasksToday was querying Supabase while /api/production/my-tasks had subtask fetching logic"
+    },
+    {
+      "name": "Deferred Content Generation",
+      "description": "Creating email cards with empty body/subject, expecting content to be generated at execution time",
+      "solution": "Generate complete email content at card CREATION time, not execution time. Cards should be ready-to-send when created.",
+      "example": "email-to-card.ts was creating send_email cards without calling generateEmailResponse(), leaving body/subject empty"
+    },
+    {
+      "name": "Placeholder Signatures in AI Prompts",
+      "description": "AI generates [Your Name], [Your Title], [Your Phone] placeholders instead of actual signatures",
+      "solution": "Explicitly specify signature in prompt: 'Sign off with Best, Rod Haug, ROI Homes - NEVER leave signature blank'",
+      "example": "planner.ts and action-extractor.ts prompts now include explicit signature requirement"
     }
-  ]
+  ],
+  "session_learnings_2025_12_30": {
+    "context": "Autonomous Agent Email Quality - fixing missing content, signatures, and year references",
+    "learnings": [
+      {
+        "topic": "Generate Email Content at Card Creation",
+        "issue": "Email cards in Approved column had no message body - just empty action_payload",
+        "root_cause": "email-to-card.ts created cards without calling generateEmailResponse(). Email content was only generated at execution time, but cards were visible before then.",
+        "solution": "Call generateEmailResponse() during card creation and populate action_payload.to, action_payload.subject, action_payload.body immediately",
+        "files": ["src/lib/agent/email-to-card.ts"]
+      },
+      {
+        "topic": "Autonomous Agent Should DO Work, Not Create Tasks",
+        "issue": "Agent creating schedule_call and create_task cards instead of sending emails directly",
+        "root_cause": "Schema and prompts allowed schedule_call and create_task action types. Agent chose research/tasks over outreach.",
+        "solution": "1) Remove schedule_call and create_task from schema entirely, 2) Update prompts to require 70%+ outreach actions, 3) Make agent email-only for communication",
+        "files": ["src/lib/agent/planner.ts", "src/lib/research/action-extractor.ts"]
+      },
+      {
+        "topic": "AI Prompts Need Explicit Signature Instructions",
+        "issue": "Generated emails had placeholder signatures like [Your Name], [Your Title], [Your Phone]",
+        "solution": "Add explicit signature requirement to all email-generating prompts: 'Sign off with Best, Rod Haug, ROI Homes'",
+        "files": ["src/lib/agent/planner.ts", "src/lib/research/action-extractor.ts", "src/lib/agent/email-response-generator.ts"]
+      },
+      {
+        "topic": "AI Prompts Need Year Context",
+        "issue": "Emails referenced '2025' for forward-looking statements when they should say '2026'",
+        "solution": "Add year guidance to prompts: 'We are at end of 2025. Forward-looking statements should reference 2026 (Q1 2026, strong start to 2026)'",
+        "files": ["src/lib/agent/planner.ts", "src/lib/research/action-extractor.ts"]
+      },
+      {
+        "topic": "Email Content Should Never Mention Calls",
+        "issue": "Generated emails invited recipients to schedule calls, but user wants email-only communication",
+        "solution": "Add explicit prohibition to prompts: 'NEVER mention calls, phone, meetings, or scheduling. CTA should ask them to REPLY to this email'",
+        "files": ["src/lib/agent/planner.ts", "src/lib/research/action-extractor.ts"]
+      },
+      {
+        "topic": "Schema/Code Field Mismatch",
+        "issue": "action-extractor.ts used action.description but schema only had rationale field",
+        "solution": "Always verify that code references match actual Zod schema fields. Changed to use action.rationale for description.",
+        "files": ["src/lib/research/action-extractor.ts"]
+      }
+    ]
+  }
 }
