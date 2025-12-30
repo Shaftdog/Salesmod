@@ -55,9 +55,13 @@ FOR EACH EMAIL, INCLUDE:
 EMAIL BODY GUIDELINES:
 - Start with a personalized greeting using their first name
 - Reference specific information from the research
-- Include a clear call-to-action
 - Keep it concise but complete
-- Sign off professionally
+- Sign off with "Best,\n\nRod Haug\nROI Homes" - NEVER leave signature blank
+- Ask them to REPLY to this email if interested
+
+CRITICAL: NEVER mention calls, phone, meetings, or scheduling. Keep all communication via email only.
+
+YEAR GUIDANCE: We are at the end of 2025. Any forward-looking references should use 2026 (e.g., "Q1 2026", "strong start to 2026", "looking ahead to 2026").
 
 RULES:
 - ONLY target contacts who have an email address listed above
@@ -128,7 +132,7 @@ export function actionsToCardPayloads(
     const baseCard = {
       type: action.type,
       title: action.title,
-      description: action.description,
+      description: action.rationale, // Use rationale as description since schema doesn't have description
       rationale: action.rationale,
       priority: action.priority,
       client_id: clientId,

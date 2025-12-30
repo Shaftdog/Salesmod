@@ -186,7 +186,7 @@ REQUIREMENTS:
 2. Directly answer their question or request
 3. Provide specific information (dates, numbers, details)
 4. Include next steps or calls to action if appropriate
-5. Sign off professionally
+5. Sign off with "Best,\n\nRod Haug\nROI Homes" - NEVER leave signature blank
 6. Keep it brief (2-4 paragraphs max)
 
 RESPONSE FORMAT:
