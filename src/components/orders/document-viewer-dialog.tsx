@@ -19,6 +19,12 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   getFileIcon,
   formatFileSize,
   getDocumentTypeLabel,
@@ -126,65 +132,105 @@ export function DocumentViewerDialog({
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              {isImage && (
-                <>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={handleZoomOut}
-                    disabled={imageZoom <= ZOOM_MIN}
-                    title="Zoom out"
-                    aria-label="Zoom out"
-                  >
-                    <ZoomOut className="h-4 w-4" />
-                  </Button>
-                  <span className="text-sm text-muted-foreground w-12 text-center">
-                    {imageZoom}%
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={handleZoomIn}
-                    disabled={imageZoom >= ZOOM_MAX}
-                    title="Zoom in"
-                    aria-label="Zoom in"
-                  >
-                    <ZoomIn className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={handleRotate}
-                    title="Rotate"
-                    aria-label="Rotate image 90 degrees"
-                  >
-                    <RotateCw className="h-4 w-4" />
-                  </Button>
-                </>
-              )}
-              {document.url && (
-                <>
-                  <Button variant="outline" size="icon" asChild title="Open in new tab">
-                    <a
-                      href={document.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Open ${document.file_name} in new tab`}
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  </Button>
-                  <Button variant="outline" size="icon" asChild title="Download">
-                    <a
-                      href={document.url}
-                      download={document.file_name}
-                      aria-label={`Download ${document.file_name}`}
-                    >
-                      <Download className="h-4 w-4" />
-                    </a>
-                  </Button>
-                </>
-              )}
+              <TooltipProvider>
+                {isImage && (
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        {/* Wrapper div needed for tooltip to show on disabled button */}
+                        <div className="inline-block">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={handleZoomOut}
+                            disabled={imageZoom <= ZOOM_MIN}
+                            aria-label="Zoom out"
+                          >
+                            <ZoomOut className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Zoom out</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <span className="text-sm text-muted-foreground w-12 text-center">
+                      {imageZoom}%
+                    </span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        {/* Wrapper div needed for tooltip to show on disabled button */}
+                        <div className="inline-block">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={handleZoomIn}
+                            disabled={imageZoom >= ZOOM_MAX}
+                            aria-label="Zoom in"
+                          >
+                            <ZoomIn className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Zoom in</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={handleRotate}
+                          aria-label="Rotate image 90 degrees"
+                        >
+                          <RotateCw className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Rotate</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </>
+                )}
+                {document.url && (
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" asChild>
+                          <a
+                            href={document.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`Open ${document.file_name} in new tab`}
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Open in new tab</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" asChild>
+                          <a
+                            href={document.url}
+                            download={document.file_name}
+                            aria-label={`Download ${document.file_name}`}
+                          >
+                            <Download className="h-4 w-4" />
+                          </a>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Download</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </>
+                )}
+              </TooltipProvider>
             </div>
           </div>
         </DialogHeader>
