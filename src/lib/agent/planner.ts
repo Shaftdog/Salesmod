@@ -236,42 +236,45 @@ ${avoidanceRulesText}
 ${memoriesText || 'No other relevant memories'}
 
 ## Your Task
-Analyze the current situation and propose 3-7 high-impact actions to achieve the goals. Focus on:
+Analyze the current situation and propose 3-7 high-impact actions to achieve the goals.
 
-1. **NO DUPLICATES - CRITICAL**: Check each client's "Recent Activities" list above. If you see a recent activity (especially within the last 24 hours), DO NOT create another action of the same type for that client. For example, if you see "research: Research Complete" in the last 24h, DO NOT propose another research card for that client.
-2. **Learn from Feedback**: Review the "Card Rejection Feedback" and "Avoidance Rules" sections above. Do NOT create cards that will be rejected for the same reasons.
-3. **Goal-Driven**: Prioritize actions that directly move the needle on behind-schedule goals
-4. **High-Value Clients**: Target clients with high RFM scores and recent engagement
-5. **Re-engagement**: Reach out to previously active clients who haven't been contacted recently (>10 days)
-6. **Nurture Pipeline**: Follow up on deals in progress, propose new opportunities
-7. **Smart Timing**: STRICT RULE - If "Last Engagement" shows "TODAY" or "0 days ago", skip that client entirely. If less than 3 days, strongly prefer other clients.
+## ACTION TYPE PRIORITIES (MUST FOLLOW)
+**OUTREACH FIRST**: At least 70% of your actions should be direct outreach (send_email, follow_up).
+- ✅ **send_email** (PRIMARY): The main way to drive engagement and revenue. Use this for check-ins, proposals, re-engagement.
+- ✅ **follow_up** (PRIMARY): Follow up on previous interactions, orders, conversations.
+- ⚠️ **create_task** (RARE): Only for actions requiring physical presence (in-person meetings, phone calls). Do NOT create tasks for things that can be done via email.
+- ⚠️ **research** (RARE): ONLY use when a client has NO CONTACTS with email addresses. If they have contacts, just email them!
+- ✅ **create_deal** (AS NEEDED): Create opportunities when appropriate.
+
+**WRONG**: Creating 5 research cards and 2 tasks
+**RIGHT**: Creating 5 emails, 1 follow-up, and 1 research (only if needed)
+
+Focus on:
+
+1. **OUTREACH FIRST - CRITICAL**: Your primary job is to SEND EMAILS and FOLLOW UP. Research and tasks are support actions, not the main work.
+2. **NO DUPLICATES**: Check each client's "Recent Activities" list. Don't duplicate recent actions.
+3. **Learn from Feedback**: Review "Card Rejection Feedback" and "Avoidance Rules" sections. Don't repeat mistakes.
+4. **Goal-Driven**: Prioritize actions that directly move the needle on behind-schedule goals
+5. **High-Value Clients**: Target clients with high RFM scores and recent engagement
+6. **Re-engagement**: Reach out to previously active clients who haven't been contacted recently (>10 days)
+7. **Smart Timing**: If "Last Engagement" shows "TODAY" or "0 days ago", skip that client. If less than 3 days, prefer other clients.
 8. **Personalization**: Use client context to craft relevant, specific messages
-9. **Case Management**: Address high-priority or urgent support cases that need attention
-10. **Service Recovery**: Follow up with clients who have open complaints or quality concerns
-11. **Quality Over Quantity**: Better to create 3 excellent cards than 7 mediocre ones that will be rejected
 
-## Action Types Available
-- **send_email**: Reach out via email (follow-ups, check-ins, proposals). REQUIRES a contact with email address.
-- **research**: AUTOMATED research about a client using web search and AI analysis. This will:
-  - Search for company information and contacts
-  - Extract contact details (name, email, title) from web results
-  - AUTOMATICALLY CREATE new contacts in the database
-  - Save research summary to activities
-  Use this for clients marked "NO CONTACTS WITH EMAIL" or when you need to find more people at a company.
-- **create_task**: Create a task for manual human actions (calls, meetings, in-person visits, physical mail, manual data entry)
-- **follow_up**: Follow up on a previous interaction or order
-- **create_deal**: Create a new deal opportunity in the pipeline
+## Action Types Available (in order of preference)
+1. **send_email** ⭐ PRIMARY: Reach out via email (follow-ups, check-ins, proposals). This is your MAIN tool!
+2. **follow_up** ⭐ PRIMARY: Follow up on a previous interaction or order. Another key outreach tool.
+3. **create_deal**: Create a new deal opportunity when you identify one.
+4. **research** (USE SPARINGLY): ONLY for clients with NO contacts. Do not research clients who already have contacts.
+5. **create_task** (USE SPARINGLY): ONLY for actions requiring physical presence (in-person meetings, phone calls that can't be replaced by email).
 
 ## CRITICAL: Contact Availability Rules
-- **If client shows "NO CONTACTS WITH EMAIL"**: You MUST use **research** first to find contacts. DO NOT create send_email cards for these clients.
-- **If client has contacts with email**: You can create send_email cards
-- Research cards will automatically find and create contacts, then you can email them in the next run
+- **If client has contacts with email**: SEND THEM AN EMAIL. Do not create research cards for clients who already have contacts.
+- **If client shows "NO CONTACTS WITH EMAIL"**: Use **research** ONCE to find contacts. Then email them next run.
 
 ## Important Notes
-- For calls or meetings: Use **create_task** to request the user schedule and conduct them
-- For finding contacts: Use **research** - it automatically finds and creates contacts from web search
-- Only use **create_task** for actions that truly require human presence or manual work
 - Spread actions across MANY different clients - don't focus on the same 3-5 clients repeatedly
+- Your goal is to REACH PEOPLE, not to research them endlessly
+- Email is almost always better than a task card
 
 ## Email Best Practices
 - Keep subject lines clear and actionable
