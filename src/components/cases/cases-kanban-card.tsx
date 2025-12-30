@@ -1,12 +1,25 @@
 'use client';
 
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { CasePriorityBadge } from './case-status-badge';
 import { cn } from '@/lib/utils';
 import type { Case, CasePriority } from '@/lib/types';
-import { Building2, FileText, User, Calendar } from 'lucide-react';
+import { Building2, FileText, User, Calendar, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useDeleteCase } from '@/hooks/use-cases';
 
 const PRIORITY_BORDER_COLORS: Record<CasePriority, string> = {
   low: 'border-l-gray-400',
@@ -29,6 +42,9 @@ export function CasesKanbanCard({
   onClick,
   isDragging,
 }: CasesKanbanCardProps) {
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const deleteCase = useDeleteCase();
+
   const formatCaseType = (type: string) => {
     return type
       .split('_')
@@ -36,7 +52,34 @@ export function CasesKanbanCard({
       .join(' ');
   };
 
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDelete = () => {
+    deleteCase.mutate(caseItem.id);
+    setShowDeleteDialog(false);
+  };
+
   return (
+    <>
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Case</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete case {caseItem.caseNumber}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     <Card
       draggable
       onDragStart={() => onDragStart(caseItem)}
@@ -54,7 +97,17 @@ export function CasesKanbanCard({
             <p className="text-sm font-semibold truncate">{caseItem.subject}</p>
             <p className="text-xs text-muted-foreground">{caseItem.caseNumber}</p>
           </div>
-          <CasePriorityBadge priority={caseItem.priority} className="shrink-0 text-xs" />
+          <div className="flex items-center gap-1 shrink-0">
+            <CasePriorityBadge priority={caseItem.priority} className="text-xs" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+              onClick={handleDelete}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
 
         {/* Case Type */}
@@ -100,5 +153,6 @@ export function CasesKanbanCard({
         </div>
       </CardContent>
     </Card>
+    </>
   );
 }
