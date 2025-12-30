@@ -3,9 +3,9 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import { AgentContext } from './context-builder';
 
-// Schema for a single action plan
+// Schema for a single action plan - NO schedule_call or create_task (agent does work, not creates tasks for humans)
 const ActionSchema = z.object({
-  type: z.enum(['send_email', 'research', 'create_task', 'follow_up', 'create_deal']),
+  type: z.enum(['send_email', 'follow_up', 'create_deal', 'research']),
   clientId: z.string(),
   contactId: z.string().optional(),
   priority: z.enum(['low', 'medium', 'high']),
@@ -16,10 +16,6 @@ const ActionSchema = z.object({
     subject: z.string().min(5),
     body: z.string().min(20).describe('HTML email body'),
     replyTo: z.string().optional(), // Relaxed from .email()
-  }).optional(),
-  taskDetails: z.object({
-    description: z.string(),
-    dueDate: z.string().optional(),
   }).optional(),
   dealDetails: z.object({
     title: z.string(),
@@ -264,8 +260,10 @@ Focus on:
 1. **send_email** ⭐ PRIMARY: Reach out via email (follow-ups, check-ins, proposals). This is your MAIN tool!
 2. **follow_up** ⭐ PRIMARY: Follow up on a previous interaction or order. Another key outreach tool.
 3. **create_deal**: Create a new deal opportunity when you identify one.
-4. **research** (USE SPARINGLY): ONLY for clients with NO contacts. Do not research clients who already have contacts.
-5. **create_task** (USE SPARINGLY): ONLY for actions requiring physical presence (in-person meetings, phone calls that can't be replaced by email).
+4. **research** (USE SPARINGLY): ONLY for clients with NO contacts with email addresses.
+
+NOTE: You are an AUTONOMOUS agent. You SEND emails directly - you do NOT create tasks for humans to do.
+Do NOT use schedule_call or create_task - those are not available. Email is your primary outreach method.
 
 ## CRITICAL: Contact Availability Rules
 - **If client has contacts with email**: SEND THEM AN EMAIL. Do not create research cards for clients who already have contacts.
@@ -310,7 +308,6 @@ Generate a plan with specific, actionable items. Each action MUST include:
   - **subject**: Complete email subject line (at least 5 characters)
   - **body**: Complete HTML email body (at least 20 characters, use <p>, <strong>, <ul>, <li> tags)
   - **replyTo**: (optional) Reply-to address
-- **For create_task actions**: Include taskDetails with description and optional dueDate
 - **For create_deal actions**: Include dealDetails with title, stage, and optional value/description
 
 IMPORTANT: For send_email actions, the rationale field should explain WHY you're sending the email (business reasoning), while the emailDraft.body contains the ACTUAL email message to send. These are separate fields!
@@ -377,11 +374,6 @@ export function validatePlan(plan: AgentPlan, context: AgentContext): {
           errors.push(`Action ${index + 1}: Client has no email address`);
         }
       }
-    }
-
-    // Validate task actions
-    if (action.type === 'create_task' && !action.taskDetails) {
-      errors.push(`Action ${index + 1}: Task action must include taskDetails`);
     }
 
     // Validate deal actions
