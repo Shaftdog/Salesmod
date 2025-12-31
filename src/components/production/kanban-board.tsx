@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Loader2, Calendar, CalendarCheck, User, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -244,23 +245,30 @@ function AssignedResourcesDisplay({ card }: { card: ProductionCardWithOrder }) {
   }
 
   return (
-    <div className="flex flex-wrap gap-1">
-      {assignments.map(({ role, user }) => (
-        <div
-          key={role}
-          className={cn(
-            'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs',
-            ROLE_COLORS[role]
-          )}
-          title={`${ROLE_ABBREV[role]}: ${user?.name || user?.email}`}
-        >
-          <span className="font-medium">{ROLE_ABBREV[role]}</span>
-          <span className="max-w-[60px] truncate">
-            {user?.name?.split(' ')[0] || user?.email?.split('@')[0]}
-          </span>
-        </div>
-      ))}
-    </div>
+    <TooltipProvider>
+      <div className="flex flex-wrap gap-1">
+        {assignments.map(({ role, user }) => (
+          <Tooltip key={role}>
+            <TooltipTrigger asChild>
+              <div
+                className={cn(
+                  'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs cursor-default',
+                  ROLE_COLORS[role]
+                )}
+              >
+                <span className="font-medium">{ROLE_ABBREV[role]}</span>
+                <span className="max-w-[60px] truncate">
+                  {user?.name?.split(' ')[0] || user?.email?.split('@')[0]}
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{ROLE_ABBREV[role]}: {user?.name || user?.email}</p>
+            </TooltipContent>
+          </Tooltip>
+        ))}
+      </div>
+    </TooltipProvider>
   );
 }
 
