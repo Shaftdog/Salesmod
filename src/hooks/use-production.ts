@@ -168,6 +168,7 @@ export function useCreateProductionTemplate() {
             .from('production_template_tasks')
             .insert({
               template_id: template.id,
+              tenant_id: profile.tenant_id, // Add tenant_id for RLS
               stage: task.stage,
               title: task.title,
               description: task.description,
@@ -185,6 +186,7 @@ export function useCreateProductionTemplate() {
           if (task.subtasks && task.subtasks.length > 0) {
             const subtasksToInsert = task.subtasks.map((subtask, index) => ({
               parent_task_id: createdTask.id,
+              tenant_id: profile.tenant_id, // Add tenant_id for RLS
               title: subtask.title,
               description: subtask.description,
               default_role: subtask.default_role,
@@ -228,6 +230,20 @@ export function useUpdateProductionTemplate() {
 
   return useMutation({
     mutationFn: async ({ id, tasks, ...updates }: Partial<ProductionTemplate> & { id: string; tasks?: CreateTemplateRequest['tasks'] }) => {
+      // Get user's tenant_id for multi-tenant isolation
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+
+      if (profileError || !profile?.tenant_id) {
+        throw new Error('User has no tenant_id assigned')
+      }
+
       // Update template metadata
       const { data: template, error: templateError } = await supabase
         .from('production_templates')
@@ -275,6 +291,7 @@ export function useUpdateProductionTemplate() {
               .from('production_template_tasks')
               .insert({
                 template_id: id,
+                tenant_id: profile.tenant_id, // Add tenant_id for RLS
                 stage: task.stage,
                 title: task.title,
                 description: task.description,
@@ -292,6 +309,7 @@ export function useUpdateProductionTemplate() {
             if (task.subtasks && task.subtasks.length > 0) {
               const subtasksToInsert = task.subtasks.map((subtask, index) => ({
                 parent_task_id: createdTask.id,
+                tenant_id: profile.tenant_id, // Add tenant_id for RLS
                 title: subtask.title,
                 description: subtask.description,
                 default_role: subtask.default_role,
@@ -419,10 +437,11 @@ export function useDuplicateProductionTemplate() {
             .from('production_template_tasks')
             .insert({
               template_id: newTemplate.id,
+              tenant_id: profile.tenant_id, // Add tenant_id for RLS
               title: task.title,
               description: task.description,
               stage: task.stage,
-              role: task.role,
+              default_role: task.default_role,
               is_required: task.is_required,
               estimated_minutes: task.estimated_minutes,
               sort_order: task.sort_order,
@@ -438,7 +457,8 @@ export function useDuplicateProductionTemplate() {
               .from('production_template_subtasks')
               .insert(
                 task.subtasks.map((sub: any) => ({
-                  template_task_id: newTask.id,
+                  parent_task_id: newTask.id,
+                  tenant_id: profile.tenant_id, // Add tenant_id for RLS
                   title: sub.title,
                   sort_order: sub.sort_order,
                 }))
