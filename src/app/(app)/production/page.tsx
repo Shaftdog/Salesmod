@@ -205,27 +205,41 @@ function ProductionDashboardContent() {
               onClick={() => handleMetricClick("valueDeliveredToday")}
             />
 
-            {/* Row 5: 7-Day Stats & Turn Times */}
+            {/* Row 5: 7-Day Delivery Stats */}
             <MetricCard
-              title="# Delivered Past 7 Days"
+              title="Files Delivered (7 Days)"
               value={metrics?.deliveredPast7Days ?? 0}
               filterCount={4}
               onClick={() => handleMetricClick("deliveredPast7Days")}
             />
             <MetricCard
-              title="Value Delivered Past 7 Days"
+              title="Value Delivered (7 Days)"
               value={formatCurrency(metrics?.valueDeliveredPast7Days ?? 0)}
               filterCount={3}
               onClick={() => handleMetricClick("valueDeliveredPast7Days")}
             />
             <MetricCard
-              title="Average Turn Time (1 Week)"
-              value={formatTurnTime(metrics?.avgTurnTime1Week ?? null)}
-              filterCount={2}
-              onClick={() => handleMetricClick("avgTurnTime1Week")}
+              title="Files Delivered (30 Days)"
+              value={metrics?.deliveredPast30Days ?? 0}
+              filterCount={4}
+              onClick={() => handleMetricClick("deliveredPast30Days")}
             />
             <MetricCard
-              title="Average Turn Time (Last 30 Days)"
+              title="Value Delivered (30 Days)"
+              value={formatCurrency(metrics?.valueDeliveredPast30Days ?? 0)}
+              filterCount={3}
+              onClick={() => handleMetricClick("valueDeliveredPast30Days")}
+            />
+
+            {/* Row 6: Turn Times */}
+            <MetricCard
+              title="Avg Turn Time (7 Days)"
+              value={formatTurnTime(metrics?.avgTurnTime7Days ?? null)}
+              filterCount={2}
+              onClick={() => handleMetricClick("avgTurnTime7Days")}
+            />
+            <MetricCard
+              title="Avg Turn Time (30 Days)"
               value={formatTurnTime(metrics?.avgTurnTime30Days ?? null)}
               filterCount={2}
               onClick={() => handleMetricClick("avgTurnTime30Days")}

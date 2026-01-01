@@ -14,10 +14,10 @@ export const PRODUCTION_STAGES = [
   'SCHEDULING',
   'SCHEDULED',
   'INSPECTED',
+  'CORRECTION',
   'FINALIZATION',
   'READY_FOR_DELIVERY',
   'DELIVERED',
-  'CORRECTION',
   'REVISION',
   'WORKFILE',
   'ON_HOLD',
@@ -877,3 +877,122 @@ export const DEFAULT_SLA_CONFIG: Record<ProductionStage, { sla_days: number; ref
   ON_HOLD: { sla_days: 0, reference_point: 'stage_entry' },
   CANCELLED: { sla_days: 0, reference_point: 'stage_entry' },
 };
+
+// ============================================================================
+// RESOURCE TASKS KANBAN TYPES
+// ============================================================================
+
+export const RESOURCE_TASK_COLUMNS = [
+  'NOT_STARTED',
+  'NEXT_DAY',
+  'TOMORROW',
+  'TODAY',
+  'OVERDUE',
+  'STARTED',
+  'ISSUES',
+  'IMPEDED',
+  'CORRECTION',
+  'COMPLETED',
+] as const;
+
+export type ResourceTaskColumn = (typeof RESOURCE_TASK_COLUMNS)[number];
+
+export const RESOURCE_TASK_COLUMN_LABELS: Record<ResourceTaskColumn, string> = {
+  NOT_STARTED: 'Not Started',
+  NEXT_DAY: 'Next Day',
+  TOMORROW: 'Tomorrow',
+  TODAY: 'Today',
+  OVERDUE: 'Overdue',
+  STARTED: 'Started',
+  ISSUES: 'Issues',
+  IMPEDED: 'Impeded',
+  CORRECTION: 'Correction',
+  COMPLETED: 'Completed',
+};
+
+export const RESOURCE_TASK_COLUMN_COLORS: Record<ResourceTaskColumn, string> = {
+  NOT_STARTED: 'bg-slate-50 border-slate-200',
+  NEXT_DAY: 'bg-blue-50 border-blue-200',
+  TOMORROW: 'bg-cyan-50 border-cyan-200',
+  TODAY: 'bg-amber-50 border-amber-200',
+  OVERDUE: 'bg-red-50 border-red-200',
+  STARTED: 'bg-green-50 border-green-200',
+  ISSUES: 'bg-rose-50 border-rose-300',
+  IMPEDED: 'bg-orange-50 border-orange-200',
+  CORRECTION: 'bg-pink-50 border-pink-200',
+  COMPLETED: 'bg-emerald-50 border-emerald-200',
+};
+
+// Extended ProductionTask with issue fields
+export interface ProductionTaskWithIssue extends ProductionTask {
+  has_issue?: boolean;
+  issue_description?: string | null;
+  issue_created_at?: string | null;
+  issue_created_by?: string | null;
+}
+
+// Subtask type for resource tasks kanban
+export interface ResourceSubtask extends ProductionTask {
+  assigned_user: {
+    id: string;
+    name: string | null;
+    email: string;
+  } | null;
+}
+
+// Extended task with relations for kanban board
+export interface ResourceTaskWithRelations extends ProductionTaskWithIssue {
+  production_card: {
+    id: string;
+    order_id: string;
+    current_stage: ProductionStage;
+    due_date: string | null;
+    order: {
+      id: string;
+      order_number: string | null;
+      property_address: string | null;
+    };
+  };
+  assigned_user: {
+    id: string;
+    name: string | null;
+    email: string;
+  } | null;
+  subtasks?: ResourceSubtask[];
+}
+
+export interface ResourceTaskKanbanColumn {
+  id: ResourceTaskColumn;
+  title: string;
+  color: string;
+  tasks: ResourceTaskWithRelations[];
+  count: number;
+}
+
+export interface ResourceTaskKanbanData {
+  columns: ResourceTaskKanbanColumn[];
+  total_tasks: number;
+}
+
+// Input types for resource task actions
+export interface CreateTaskIssueInput {
+  task_id: string;
+  issue_description: string;
+}
+
+export interface ResourceTaskDropInput {
+  task_id: string;
+  target_column: ResourceTaskColumn;
+  issue_description?: string;
+}
+
+export const ResourceTaskDropSchema = z.object({
+  target_column: z.enum(RESOURCE_TASK_COLUMNS),
+  issue_description: z.string().optional(),
+});
+
+export type ResourceTaskDropSchemaInput = z.infer<typeof ResourceTaskDropSchema>;
+
+export function isValidResourceTaskColumn(column: string): column is ResourceTaskColumn {
+  return RESOURCE_TASK_COLUMNS.includes(column as ResourceTaskColumn);
+}

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { ProductionBoardTabs } from '@/components/production/production-board-tabs';
 import { ProductionCardModal } from '@/components/production/production-card-modal';
 import { SLAConfigDialog } from '@/components/production/sla-config-dialog';
@@ -11,9 +12,32 @@ import type { ProductionCardWithOrder } from '@/types/production';
 import Link from 'next/link';
 
 export default function ProductionBoardPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const { refetch, isRefetching } = useProductionBoardData();
   const [selectedCard, setSelectedCard] = useState<ProductionCardWithOrder | null>(null);
+  const [cardIdFromUrl, setCardIdFromUrl] = useState<string | null>(null);
   const [slaConfigOpen, setSlaConfigOpen] = useState(false);
+
+  // Handle cardId from URL query parameter
+  useEffect(() => {
+    const cardId = searchParams.get('cardId');
+    if (cardId) {
+      setCardIdFromUrl(cardId);
+    }
+  }, [searchParams]);
+
+  // Clear URL parameter when modal closes
+  const handleModalClose = (open: boolean) => {
+    if (!open) {
+      setSelectedCard(null);
+      setCardIdFromUrl(null);
+      // Remove cardId from URL without full navigation
+      const url = new URL(window.location.href);
+      url.searchParams.delete('cardId');
+      router.replace(url.pathname, { scroll: false });
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -62,11 +86,11 @@ export default function ProductionBoardPage() {
       <ProductionBoardTabs onCardClick={setSelectedCard} />
 
       {/* Card Detail Modal */}
-      {selectedCard && (
+      {(selectedCard || cardIdFromUrl) && (
         <ProductionCardModal
-          cardId={selectedCard.id}
-          open={!!selectedCard}
-          onOpenChange={(open) => !open && setSelectedCard(null)}
+          cardId={selectedCard?.id || cardIdFromUrl!}
+          open={!!(selectedCard || cardIdFromUrl)}
+          onOpenChange={handleModalClose}
         />
       )}
 

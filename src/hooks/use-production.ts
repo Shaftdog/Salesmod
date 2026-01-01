@@ -561,10 +561,15 @@ export function useProductionBoardData() {
   return useQuery({
     queryKey: ['production-board'],
     queryFn: async () => {
+      // Get active cards (no completed_at) OR recently delivered cards (last 7 days)
+      const sevenDaysAgo = new Date()
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      const sevenDaysAgoStr = sevenDaysAgo.toISOString()
+
       const { data, error } = await supabase
         .from('production_cards')
         .select(PRODUCTION_CARD_SELECT)
-        .is('completed_at', null) // Only active cards
+        .or(`completed_at.is.null,and(current_stage.eq.DELIVERED,completed_at.gte.${sevenDaysAgoStr})`)
         .order('due_date', { ascending: true, nullsFirst: false })
 
       if (error) {
@@ -784,6 +789,11 @@ export function useUpdateProductionCard() {
 
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<ProductionCard> & { id: string }) => {
+      // If moving to DELIVERED, set completed_at timestamp
+      if (updates.current_stage === 'DELIVERED' && !updates.completed_at) {
+        updates.completed_at = new Date().toISOString()
+      }
+
       const { data, error } = await supabase
         .from('production_cards')
         .update(updates)

@@ -372,9 +372,19 @@
       "name": "Supabase Batch Query Pattern for RLS",
       "description": "Supabase query joins (e.g., client:clients(company_name)) may return empty results with authenticated client + RLS. Solution: 1) Query main table without joins, 2) Collect foreign key IDs into Sets, 3) Batch query related tables with .in('id', [...ids]), 4) Create Maps for O(1) lookup, 5) Map results together. This pattern is more verbose but works reliably with RLS.",
       "files": ["src/app/api/production/dashboard-metrics/drill-down/route.ts"]
+    },
+    {
+      "name": "Workflow Stage Skip Transitions",
+      "description": "When allowing users to skip workflow stages: 1) Define allowedSkips record mapping current stage to allowed skip targets, 2) Apply in BOTH drag-drop (kanban-board.tsx) AND modal buttons (production-card-modal.tsx), 3) Validate isForwardMove && (isAdjacentMove || isAllowedSkip), 4) Show skip options as secondary buttons with 'Skip to' label vs 'Move to' for normal transitions.",
+      "files": ["src/components/production/kanban-board.tsx", "src/components/production/production-card-modal.tsx"]
+    },
+    {
+      "name": "Auto-Set Timestamp on Status Change",
+      "description": "When records transition to a terminal/milestone state (DELIVERED, completed, etc.), auto-set the timestamp field in the mutation hook. Check if target state is reached AND timestamp is not already set, then set it. Also create backfill script for existing records that missed the timestamp.",
+      "files": ["src/hooks/use-production.ts"]
     }
   ],
-  "last_updated": "2025-12-28",
+  "last_updated": "2025-12-31",
   "session_learnings_2025_12_28_phase_review": {
     "context": "Admin Panel Reorganization - Phase Review for sidebar and route changes",
     "learnings": [
@@ -782,6 +792,104 @@
         "issue": "action-extractor.ts used action.description but schema only had rationale field",
         "solution": "Always verify that code references match actual Zod schema fields. Changed to use action.rationale for description.",
         "files": ["src/lib/research/action-extractor.ts"]
+      }
+    ]
+  },
+  "session_learnings_2025_12_31": {
+    "context": "Resource Tasks Kanban Board - 10-column kanban for task assignments with time-based and status-based columns",
+    "learnings": [
+      {
+        "topic": "Order Status Case Sensitivity",
+        "issue": "Dashboard metrics excluded ON_HOLD but orders had lowercase on_hold, causing filtered records to still appear",
+        "root_cause": "Orders table uses mixed case: 'cancelled', 'on_hold' (lowercase for original statuses) and 'CANCELLED', 'ON_HOLD' (uppercase for production card stages)",
+        "solution": "Include BOTH case variants in exclusion filters: excludedOrderStatuses = '(DELIVERED,REVISION,on_hold,ON_HOLD,WORKFILE,cancelled,CANCELLED)'",
+        "files": ["src/app/api/production/dashboard-metrics/route.ts", "src/app/api/production/dashboard-metrics/drill-down/route.ts"]
+      },
+      {
+        "topic": "Database Migration via pg Module",
+        "issue": "psql command not available on Windows, needed to run migration SQL",
+        "solution": "Use Node.js pg module directly: const client = new Client({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } }); await client.query(sql);",
+        "files": ["apply-migration.js"]
+      },
+      {
+        "topic": "Time-Based Kanban Column Logic",
+        "issue": "Needed to categorize pending tasks into NOT STARTED, NEXT DAY, TOMORROW, TODAY, OVERDUE",
+        "solution": "Calculate reference dates (today, tomorrow, nextDay) at midnight, compare task due_date: null or >nextDay = NOT_STARTED, =nextDay = NEXT_DAY, =tomorrow = TOMORROW, =today = TODAY, <today = OVERDUE",
+        "files": ["src/app/api/production/resource-tasks/route.ts"]
+      },
+      {
+        "topic": "Distinguishing ISSUES from IMPEDED Columns",
+        "issue": "Both use status='blocked' but need different columns",
+        "solution": "Add has_issue boolean flag to production_tasks. ISSUES = status='blocked' AND has_issue=true. IMPEDED = status='blocked' AND has_issue=false. When dropping to ISSUES, show dialog for issue_description.",
+        "files": ["supabase/migrations/20251231100000_add_task_issue_fields.sql", "src/types/production.ts"]
+      },
+      {
+        "topic": "CORRECTION Column Triggers Card Movement",
+        "issue": "Dropping to CORRECTION column should move the parent production card to CORRECTION stage",
+        "solution": "On drop to CORRECTION, call existing move_production_card RPC with target_stage='CORRECTION'. This reuses the production card workflow logic.",
+        "files": ["src/app/api/production/resource-tasks/[id]/route.ts"]
+      },
+      {
+        "topic": "TaskDetailDialog Props Interface",
+        "issue": "TypeScript error: 'taskId' does not exist on type, did you mean 'task'?",
+        "root_cause": "TaskDetailDialog expects a full task object with subtasks, time_entries, active_timer - not just a taskId",
+        "solution": "Pass full task object with required nested fields: task={{ ...selectedTask, subtasks: [], time_entries: [], active_timer: null }}",
+        "files": ["src/components/production/production-board-tabs.tsx"]
+      },
+      {
+        "topic": "Native HTML5 Drag-and-Drop Pattern",
+        "issue": "Needed consistent DnD across kanban boards without external library",
+        "solution": "Use useState for draggedItem, draggable attribute on cards, onDragStart/onDragOver/onDrop on columns. Check isDroppableColumn before allowing drop. Same pattern used in Cases, Production, and Agent kanban boards.",
+        "files": ["src/components/production/resource-tasks-kanban.tsx", "src/components/production/resource-task-column.tsx"]
+      }
+    ]
+  },
+  "session_learnings_2025_12_31_dashboard_metrics": {
+    "context": "Production Dashboard Metrics - delivery tracking, turn time calculation, skip stage workflow",
+    "learnings": [
+      {
+        "topic": "completed_at Field Must Be Set When Moving to DELIVERED",
+        "issue": "DELIVERED production cards had completed_at = NULL, causing turn time calculations to fail",
+        "root_cause": "The field existed but useUpdateProductionCard hook wasn't setting it when cards moved to DELIVERED stage",
+        "solution": "In useUpdateProductionCard, check if updates.current_stage === 'DELIVERED' and auto-set completed_at = new Date().toISOString(). Also backfill existing DELIVERED cards.",
+        "files": ["src/hooks/use-production.ts"]
+      },
+      {
+        "topic": "Turn Time Calculation Uses Production Card Timestamps",
+        "issue": "Dashboard needed accurate turn time (days from order entry to delivery)",
+        "solution": "Calculate turn time from production_cards.created_at to completed_at, NOT from order dates. This measures actual production throughput.",
+        "files": ["src/app/api/production/dashboard-metrics/route.ts"]
+      },
+      {
+        "topic": "Board Queries That Filter on completed_at Can Hide DELIVERED Cards",
+        "issue": "After setting completed_at on DELIVERED cards, they disappeared from the production board",
+        "root_cause": "Board query used .is('completed_at', null) to show only 'active' cards. Once completed_at was set, DELIVERED cards were excluded.",
+        "solution": "Use .or() filter to include completed_at IS NULL OR (stage=DELIVERED AND completed_at within last 7 days)",
+        "files": ["src/hooks/use-production.ts"]
+      },
+      {
+        "topic": "Cases Delivered vs Files Delivered Distinction",
+        "issue": "'Cases Delivered' metric was showing ALL delivered files, not just those with associated cases",
+        "solution": "Join production_cards → orders → cases and filter for orders that have at least one case. Cases Delivered ≠ Files Delivered.",
+        "files": ["src/app/api/production/dashboard-metrics/route.ts", "src/app/api/production/dashboard-metrics/drill-down/route.ts"]
+      },
+      {
+        "topic": "Stage Skip Options Must Be Defined in Multiple Locations",
+        "issue": "Kanban board allowed skipping CORRECTION→FINALIZATION via drag, but modal button only showed 'Move to Correction'",
+        "solution": "Define allowedSkips config in BOTH kanban-board.tsx (for drag-drop) AND production-card-modal.tsx (for button UI). Keep configurations synchronized.",
+        "files": ["src/components/production/kanban-board.tsx", "src/components/production/production-card-modal.tsx"]
+      },
+      {
+        "topic": "Skip Button UI Pattern",
+        "issue": "How to distinguish normal stage movement from skip options in UI",
+        "solution": "Render multiple buttons: first button says 'Move to [stage]' with primary styling, subsequent buttons say 'Skip to [stage]' with outline/secondary styling",
+        "files": ["src/components/production/production-card-modal.tsx"]
+      },
+      {
+        "topic": "PRODUCTION_STAGES Array Order Matters",
+        "issue": "CORRECTION was after FINALIZATION but should come before (correction happens before finalization)",
+        "solution": "Reorder PRODUCTION_STAGES array in production.ts AND task-library.ts to reflect actual workflow order. Array order drives kanban column order and stage transition validation.",
+        "files": ["src/types/production.ts", "src/types/task-library.ts"]
       }
     ]
   }

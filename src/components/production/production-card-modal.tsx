@@ -151,6 +151,25 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
   const canMoveToNextStage = data?.can_move_to_next_stage;
   const nextStage = card ? getNextStage(card.current_stage) : null;
 
+  // Define allowed skip transitions (same as kanban-board.tsx)
+  const allowedSkips: Record<string, ProductionStage[]> = {
+    'INSPECTED': ['FINALIZATION'], // Can skip CORRECTION and go directly to FINALIZATION
+  };
+
+  // Get all possible next stages (adjacent + skips)
+  const getPossibleNextStages = (): ProductionStage[] => {
+    if (!card) return [];
+    const stages: ProductionStage[] = [];
+    if (nextStage) stages.push(nextStage);
+    const skips = allowedSkips[card.current_stage] || [];
+    for (const skip of skips) {
+      if (!stages.includes(skip)) stages.push(skip);
+    }
+    return stages;
+  };
+
+  const possibleNextStages = getPossibleNextStages();
+
   const toggleStageExpanded = (stage: ProductionStage) => {
     setExpandedStages(prev => {
       const next = new Set(prev);
@@ -163,10 +182,10 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
     });
   };
 
-  const handleMoveToNextStage = async () => {
-    if (!card || !nextStage) return;
+  const handleMoveToStage = async (targetStage: ProductionStage) => {
+    if (!card) return;
     try {
-      await moveCard.mutateAsync({ cardId: card.id, targetStage: nextStage });
+      await moveCard.mutateAsync({ cardId: card.id, targetStage });
     } catch (error) {
       // Error handled by hook
     }
@@ -456,20 +475,29 @@ export function ProductionCardModal({ cardId, open, onOpenChange }: ProductionCa
               ) : (
                 /* Normal workflow - Move, Hold, Cancel buttons */
                 <div className="space-y-2">
-                  {nextStage && (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        onClick={handleMoveToNextStage}
-                        disabled={!canMoveToNextStage || moveCard.isPending}
-                        className="flex-1"
-                      >
-                        {moveCard.isPending ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 mr-2" />
-                        )}
-                        Move to {PRODUCTION_STAGE_LABELS[nextStage]}
-                      </Button>
+                  {possibleNextStages.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        {possibleNextStages.map((stage, index) => (
+                          <Button
+                            key={stage}
+                            onClick={() => handleMoveToStage(stage)}
+                            disabled={!canMoveToNextStage || moveCard.isPending}
+                            variant={index === 0 ? 'default' : 'outline'}
+                            className={cn(
+                              'flex-1',
+                              index > 0 && 'border-blue-300 text-blue-700 hover:bg-blue-50'
+                            )}
+                          >
+                            {moveCard.isPending ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 mr-2" />
+                            )}
+                            {index === 0 ? 'Move to' : 'Skip to'} {PRODUCTION_STAGE_LABELS[stage]}
+                          </Button>
+                        ))}
+                      </div>
                       {!canMoveToNextStage && (
                         <p className="text-xs text-amber-600">
                           Complete all required tasks first

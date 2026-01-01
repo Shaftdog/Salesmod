@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useCase, useUpdateCase, useCaseComments, useCreateCaseComment } from "@/hooks/use-cases";
+import { useCase, useUpdateCase, useCaseComments, useCreateCaseComment, useDeleteCase } from "@/hooks/use-cases";
 import { useCorrections, useCreateRevisionFromCase } from "@/hooks/use-corrections";
 import { createClient } from "@/lib/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -24,8 +24,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
-import { Loader2, Building2, FileText, User, Calendar, MessageSquare, CheckCircle, AlertCircle, ArrowLeft, LayoutGrid, Plus, Sparkles, CheckCircle2, ListTodo } from "lucide-react";
+import { Loader2, Building2, FileText, User, Calendar, MessageSquare, CheckCircle, AlertCircle, ArrowLeft, LayoutGrid, Plus, Sparkles, CheckCircle2, ListTodo, Trash2 } from "lucide-react";
 import { caseStatuses, casePriorities } from "@/lib/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -42,6 +52,7 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
   const [resolution, setResolution] = useState("");
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
   const [revisionDescription, setRevisionDescription] = useState("");
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // AI state
   const [aiSummary, setAiSummary] = useState<string | null>(null);
@@ -67,6 +78,7 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
   const updateCase = useUpdateCase();
   const createComment = useCreateCaseComment();
   const createRevision = useCreateRevisionFromCase();
+  const deleteCase = useDeleteCase();
   const queryClient = useQueryClient();
 
   const handleStatusChange = async (newStatus: string) => {
@@ -104,6 +116,13 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
       created_by: currentUser.id,
     });
     setNewComment("");
+  };
+
+  const handleDeleteCase = async () => {
+    if (!caseId) return;
+    await deleteCase.mutateAsync(caseId);
+    setShowDeleteDialog(false);
+    router.push('/cases');
   };
 
   const handleCreateRevision = async () => {
@@ -561,6 +580,18 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
                   </Button>
                 </div>
               )}
+
+              {/* Delete Case Button */}
+              <div className="pt-2 border-t">
+                <Button
+                  onClick={() => setShowDeleteDialog(true)}
+                  variant="outline"
+                  className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Case
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -740,6 +771,29 @@ export default function CaseDetailsPage({ params }: { params: Promise<{ id: stri
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Case</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete case {caseData.caseNumber}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteCase}
+              disabled={deleteCase.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteCase.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

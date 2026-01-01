@@ -106,12 +106,20 @@ export function ProductionKanbanBoard({ onCardClick }: ProductionKanbanBoardProp
     const currentIndex = workflowStages.indexOf(draggedCard.current_stage);
     const targetIndex = workflowStages.indexOf(targetStage);
 
-    // For now, only allow moving to adjacent stages
-    // In the future, could allow skipping with confirmation
-    if (Math.abs(targetIndex - currentIndex) > 1) {
+    // Define allowed skip transitions (can skip certain stages)
+    const allowedSkips: Record<string, string[]> = {
+      'INSPECTED': ['CORRECTION', 'FINALIZATION'], // Can skip CORRECTION and go directly to FINALIZATION
+    };
+
+    // Check if this is a valid move
+    const isAdjacentMove = Math.abs(targetIndex - currentIndex) === 1;
+    const isAllowedSkip = allowedSkips[draggedCard.current_stage]?.includes(targetStage);
+    const isForwardMove = targetIndex > currentIndex;
+
+    if (!isAdjacentMove && !(isAllowedSkip && isForwardMove)) {
       toast({
         title: 'Invalid Move',
-        description: 'Cards can only move to adjacent stages.',
+        description: 'Cards can only move to adjacent stages or allowed skip stages.',
         variant: 'destructive',
       });
       setDraggedCard(null);

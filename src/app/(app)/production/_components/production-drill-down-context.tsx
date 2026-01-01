@@ -22,7 +22,9 @@ export type ProductionDrillDownType =
   | "valueDeliveredToday"
   | "deliveredPast7Days"
   | "valueDeliveredPast7Days"
-  | "avgTurnTime1Week"
+  | "deliveredPast30Days"
+  | "valueDeliveredPast30Days"
+  | "avgTurnTime7Days"
   | "avgTurnTime30Days";
 
 export interface DrillDownConfig {
@@ -140,19 +142,27 @@ export const DRILL_DOWN_CONFIGS: Record<ProductionDrillDownType, { title: string
     description: "Total value of orders delivered today",
   },
   deliveredPast7Days: {
-    title: "Delivered Past 7 Days",
-    description: "Orders delivered in the past week",
+    title: "Files Delivered (Past 7 Days)",
+    description: "Production cards delivered in the past week",
   },
   valueDeliveredPast7Days: {
-    title: "Value Delivered Past 7 Days",
-    description: "Total value delivered in the past week",
+    title: "Value Delivered (Past 7 Days)",
+    description: "Total value of files delivered in the past week",
   },
-  avgTurnTime1Week: {
-    title: "Average Turn Time (1 Week)",
-    description: "Average completion time for orders in the past week",
+  deliveredPast30Days: {
+    title: "Files Delivered (Past 30 Days)",
+    description: "Production cards delivered in the past 30 days",
+  },
+  valueDeliveredPast30Days: {
+    title: "Value Delivered (Past 30 Days)",
+    description: "Total value of files delivered in the past 30 days",
+  },
+  avgTurnTime7Days: {
+    title: "Avg Turn Time (7 Days)",
+    description: "Average production time from card creation to delivery (past 7 days)",
   },
   avgTurnTime30Days: {
-    title: "Average Turn Time (30 Days)",
-    description: "Average completion time for orders in the past 30 days",
+    title: "Avg Turn Time (30 Days)",
+    description: "Average production time from card creation to delivery (past 30 days)",
   },
 };

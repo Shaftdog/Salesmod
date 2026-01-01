@@ -75,6 +75,8 @@ function formatDate(dateString: string | null | undefined): string {
 
 // Determine if this metric shows orders or cases
 function showsCases(type: ProductionDrillDownType): boolean {
+  // casesDelivered returns orders (production cards delivered), not case records
+  if (type === "casesDelivered") return false;
   return type.startsWith("cases");
 }
 
