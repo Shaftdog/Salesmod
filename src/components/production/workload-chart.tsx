@@ -203,13 +203,23 @@ export function WorkloadChart() {
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-semibold">{getPeriodDisplayText()}</h2>
           <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" onClick={goToPrevious}>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={goToPrevious}
+              aria-label={`Previous ${period}`}
+            >
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <Button variant="outline" size="sm" onClick={goToToday}>
               Today
             </Button>
-            <Button variant="outline" size="icon" onClick={goToNext}>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={goToNext}
+              aria-label={`Next ${period}`}
+            >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -217,7 +227,7 @@ export function WorkloadChart() {
           {/* Date Picker */}
           <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" aria-label="Select date">
                 <CalendarIcon className="h-4 w-4" />
               </Button>
             </PopoverTrigger>

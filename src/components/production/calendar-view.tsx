@@ -141,13 +141,23 @@ export function CalendarView({ onCardClick }: CalendarViewProps) {
             }
           </h2>
           <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" onClick={goToPrevious}>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={goToPrevious}
+              aria-label={`Previous ${viewMode}`}
+            >
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <Button variant="outline" size="sm" onClick={goToToday}>
               Today
             </Button>
-            <Button variant="outline" size="icon" onClick={goToNext}>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={goToNext}
+              aria-label={`Next ${viewMode}`}
+            >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
