@@ -2,6 +2,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { Task } from "@/lib/types";
 import { Calendar, User, AlertCircle, CheckCircle2, Trash2 } from "lucide-react";
 import { format, isPast, isToday } from "date-fns";
@@ -102,17 +107,25 @@ export function TaskCard({ task, onComplete, onEdit, onDelete, showClient = true
 
           {/* Delete button - appears on hover */}
           {onDelete && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(task);
-              }}
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity absolute top-2 right-2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(task);
+                  }}
+                  aria-label="Delete task"
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Delete task</p>
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
       </CardContent>
