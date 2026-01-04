@@ -111,10 +111,11 @@ export function ContactCard({ contact, onEdit, onDelete }: ContactCardProps) {
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="icon"
                 onClick={(e) => e.stopPropagation()}
+                aria-label={`Actions for ${fullName}`}
               >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
