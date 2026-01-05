@@ -781,20 +781,33 @@ export function useMoveProductionCard() {
 
       if (error) throw error
 
-      // When moving to DELIVERED, update the order status and delivered_date
+      // When moving to DELIVERED, update order and set completed_at on card
       if (targetStage === 'DELIVERED' && card?.order_id) {
-        const today = new Date().toISOString().split('T')[0]
+        const now = new Date().toISOString()
+        const today = now.split('T')[0]
+
+        // Update order status and delivered_date
         const { error: orderError } = await supabase
           .from('orders')
           .update({
             status: 'DELIVERED',
             delivered_date: today,
-            updated_at: new Date().toISOString(),
+            updated_at: now,
           })
           .eq('id', card.order_id)
 
         if (orderError) {
           console.error('Error updating order delivered status:', orderError)
+        }
+
+        // Set completed_at on the production card (needed for delivered metrics)
+        const { error: completedError } = await supabase
+          .from('production_cards')
+          .update({ completed_at: now })
+          .eq('id', cardId)
+
+        if (completedError) {
+          console.error('Error setting card completed_at:', completedError)
         }
       }
 
