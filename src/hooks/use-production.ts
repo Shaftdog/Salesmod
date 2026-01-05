@@ -764,6 +764,15 @@ export function useMoveProductionCard() {
 
   return useMutation({
     mutationFn: async ({ cardId, targetStage }: { cardId: string; targetStage: ProductionStage }) => {
+      // Get the card to find the order_id
+      const { data: card, error: cardError } = await supabase
+        .from('production_cards')
+        .select('order_id')
+        .eq('id', cardId)
+        .single()
+
+      if (cardError) throw cardError
+
       // Use the database function for safe stage transitions
       const { error } = await supabase.rpc('move_production_card', {
         p_card_id: cardId,
@@ -771,6 +780,38 @@ export function useMoveProductionCard() {
       })
 
       if (error) throw error
+
+      // When moving to DELIVERED, update the order status and delivered_date
+      if (targetStage === 'DELIVERED' && card?.order_id) {
+        const today = new Date().toISOString().split('T')[0]
+        const { error: orderError } = await supabase
+          .from('orders')
+          .update({
+            status: 'DELIVERED',
+            delivered_date: today,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', card.order_id)
+
+        if (orderError) {
+          console.error('Error updating order delivered status:', orderError)
+        }
+      }
+
+      // When moving to READY_FOR_DELIVERY, update order status
+      if (targetStage === 'READY_FOR_DELIVERY' && card?.order_id) {
+        const { error: orderError } = await supabase
+          .from('orders')
+          .update({
+            status: 'READY_FOR_DELIVERY',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', card.order_id)
+
+        if (orderError) {
+          console.error('Error updating order status:', orderError)
+        }
+      }
 
       // Generate tasks for new stage if not already processed
       const { error: genError } = await supabase.rpc('generate_stage_tasks', {

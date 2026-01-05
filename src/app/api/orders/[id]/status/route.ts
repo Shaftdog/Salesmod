@@ -53,14 +53,22 @@ export async function PATCH(
       return NextResponse.json({ error: "User profile not found" }, { status: 400 });
     }
 
+    // Prepare update data
+    const updateData: Record<string, any> = {
+      status,
+      notes: notes || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Set delivered_date when status changes to delivered/DELIVERED
+    if (status.toLowerCase() === 'delivered') {
+      updateData.delivered_date = new Date().toISOString().split('T')[0];
+    }
+
     // Verify order belongs to this tenant and update it
     const { data: order, error: updateError } = await supabase
       .from("orders")
-      .update({
-        status,
-        notes: notes || null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq("id", id)
       .eq("tenant_id", profile.tenant_id)
       .select()
