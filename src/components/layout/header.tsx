@@ -273,6 +273,7 @@ function Header() {
             variant="outline"
             size="icon"
             className="overflow-hidden rounded-full"
+            aria-label="User menu"
           >
             <Avatar className="h-8 w-8">
               {currentUser?.avatarUrl && <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} />}

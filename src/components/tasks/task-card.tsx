@@ -105,11 +105,13 @@ export function TaskCard({ task, onComplete, onEdit, onDelete, showClient = true
             <Button
               variant="ghost"
               size="icon"
-              className="opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2"
+              className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity absolute top-2 right-2"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(task);
               }}
+              aria-label="Delete task"
+              title="Delete task"
             >
               <Trash2 className="h-4 w-4 text-destructive" />
             </Button>
@@ -119,4 +121,3 @@ export function TaskCard({ task, onComplete, onEdit, onDelete, showClient = true
     </Card>
   );
 }
-
