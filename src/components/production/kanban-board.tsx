@@ -282,8 +282,16 @@ function ProductionCardItem({ card, onDragStart, onClick, isDragging }: Producti
       draggable
       onDragStart={() => onDragStart(card)}
       onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       className={cn(
-        'cursor-pointer hover:shadow-md transition-all border-l-4',
+        'cursor-pointer hover:shadow-md transition-all border-l-4 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none',
         PRIORITY_COLORS[card.priority].replace('bg-', 'border-l-').replace('text-', ''),
         isDragging && 'opacity-50 scale-95',
         isOverdue && 'ring-2 ring-red-300'
