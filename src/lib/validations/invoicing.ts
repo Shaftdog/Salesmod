@@ -110,6 +110,14 @@ export const CreateInvoiceSchema = z.object({
   cod_collection_method: CodCollectionMethodSchema.optional(),
   cod_notes: z.string().max(1000).transform(sanitizeText).optional(),
 
+  // Payer fields - when set, shows separate "Ordered By" (client) and "Bill To" (payer) on invoice
+  // Common in appraisal workflows where borrower pays but order is from lender/AMC
+  payer_name: z.string().max(200).transform(sanitizeText).optional(),
+  payer_company: z.string().max(200).transform(sanitizeText).optional(),
+  payer_email: z.string().email().optional(),
+  payer_phone: z.string().max(50).transform(sanitizeText).optional(),
+  payer_address: z.string().max(500).transform(sanitizeText).optional(),
+
   // Line items (required)
   line_items: z.array(CreateLineItemSchema).min(1, 'At least one line item is required'),
 }).superRefine((data, ctx) => {
@@ -167,6 +175,13 @@ export const UpdateInvoiceSchema = z.object({
   cod_collected_at: z.string().datetime().optional(),
   cod_receipt_number: z.string().max(100).transform(sanitizeText).optional(),
   cod_notes: z.string().max(1000).transform(sanitizeText).optional(),
+
+  // Payer fields - when set, shows separate "Ordered By" (client) and "Bill To" (payer) on invoice
+  payer_name: z.string().max(200).transform(sanitizeText).optional().nullable(),
+  payer_company: z.string().max(200).transform(sanitizeText).optional().nullable(),
+  payer_email: z.string().email().optional().nullable(),
+  payer_phone: z.string().max(50).transform(sanitizeText).optional().nullable(),
+  payer_address: z.string().max(500).transform(sanitizeText).optional().nullable(),
 });
 
 // =============================================

@@ -52,6 +52,11 @@ export async function GET(
         view_count,
         first_viewed_at,
         stripe_payment_link,
+        payer_name,
+        payer_company,
+        payer_email,
+        payer_phone,
+        payer_address,
         client:clients(
           id,
           company_name,

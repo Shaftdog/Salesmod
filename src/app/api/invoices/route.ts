@@ -209,6 +209,12 @@ export async function POST(request: NextRequest) {
         cod_collected_by: body.cod_collected_by,
         cod_collection_method: body.cod_collection_method,
         cod_notes: body.cod_notes,
+        // Payer fields - for separate "Bill To" entity
+        payer_name: body.payer_name,
+        payer_company: body.payer_company,
+        payer_email: body.payer_email,
+        payer_phone: body.payer_phone,
+        payer_address: body.payer_address,
         created_by: orgId,
         updated_by: orgId,
       })

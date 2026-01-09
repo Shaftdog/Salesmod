@@ -17,6 +17,9 @@ interface InvoiceEmailData {
     unitPrice: number;
     amount: number;
   }>;
+  // Payer fields - when set, shows separate "Bill To" info in email
+  payerName?: string;
+  payerCompany?: string;
 }
 
 /**
@@ -61,7 +64,13 @@ export function generateInvoiceEmailHtml(data: InvoiceEmailData): string {
     orgName,
     orgEmail,
     lineItems = [],
+    payerName,
+    payerCompany,
   } = data;
+
+  // Determine if there's a separate payer (Bill To) party
+  const hasSeparatePayer = payerName || payerCompany;
+  const payerDisplay = payerCompany || payerName;
 
   const lineItemsHtml = lineItems.length > 0
     ? `
@@ -119,6 +128,21 @@ export function generateInvoiceEmailHtml(data: InvoiceEmailData): string {
                 Please find attached your invoice for ${formatCurrency(totalAmount)}.
                 Payment is due by <strong>${formatDate(dueDate)}</strong>.
               </p>
+              ${hasSeparatePayer ? `
+              <table style="margin-top: 20px; width: 100%;">
+                <tr>
+                  <td style="width: 50%; vertical-align: top; padding-right: 10px;">
+                    <p style="margin: 0; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Ordered By</p>
+                    <p style="margin: 4px 0 0; font-size: 14px; color: #374151; font-weight: 600;">${escapeHtml(clientName)}</p>
+                  </td>
+                  <td style="width: 50%; vertical-align: top; padding-left: 10px;">
+                    <p style="margin: 0; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Bill To</p>
+                    <p style="margin: 4px 0 0; font-size: 14px; color: #374151; font-weight: 600;">${escapeHtml(payerDisplay || '')}</p>
+                    ${payerCompany && payerName ? `<p style="margin: 2px 0 0; font-size: 13px; color: #6b7280;">${escapeHtml(payerName)}</p>` : ''}
+                  </td>
+                </tr>
+              </table>
+              ` : ''}
             </td>
           </tr>
 
@@ -207,11 +231,23 @@ export function generateInvoiceEmailText(data: InvoiceEmailData): string {
     dueDate,
     viewUrl,
     orgName,
+    payerName,
+    payerCompany,
   } = data;
 
   // Plain text doesn't need HTML escaping, but sanitize for safety
   const safeOrgName = String(orgName).replace(/[<>]/g, '');
   const safeClientName = String(clientName).replace(/[<>]/g, '');
+
+  // Determine if there's a separate payer (Bill To) party
+  const hasSeparatePayer = payerName || payerCompany;
+  const payerDisplay = payerCompany || payerName;
+  const safePayerDisplay = payerDisplay ? String(payerDisplay).replace(/[<>]/g, '') : '';
+
+  const payerSection = hasSeparatePayer ? `
+Ordered By: ${safeClientName}
+Bill To: ${safePayerDisplay}
+` : '';
 
   return `
 ${safeOrgName}
@@ -221,7 +257,7 @@ Dear ${safeClientName},
 
 Please find your invoice for ${formatCurrency(totalAmount)}.
 Payment is due by ${formatDate(dueDate)}.
-
+${payerSection}
 Invoice Number: ${invoiceNumber}
 Due Date: ${formatDate(dueDate)}
 Amount Due: ${formatCurrency(totalAmount)}

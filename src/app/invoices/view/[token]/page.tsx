@@ -47,6 +47,12 @@ interface Invoice {
     phone?: string;
     address?: string;
   };
+  // Payer fields - when populated, shows separate "Bill To" section
+  payer_name?: string;
+  payer_company?: string;
+  payer_email?: string;
+  payer_phone?: string;
+  payer_address?: string;
   line_items: LineItem[];
   org: {
     name: string;
@@ -240,40 +246,97 @@ export default function PublicInvoiceViewPage() {
         {/* Main Invoice Card */}
         <Card>
           <CardContent className="pt-6">
-            {/* Bill To / Invoice Details */}
-            <div className="grid md:grid-cols-2 gap-6 mb-8">
-              <div>
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  Bill To
-                </h3>
-                <p className="font-semibold text-lg">{invoice.client?.company_name}</p>
-                {invoice.client?.email && (
-                  <p className="text-muted-foreground">{invoice.client.email}</p>
-                )}
-                {invoice.client?.phone && (
-                  <p className="text-muted-foreground">{invoice.client.phone}</p>
-                )}
-                {invoice.client?.address && (
-                  <p className="text-muted-foreground whitespace-pre-line">{invoice.client.address}</p>
-                )}
-              </div>
-              <div className="md:text-right">
-                <div className="space-y-2">
-                  <div>
-                    <span className="text-sm text-muted-foreground">Invoice Date: </span>
-                    <span className="font-medium">
-                      {format(new Date(invoice.invoice_date), 'MMMM d, yyyy')}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-sm text-muted-foreground">Due Date: </span>
-                    <span className={`font-medium ${isOverdue ? 'text-red-600' : ''}`}>
-                      {format(new Date(invoice.due_date), 'MMMM d, yyyy')}
-                    </span>
+            {/* Ordered By / Bill To / Invoice Details */}
+            {/* When payer fields are set, show both "Ordered By" (client) and "Bill To" (payer) */}
+            {/* When no payer, show only "Bill To" with client info */}
+            {(invoice.payer_name || invoice.payer_company) ? (
+              // Payer exists - show both sections
+              <div className="grid md:grid-cols-3 gap-6 mb-8">
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                    Ordered By
+                  </h3>
+                  <p className="font-semibold text-lg">{invoice.client?.company_name}</p>
+                  {invoice.client?.email && (
+                    <p className="text-muted-foreground">{invoice.client.email}</p>
+                  )}
+                  {invoice.client?.phone && (
+                    <p className="text-muted-foreground">{invoice.client.phone}</p>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                    Bill To
+                  </h3>
+                  <p className="font-semibold text-lg">
+                    {invoice.payer_company || invoice.payer_name}
+                  </p>
+                  {invoice.payer_company && invoice.payer_name && (
+                    <p className="text-muted-foreground">{invoice.payer_name}</p>
+                  )}
+                  {invoice.payer_email && (
+                    <p className="text-muted-foreground">{invoice.payer_email}</p>
+                  )}
+                  {invoice.payer_phone && (
+                    <p className="text-muted-foreground">{invoice.payer_phone}</p>
+                  )}
+                  {invoice.payer_address && (
+                    <p className="text-muted-foreground whitespace-pre-line">{invoice.payer_address}</p>
+                  )}
+                </div>
+                <div className="md:text-right">
+                  <div className="space-y-2">
+                    <div>
+                      <span className="text-sm text-muted-foreground">Invoice Date: </span>
+                      <span className="font-medium">
+                        {format(new Date(invoice.invoice_date), 'MMMM d, yyyy')}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-sm text-muted-foreground">Due Date: </span>
+                      <span className={`font-medium ${isOverdue ? 'text-red-600' : ''}`}>
+                        {format(new Date(invoice.due_date), 'MMMM d, yyyy')}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              // No payer - traditional layout with client as Bill To
+              <div className="grid md:grid-cols-2 gap-6 mb-8">
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                    Bill To
+                  </h3>
+                  <p className="font-semibold text-lg">{invoice.client?.company_name}</p>
+                  {invoice.client?.email && (
+                    <p className="text-muted-foreground">{invoice.client.email}</p>
+                  )}
+                  {invoice.client?.phone && (
+                    <p className="text-muted-foreground">{invoice.client.phone}</p>
+                  )}
+                  {invoice.client?.address && (
+                    <p className="text-muted-foreground whitespace-pre-line">{invoice.client.address}</p>
+                  )}
+                </div>
+                <div className="md:text-right">
+                  <div className="space-y-2">
+                    <div>
+                      <span className="text-sm text-muted-foreground">Invoice Date: </span>
+                      <span className="font-medium">
+                        {format(new Date(invoice.invoice_date), 'MMMM d, yyyy')}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-sm text-muted-foreground">Due Date: </span>
+                      <span className={`font-medium ${isOverdue ? 'text-red-600' : ''}`}>
+                        {format(new Date(invoice.due_date), 'MMMM d, yyyy')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <Separator className="my-6" />
 

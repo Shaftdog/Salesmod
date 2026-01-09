@@ -51,11 +51,16 @@ export async function POST(
     // Verify invoice exists and belongs to tenant
     await verifyTenantResourceOwnership(supabase, 'invoices', id, tenantId);
 
-    // Fetch invoice with client and billing contact info
+    // Fetch invoice with client, billing contact, and payer info
     const { data: invoice, error: fetchError } = await supabase
       .from('invoices')
       .select(`
         *,
+        payer_name,
+        payer_company,
+        payer_email,
+        payer_phone,
+        payer_address,
         client:clients(
           id,
           company_name,
@@ -156,6 +161,9 @@ export async function POST(
         unitPrice: item.unit_price,
         amount: item.amount,
       })),
+      // Payer fields - shows "Ordered By" / "Bill To" sections when payer is different from client
+      payerName: invoice.payer_name,
+      payerCompany: invoice.payer_company,
     });
     const emailText = generateInvoiceEmailText({
       invoiceNumber: invoice.invoice_number,
@@ -165,6 +173,9 @@ export async function POST(
       viewUrl,
       orgName,
       orgEmail,
+      // Payer fields - shows "Ordered By" / "Bill To" sections when payer is different from client
+      payerName: invoice.payer_name,
+      payerCompany: invoice.payer_company,
     });
 
     // Build email payload for central gate
