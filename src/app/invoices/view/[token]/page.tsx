@@ -263,6 +263,9 @@ export default function PublicInvoiceViewPage() {
                   {invoice.client?.phone && (
                     <p className="text-muted-foreground">{invoice.client.phone}</p>
                   )}
+                  {invoice.client?.address && (
+                    <p className="text-muted-foreground whitespace-pre-line">{invoice.client.address}</p>
+                  )}
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
