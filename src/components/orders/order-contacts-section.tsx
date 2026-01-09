@@ -88,6 +88,7 @@ export function OrderContactsSection({ orderId }: OrderContactsSectionProps) {
   // Form state
   const [newContact, setNewContact] = useState({
     fullName: "",
+    title: "",
     email: "",
     phone: "",
     role: "cc",
@@ -131,6 +132,7 @@ export function OrderContactsSection({ orderId }: OrderContactsSectionProps) {
         body: JSON.stringify({
           contacts: [{
             fullName: newContact.fullName,
+            title: newContact.title || null,
             email: newContact.email || null,
             phone: newContact.phone || null,
             role: newContact.role,
@@ -141,7 +143,7 @@ export function OrderContactsSection({ orderId }: OrderContactsSectionProps) {
       if (response.ok) {
         toast.success("Contact added successfully");
         setAddDialogOpen(false);
-        setNewContact({ fullName: "", email: "", phone: "", role: "cc" });
+        setNewContact({ fullName: "", title: "", email: "", phone: "", role: "cc" });
         fetchContacts();
       } else {
         const error = await response.json();
@@ -222,6 +224,7 @@ export function OrderContactsSection({ orderId }: OrderContactsSectionProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
+                  <TableHead>Title</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
@@ -233,11 +236,9 @@ export function OrderContactsSection({ orderId }: OrderContactsSectionProps) {
                   <TableRow key={`${oc.contactId}-${oc.roleCode}`}>
                     <TableCell className="font-medium">
                       {oc.contact?.fullName || "Unknown"}
-                      {oc.contact?.title && (
-                        <span className="text-xs text-muted-foreground ml-2">
-                          ({oc.contact.title})
-                        </span>
-                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {oc.contact?.title || "-"}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -312,6 +313,15 @@ export function OrderContactsSection({ orderId }: OrderContactsSectionProps) {
                 value={newContact.fullName}
                 onChange={(e) => setNewContact({ ...newContact, fullName: e.target.value })}
                 placeholder="John Smith"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="title">Title</Label>
+              <Input
+                id="title"
+                value={newContact.title}
+                onChange={(e) => setNewContact({ ...newContact, title: e.target.value })}
+                placeholder="e.g., Loan Officer, Account Manager, VP Operations"
               />
             </div>
             <div className="grid gap-2">

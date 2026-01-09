@@ -26,12 +26,15 @@ export const ORDER_CONTACT_ROLES = {
   REALTOR: 'realtor',
   LISTING_AGENT: 'listing_agent',
   BUYING_AGENT: 'buying_agent',
+  CC: 'cc',
+  ORDERER: 'orderer',
 } as const;
 
 export type OrderContactRole = typeof ORDER_CONTACT_ROLES[keyof typeof ORDER_CONTACT_ROLES];
 
 export interface OrderContactInput {
   fullName: string;
+  title?: string | null;
   email?: string | null;
   phone?: string | null;
   role: OrderContactRole;
@@ -194,6 +197,7 @@ async function createSingleOrderContact(
       ...contact,
       email: enrichedData.email || contact.email,
       phone: enrichedData.phone || contact.phone,
+      title: enrichedData.title || contact.title,
     };
 
     const revalidation = validateContact(enrichedContact);
@@ -259,6 +263,7 @@ async function createSingleOrderContact(
       const updateData: Record<string, any> = { updated_at: new Date().toISOString() };
       if (email) updateData.email = email;
       if (phone) updateData.phone = phone;
+      if (contact.title) updateData.title = contact.title;
       if (!updateData.primary_role_code) updateData.primary_role_code = contact.role;
 
       await supabase
@@ -277,6 +282,7 @@ async function createSingleOrderContact(
           last_name: lastName,
           email: email,
           phone: phone,
+          title: contact.title || null,
           primary_role_code: contact.role,
           is_primary: false,
           tenant_id: tenantId,
@@ -300,10 +306,10 @@ async function createSingleOrderContact(
         order_id: orderId,
         contact_id: contactId,
         role_code: contact.role,
-        is_primary: true,
+        is_primary: false,
         tenant_id: tenantId,
       }, {
-        onConflict: 'order_id,role_code',
+        onConflict: 'order_id,contact_id',
       });
 
     if (linkError) {

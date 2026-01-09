@@ -11,6 +11,7 @@ import {
 
 const contactInputSchema = z.object({
   fullName: z.string().min(1, "Full name is required"),
+  title: z.string().nullable().optional(),
   email: z.string().email().nullable().optional(),
   phone: z.string().nullable().optional(),
   role: z.enum([
@@ -21,6 +22,8 @@ const contactInputSchema = z.object({
     ORDER_CONTACT_ROLES.REALTOR,
     ORDER_CONTACT_ROLES.LISTING_AGENT,
     ORDER_CONTACT_ROLES.BUYING_AGENT,
+    "cc",
+    "orderer",
   ]),
   companyName: z.string().nullable().optional(),
 });
