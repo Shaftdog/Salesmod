@@ -72,9 +72,40 @@ export async function GET(
     // Create service role client to bypass RLS
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Find the invoice by view token
+    // Check if this is an email-specific token (starts with "e_")
+    const isEmailToken = token.startsWith('e_');
+    let emailTokenRecord: {
+      id: string;
+      invoice_id: string;
+      recipient_email: string;
+      recipient_name: string | null;
+      recipient_role: string | null;
+    } | null = null;
+    let invoiceId: string | null = null;
+
+    if (isEmailToken) {
+      // Look up the email token to get invoice_id and recipient info
+      const { data: emailToken, error: emailTokenError } = await supabase
+        .from('invoice_email_tokens')
+        .select('id, invoice_id, recipient_email, recipient_name, recipient_role')
+        .eq('token', token)
+        .single();
+
+      if (emailTokenError || !emailToken) {
+        console.error('Email token lookup error:', emailTokenError);
+        return NextResponse.json(
+          { error: 'Invoice not found' },
+          { status: 404 }
+        );
+      }
+
+      emailTokenRecord = emailToken;
+      invoiceId = emailToken.invoice_id;
+    }
+
+    // Find the invoice by view token or by ID (if using email token)
     // Note: Use !invoices_org_id_fkey to specify the FK relationship
-    const { data: invoice, error: fetchError } = await supabase
+    const invoiceQuery = supabase
       .from('invoices')
       .select(`
         id,
@@ -120,9 +151,12 @@ export async function GET(
           name,
           email
         )
-      `)
-      .eq('view_token', token)
-      .single();
+      `);
+
+    // Query by invoice ID if we have it from email token, otherwise by view_token
+    const { data: invoice, error: fetchError } = invoiceId
+      ? await invoiceQuery.eq('id', invoiceId).single()
+      : await invoiceQuery.eq('view_token', token).single();
 
     if (fetchError || !invoice) {
       console.error('Invoice lookup error:', fetchError);
@@ -154,7 +188,7 @@ export async function GET(
       .eq('id', invoice.id)
       .single();
 
-    // Log the view to invoice_views table
+    // Log the view to invoice_views table (with email token if available)
     const { error: viewError } = await supabase
       .from('invoice_views')
       .insert({
@@ -166,11 +200,30 @@ export async function GET(
         browser: browser,
         os: os,
         is_internal: false, // Public view
+        email_token_id: emailTokenRecord?.id || null,
       });
 
     if (viewError) {
       console.error('Error logging invoice view:', viewError);
       // Don't fail the request, just log the error
+    }
+
+    // If this is an email token view, update the email token's view tracking
+    if (emailTokenRecord) {
+      // Get current view count to increment
+      const { data: currentToken } = await supabase
+        .from('invoice_email_tokens')
+        .select('view_count, first_viewed_at')
+        .eq('id', emailTokenRecord.id)
+        .single();
+
+      await supabase
+        .from('invoice_email_tokens')
+        .update({
+          view_count: (currentToken?.view_count || 0) + 1,
+          first_viewed_at: currentToken?.first_viewed_at || new Date().toISOString(),
+        })
+        .eq('id', emailTokenRecord.id);
     }
 
     // Update view tracking and status on the invoice

@@ -82,6 +82,11 @@ export default function InvoiceDetailPage() {
     browser: string | null;
     os: string | null;
     is_internal: boolean;
+    email_token?: {
+      recipient_email: string;
+      recipient_name: string | null;
+      recipient_role: string | null;
+    } | null;
   }[]>([]);
   const [isLoadingViews, setIsLoadingViews] = useState(false);
 
@@ -837,11 +842,10 @@ export default function InvoiceDetailPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Date & Time</TableHead>
+                  <TableHead>Recipient</TableHead>
                   <TableHead>Device</TableHead>
                   <TableHead>Browser</TableHead>
-                  <TableHead>OS</TableHead>
                   <TableHead>IP Address</TableHead>
-                  <TableHead>Type</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -851,6 +855,35 @@ export default function InvoiceDetailPage() {
                       {new Date(view.viewed_at).toLocaleString()}
                     </TableCell>
                     <TableCell>
+                      {view.email_token ? (
+                        <div className="space-y-0.5">
+                          <div className="font-medium">
+                            {view.email_token.recipient_name || view.email_token.recipient_email}
+                          </div>
+                          {view.email_token.recipient_name && (
+                            <div className="text-xs text-muted-foreground">
+                              {view.email_token.recipient_email}
+                            </div>
+                          )}
+                          {view.email_token.recipient_role && (
+                            <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium ${
+                              view.email_token.recipient_role === 'borrower'
+                                ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300'
+                                : view.email_token.recipient_role === 'billing_contact'
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                                : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                            }`}>
+                              {view.email_token.recipient_role.replace('_', ' ')}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">
+                          {view.is_internal ? 'Internal user' : 'Unknown (legacy)'}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       <div className="flex items-center gap-1.5">
                         {view.device_type === 'mobile' && <Smartphone className="h-4 w-4 text-muted-foreground" />}
                         {view.device_type === 'tablet' && <Tablet className="h-4 w-4 text-muted-foreground" />}
@@ -858,18 +891,13 @@ export default function InvoiceDetailPage() {
                         <span className="capitalize">{view.device_type || 'Unknown'}</span>
                       </div>
                     </TableCell>
-                    <TableCell>{view.browser || 'Unknown'}</TableCell>
-                    <TableCell>{view.os || 'Unknown'}</TableCell>
-                    <TableCell className="font-mono text-xs">{view.ip_address || 'Unknown'}</TableCell>
                     <TableCell>
-                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                        view.is_internal
-                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                          : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                      }`}>
-                        {view.is_internal ? 'Internal' : 'Client'}
-                      </span>
+                      <div className="space-y-0.5">
+                        <div>{view.browser || 'Unknown'}</div>
+                        <div className="text-xs text-muted-foreground">{view.os || 'Unknown'}</div>
+                      </div>
                     </TableCell>
+                    <TableCell className="font-mono text-xs">{view.ip_address || 'Unknown'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

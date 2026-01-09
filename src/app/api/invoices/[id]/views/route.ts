@@ -43,7 +43,7 @@ export async function GET(
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
-    // Get view history
+    // Get view history with email token recipient info
     const { data: views, error: viewsError } = await supabase
       .from('invoice_views')
       .select(`
@@ -58,7 +58,14 @@ export async function GET(
         region,
         country,
         is_internal,
-        viewer_user_id
+        viewer_user_id,
+        email_token_id,
+        email_token:invoice_email_tokens(
+          id,
+          recipient_email,
+          recipient_name,
+          recipient_role
+        )
       `)
       .eq('invoice_id', id)
       .order('viewed_at', { ascending: false });

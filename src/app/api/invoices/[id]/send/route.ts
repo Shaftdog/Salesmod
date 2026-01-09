@@ -29,6 +29,11 @@ function generateViewToken(): string {
   return randomBytes(32).toString('hex');
 }
 
+// Generate a shorter token for email-specific tracking (prefixed for identification)
+function generateEmailToken(): string {
+  return 'e_' + randomBytes(24).toString('hex');
+}
+
 // =============================================
 // POST /api/invoices/[id]/send
 // =============================================
@@ -122,12 +127,42 @@ export async function POST(
       );
     }
 
-    // Generate view token if not already set
+    // Generate view token if not already set (kept for backwards compatibility)
     const viewToken = invoice.view_token || generateViewToken();
 
-    // Generate the public view URL
+    // Generate unique email token for this specific recipient
+    const emailToken = generateEmailToken();
+
+    // Determine recipient name and role
+    const recipientName = hasBillingContact
+      ? `${client.billing_contact.first_name || ''} ${client.billing_contact.last_name || ''}`.trim()
+      : client?.contact_name || client?.company_name || null;
+    const recipientRole = hasBillingContact ? 'billing_contact' : 'primary';
+
+    // Create email token record for tracking
+    const { error: tokenError } = await supabase
+      .from('invoice_email_tokens')
+      .insert({
+        invoice_id: id,
+        tenant_id: tenantId,
+        token: emailToken,
+        recipient_email: recipientEmail,
+        recipient_name: recipientName,
+        recipient_role: recipientRole,
+        sent_at: new Date().toISOString(),
+      });
+
+    if (tokenError) {
+      console.error('Error creating email token:', tokenError);
+      // Don't fail the send - fall back to using the invoice view token
+    }
+
+    // Generate the public view URL with email-specific token (for tracking)
+    // Falls back to invoice view token if email token creation failed
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const viewUrl = `${baseUrl}/invoices/view/${viewToken}`;
+    const viewUrl = tokenError
+      ? `${baseUrl}/invoices/view/${viewToken}`
+      : `${baseUrl}/invoices/view/${emailToken}`;
 
     // Get org info for email
     const { data: orgProfile } = await supabase
