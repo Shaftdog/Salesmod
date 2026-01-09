@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, CreditCard, DollarSign, ExternalLink, Ban, FileText, Send, ChevronDown, Pencil, AlertTriangle, Copy, Check, Link2, Printer, Eye, Monitor, Smartphone, Tablet } from 'lucide-react';
+import { ArrowLeft, CreditCard, DollarSign, ExternalLink, Ban, FileText, Send, ChevronDown, Pencil, AlertTriangle, Copy, Check, Link2, Printer, Eye, Monitor, Smartphone, Tablet, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { EditInvoiceDialog } from '@/components/invoicing/edit-invoice-dialog';
@@ -51,6 +51,13 @@ const CancelInvoiceSchema = z.object({
 });
 
 type CancelInvoiceInput = z.infer<typeof CancelInvoiceSchema>;
+
+const SendSmsSchema = z.object({
+  phone: z.string().min(10, 'Phone number is required'),
+  recipient_name: z.string().optional(),
+});
+
+type SendSmsInput = z.infer<typeof SendSmsSchema>;
 
 export default function InvoiceDetailPage() {
   const params = useParams();
@@ -89,6 +96,8 @@ export default function InvoiceDetailPage() {
     } | null;
   }[]>([]);
   const [isLoadingViews, setIsLoadingViews] = useState(false);
+  const [isSmsDialogOpen, setIsSmsDialogOpen] = useState(false);
+  const [isSendingSms, setIsSendingSms] = useState(false);
 
   // Fetch view history
   useEffect(() => {
@@ -125,6 +134,60 @@ export default function InvoiceDetailPage() {
       cancellation_reason: '',
     },
   });
+
+  const smsForm = useForm<SendSmsInput>({
+    resolver: zodResolver(SendSmsSchema),
+    defaultValues: {
+      phone: '',
+      recipient_name: '',
+    },
+  });
+
+  const handleSendSms = async (data: SendSmsInput) => {
+    setIsSendingSms(true);
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}/send-sms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        toast({
+          title: 'Failed to send SMS',
+          description: result.error || 'An unexpected error occurred.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      setIsSmsDialogOpen(false);
+      smsForm.reset();
+
+      // Store the view URL for display
+      if (result.data?.view_url) {
+        setInvoiceViewUrl(result.data.view_url);
+      }
+
+      toast({
+        title: result.data?.sms_simulated ? 'SMS simulated' : 'SMS sent',
+        description: result.message,
+      });
+
+      router.refresh();
+    } catch (error) {
+      console.error('Failed to send SMS:', error);
+      toast({
+        title: 'Failed to send SMS',
+        description: 'A network error occurred.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSendingSms(false);
+    }
+  };
 
   const handleRecordPayment = async (data: RecordPaymentInput) => {
     try {
@@ -475,6 +538,79 @@ export default function InvoiceDetailPage() {
                     {isSending ? 'Sending...' : 'Send Invoice'}
                   </Button>
                 </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {/* Send SMS Button - for non-final invoices */}
+          {!['paid', 'cancelled', 'void'].includes(invoice.status) && (
+            <Dialog open={isSmsDialogOpen} onOpenChange={setIsSmsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  Send SMS
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Send Invoice via SMS</DialogTitle>
+                  <DialogDescription>
+                    Send a text message with a link to view and pay this invoice.
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...smsForm}>
+                  <form onSubmit={smsForm.handleSubmit(handleSendSms)} className="space-y-4">
+                    <FormField
+                      control={smsForm.control}
+                      name="phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Phone Number</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="+1 (555) 123-4567"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={smsForm.control}
+                      name="recipient_name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Recipient Name (Optional)</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="John Smith"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="rounded-lg border bg-muted/50 p-3 text-sm text-muted-foreground">
+                      <p className="font-medium text-foreground mb-1">Message Preview:</p>
+                      <p>
+                        Invoice {invoice.invoice_number} for {formatCurrency(invoice.total_amount)} is ready. View & pay: [link]
+                      </p>
+                    </div>
+
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setIsSmsDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={isSendingSms}>
+                        {isSendingSms ? 'Sending...' : 'Send SMS'}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
               </DialogContent>
             </Dialog>
           )}
