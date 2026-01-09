@@ -5,7 +5,7 @@
  * View and manage a specific invoice
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   useInvoice,
@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, CreditCard, DollarSign, ExternalLink, Ban, FileText, Send, ChevronDown, Pencil, AlertTriangle, Copy, Check, Link2, Printer } from 'lucide-react';
+import { ArrowLeft, CreditCard, DollarSign, ExternalLink, Ban, FileText, Send, ChevronDown, Pencil, AlertTriangle, Copy, Check, Link2, Printer, Eye, Monitor, Smartphone, Tablet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { EditInvoiceDialog } from '@/components/invoicing/edit-invoice-dialog';
@@ -74,6 +74,36 @@ export default function InvoiceDetailPage() {
   const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [invoiceViewUrl, setInvoiceViewUrl] = useState<string | null>(null);
   const [urlCopied, setUrlCopied] = useState(false);
+  const [viewHistory, setViewHistory] = useState<{
+    id: string;
+    viewed_at: string;
+    ip_address: string | null;
+    device_type: string | null;
+    browser: string | null;
+    os: string | null;
+    is_internal: boolean;
+  }[]>([]);
+  const [isLoadingViews, setIsLoadingViews] = useState(false);
+
+  // Fetch view history
+  useEffect(() => {
+    const fetchViewHistory = async () => {
+      if (!invoiceId) return;
+      setIsLoadingViews(true);
+      try {
+        const response = await fetch(`/api/invoices/${invoiceId}/views`);
+        if (response.ok) {
+          const data = await response.json();
+          setViewHistory(data.views || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch view history:', error);
+      } finally {
+        setIsLoadingViews(false);
+      }
+    };
+    fetchViewHistory();
+  }, [invoiceId]);
 
   const paymentForm = useForm<RecordPaymentInput>({
     resolver: zodResolver(RecordPaymentSchema),
@@ -785,6 +815,68 @@ export default function InvoiceDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* View History */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Eye className="h-5 w-5 text-muted-foreground" />
+            <CardTitle>View History</CardTitle>
+          </div>
+          <CardDescription>
+            Track when and how clients view this invoice
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoadingViews ? (
+            <p className="text-sm text-muted-foreground">Loading view history...</p>
+          ) : viewHistory.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No views recorded yet</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date & Time</TableHead>
+                  <TableHead>Device</TableHead>
+                  <TableHead>Browser</TableHead>
+                  <TableHead>OS</TableHead>
+                  <TableHead>IP Address</TableHead>
+                  <TableHead>Type</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {viewHistory.map((view) => (
+                  <TableRow key={view.id}>
+                    <TableCell>
+                      {new Date(view.viewed_at).toLocaleString()}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        {view.device_type === 'mobile' && <Smartphone className="h-4 w-4 text-muted-foreground" />}
+                        {view.device_type === 'tablet' && <Tablet className="h-4 w-4 text-muted-foreground" />}
+                        {view.device_type === 'desktop' && <Monitor className="h-4 w-4 text-muted-foreground" />}
+                        <span className="capitalize">{view.device_type || 'Unknown'}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{view.browser || 'Unknown'}</TableCell>
+                    <TableCell>{view.os || 'Unknown'}</TableCell>
+                    <TableCell className="font-mono text-xs">{view.ip_address || 'Unknown'}</TableCell>
+                    <TableCell>
+                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                        view.is_internal
+                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                          : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                      }`}>
+                        {view.is_internal ? 'Internal' : 'Client'}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Additional Information */}
       {(invoice.notes || invoice.terms) && (
