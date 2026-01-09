@@ -19,6 +19,11 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -248,11 +253,18 @@ export default function CampaignDetailPage({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" asChild>
-            <Link href="/sales/campaigns">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" asChild aria-label="Back to campaigns">
+                <Link href="/sales/campaigns">
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Back to campaigns</p>
+            </TooltipContent>
+          </Tooltip>
           <div>
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-3xl font-bold tracking-tight">{campaign.name}</h1>
@@ -299,9 +311,16 @@ export default function CampaignDetailPage({
               Archive
             </Button>
           )}
-          <Button variant="outline" size="icon" onClick={handleDelete}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" onClick={handleDelete} aria-label="Delete campaign">
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Delete campaign</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
