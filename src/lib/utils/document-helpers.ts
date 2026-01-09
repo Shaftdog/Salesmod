@@ -82,7 +82,8 @@ export function getDocumentTypeColor(type: string): string {
  */
 export type FileIconType = "image" | "pdf" | "spreadsheet" | "word" | "generic";
 
-export function getFileIconType(mimeType: string): FileIconType {
+export function getFileIconType(mimeType: string | null | undefined): FileIconType {
+  if (!mimeType) return "generic";
   if (mimeType.startsWith("image/")) return "image";
   if (mimeType === "application/pdf") return "pdf";
   if (mimeType.includes("spreadsheet") || mimeType.includes("excel")) return "spreadsheet";
@@ -101,7 +102,7 @@ export const fileIconConfig: Record<FileIconType, { icon: typeof FileText; class
 /**
  * Get file icon element for a MIME type
  */
-export function getFileIcon(mimeType: string) {
+export function getFileIcon(mimeType: string | null | undefined) {
   const iconType = getFileIconType(mimeType);
   const config = fileIconConfig[iconType];
   return createElement(config.icon, { className: config.className });
@@ -122,7 +123,8 @@ export function formatFileSize(bytes: number): string {
  * Check if a file can be previewed inline (images and PDFs only)
  * Note: SVG files are excluded from image preview for security reasons
  */
-export function canPreviewFile(mimeType: string): boolean {
+export function canPreviewFile(mimeType: string | null | undefined): boolean {
+  if (!mimeType) return false;
   const isPdf = mimeType === "application/pdf";
   const isImage = mimeType.startsWith("image/") && !mimeType.includes("svg");
   return isPdf || isImage;
@@ -131,14 +133,16 @@ export function canPreviewFile(mimeType: string): boolean {
 /**
  * Check if a file is a previewable image (excludes SVG for security)
  */
-export function isPreviewableImage(mimeType: string): boolean {
+export function isPreviewableImage(mimeType: string | null | undefined): boolean {
+  if (!mimeType) return false;
   return mimeType.startsWith("image/") && !mimeType.includes("svg");
 }
 
 /**
  * Check if a file is a PDF
  */
-export function isPdfFile(mimeType: string): boolean {
+export function isPdfFile(mimeType: string | null | undefined): boolean {
+  if (!mimeType) return false;
   return mimeType === "application/pdf";
 }
 
