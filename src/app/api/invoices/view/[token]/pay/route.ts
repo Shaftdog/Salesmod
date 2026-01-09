@@ -96,6 +96,20 @@ export async function POST(
     // Extract client from joined data (Supabase returns as single object for .single())
     const client = Array.isArray(invoice.client) ? invoice.client[0] : invoice.client;
 
+    // Filter out placeholder/invalid emails
+    const isValidEmail = (email: string | null | undefined): boolean => {
+      if (!email) return false;
+      const invalidPatterns = [
+        /@imported\.local$/i,
+        /@example\.(com|org|net)$/i,
+        /@test\.(com|org|net)$/i,
+        /^noemail@/i,
+        /^placeholder/i,
+      ];
+      return !invalidPatterns.some(pattern => pattern.test(email));
+    };
+    const customerEmail = isValidEmail(client?.email) ? client.email : undefined;
+
     // If there's already a Stripe payment link, return it
     if (invoice.stripe_payment_link) {
       return NextResponse.json({
@@ -119,7 +133,8 @@ export async function POST(
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
-      customer_email: client?.email || undefined,
+      customer_email: customerEmail,
+      allow_promotion_codes: true, // Enable coupon/promo codes like NETZER0
       line_items: invoice.line_items.map((item: any) => ({
         price_data: {
           currency: 'usd',
