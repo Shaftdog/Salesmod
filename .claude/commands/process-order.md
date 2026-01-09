@@ -22,6 +22,7 @@ From the email, extract:
 - **Loan Info:** loan number, loan type, loan purpose, loan amount
 - **Order Details:** product type, due date, fee amount, special instructions
 - **Contacts:** property contact, realtor, loan officer if available
+- **CC'd Contacts:** Extract all email addresses from To, CC, and From fields for linking to order
 
 ## Step 3: Match or Create Client
 
@@ -47,19 +48,49 @@ Include ALL borrower fields:
 
 Set `fee_amount`, `due_date`, `created_by` (use Rod's profile ID).
 
-## Step 5: Update Kanban Card
+## Step 5: Link Related Contacts
+
+For each contact extracted from the email, add them to the order's related contacts:
+
+**Using the API** (POST to `/api/orders/[orderId]/contacts`):
+```json
+{
+  "contacts": [
+    { "fullName": "Milan Au", "email": "millan.au@ifundcities.com", "role": "orderer" },
+    { "fullName": "Jane Doe", "email": "jane@example.com", "role": "cc" },
+    { "fullName": "John Smith", "email": "john@lender.com", "phone": "555-1234", "role": "loan_officer" }
+  ]
+}
+```
+
+**Role assignments:**
+- `orderer` - The person who placed the order (usually main client contact)
+- `cc` - Anyone CC'd on the email
+- `loan_officer` - If identified as loan officer in email
+- `processor` - If identified as processor
+- `borrower` - The borrower (also captured in order fields)
+- `realtor` - If a realtor is mentioned
+- `property_contact` - Contact for property access
+
+The API will:
+- Match existing contacts by email or create new ones
+- Link them to the order with the specified role
+- Handle deduplication automatically
+
+## Step 6: Update Kanban Card
 
 Move the email card to 'done' state:
 - Set `state = 'done'`
 - Set `executed_at = NOW()`
 
-## Step 6: Report & Ask About Invoice
+## Step 7: Report & Ask About Invoice
 
 Report what was created:
 - Order number and ID
 - Property address
 - Client name
 - Borrower name and contact info
+- Related contacts linked (with roles)
 
 Then ask: "Would you like me to generate an invoice for this order? The borrower info will be used as the payer (Bill To) on the invoice."
 
@@ -80,3 +111,5 @@ Use the `pg` npm package for direct database queries when needed.
 - If borrower info is missing, note it but still create the order
 - Always update clients with real info if they have placeholder data
 - The borrower info is critical for invoicing - capture it accurately
+- Capture ALL email addresses from To, CC, From fields to link as related contacts
+- Related contacts can be viewed/managed in the "Related Contacts" section on the order detail page

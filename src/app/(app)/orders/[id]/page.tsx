@@ -50,6 +50,7 @@ import { useRouter } from "next/navigation";
 import { OrderInvoicesSection } from "@/components/orders/order-invoices-section";
 import { OrderDocumentsSection } from "@/components/orders/order-documents-section";
 import { OrderNotesSection } from "@/components/orders/order-notes-section";
+import { OrderContactsSection } from "@/components/orders/order-contacts-section";
 
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -357,6 +358,9 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
             </div>
           </CardContent>
         </Card>
+
+        {/* Related Contacts */}
+        <OrderContactsSection orderId={order.id} />
       </div>
       <div className="grid auto-rows-max items-start gap-4 md:gap-8 lg:col-span-2">
         <Card>
