@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { SearchProvider } from "@/contexts/search-context";
 import { AuthProvider } from "@/components/auth/auth-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export function Providers({ children }: PropsWithChildren) {
   const [queryClient] = useState(
@@ -24,8 +25,10 @@ export function Providers({ children }: PropsWithChildren) {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <SearchProvider>
-          {children}
-          <Toaster />
+          <TooltipProvider>
+            {children}
+            <Toaster />
+          </TooltipProvider>
         </SearchProvider>
         <ReactQueryDevtools initialIsOpen={false} />
       </AuthProvider>
