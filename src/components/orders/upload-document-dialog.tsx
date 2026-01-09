@@ -177,7 +177,7 @@ export function UploadDocumentDialog({
                   Drag and drop files here, or click to browse
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  PDF, Word, Excel, Images (max 50MB each)
+                  PDF, Word, Excel, CSV, Images (max 50MB each)
                 </p>
                 <Input
                   ref={fileInputRef}
@@ -185,7 +185,7 @@ export function UploadDocumentDialog({
                   multiple
                   className="hidden"
                   onChange={(e) => handleFiles(e.target.files)}
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.jpg,.jpeg,.png"
                 />
               </div>
             </div>
