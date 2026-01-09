@@ -206,12 +206,24 @@ export async function GET(
     // Get order contacts
     const contacts = await getOrderContacts(orderId);
 
+    // Role label mapping for display
+    const roleLabelMap: Record<string, string> = {
+      borrower: 'Borrower',
+      loan_officer: 'Loan Officer',
+      processor: 'Processor',
+      property_contact: 'Property Contact',
+      realtor: 'Realtor',
+      listing_agent: 'Listing Agent',
+      buying_agent: 'Buying Agent',
+      cc: 'CC (Email Recipient)',
+      orderer: 'Orderer',
+    };
+
     // Transform for response
     const formattedContacts = contacts.map((oc: any) => ({
       contactId: oc.contact_id,
       roleCode: oc.role_code,
-      roleLabel: oc.party_roles?.label || oc.role_code,
-      roleCategory: oc.party_roles?.category,
+      roleLabel: roleLabelMap[oc.role_code] || oc.role_code.replace(/_/g, ' '),
       isPrimary: oc.is_primary,
       contact: oc.contacts ? {
         id: oc.contacts.id,

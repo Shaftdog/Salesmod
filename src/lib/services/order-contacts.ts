@@ -506,11 +506,6 @@ export async function getOrderContacts(orderId: string) {
         mobile,
         title,
         primary_role_code
-      ),
-      party_roles!role_code (
-        code,
-        label,
-        category
       )
     `)
     .eq('order_id', orderId);
