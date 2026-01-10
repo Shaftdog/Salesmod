@@ -169,7 +169,82 @@ For each contact, check if we have complete information. If not, use Apollo to e
 - `realtor` - If a realtor is mentioned
 - `property_contact` - Contact for property access
 
-## Step 7: Update Email as Processed
+## Step 7: Ingest Email Attachments
+
+If the email has attachments (PDFs, documents), ingest them into the order's documents.
+
+**Check for attachments:**
+```sql
+SELECT id, gmail_message_id, attachments, has_attachments
+FROM gmail_messages
+WHERE id = '<email_id>';
+```
+
+**If has_attachments = true and attachments array is not empty:**
+
+1. **Filter for document attachments** (skip small images like signatures):
+   ```javascript
+   const validAttachments = attachments.filter(a => {
+     // Skip small images (likely email signatures)
+     if (a.mimeType.startsWith('image/') && a.size < 50000) return false;
+     // Keep PDFs, Word docs, Excel, etc.
+     return a.mimeType.includes('pdf') ||
+            a.mimeType.includes('word') ||
+            a.mimeType.includes('excel') ||
+            a.mimeType.includes('spreadsheet') ||
+            a.size > 100000; // Keep larger files
+   });
+   ```
+
+2. **For each valid attachment, download from Gmail and upload to order:**
+   ```javascript
+   // Use the Gmail service to download attachment
+   const { GmailService } = require('@/lib/gmail/gmail-service');
+   const gmailService = await GmailService.create(orgId);
+
+   for (const attachment of validAttachments) {
+     // Download from Gmail
+     const data = await gmailService.getAttachment(
+       gmail_message_id,
+       attachment.attachmentId
+     );
+
+     if (data) {
+       // Upload to Supabase storage
+       const filePath = `${tenantId}/orders/${orderId}/${Date.now()}_${attachment.filename}`;
+       await supabase.storage
+         .from('order-documents')
+         .upload(filePath, data, { contentType: attachment.mimeType });
+
+       // Create order_documents record
+       await supabase.from('order_documents').insert({
+         order_id: orderId,
+         tenant_id: tenantId,
+         org_id: orgId,
+         document_type: categorizeDocument(attachment.filename),
+         file_name: attachment.filename,
+         file_path: filePath,
+         file_size: attachment.size,
+         mime_type: attachment.mimeType,
+         uploaded_by: orgId
+       });
+     }
+   }
+   ```
+
+3. **Document type categorization:**
+   - "engagement" / "order" / "request" → `engagement_letter`
+   - "plans" / "blueprint" / "construction" → `construction_plans`
+   - "budget" / "cost" / "estimate" → `budget`
+   - "contract" / "purchase" / "agreement" → `contract`
+   - "survey" / "plat" → `survey`
+   - Default → `other`
+
+**Report attached documents:**
+- List each document uploaded with filename and size
+- Note if any attachments failed to download
+
+## Step 8: Update Email as Processed
 
 ```sql
 UPDATE gmail_messages
@@ -177,7 +252,7 @@ SET processed_at = NOW()
 WHERE id = '<email_id>';
 ```
 
-## Step 8: Report & Ask About Invoice
+## Step 9: Report & Ask About Invoice
 
 Report what was created:
 - Order number and ID
@@ -187,6 +262,7 @@ Report what was created:
 - Related contacts linked (with roles)
 - Which contacts were enriched via Apollo
 - Which contacts are still missing info
+- **Documents uploaded** (list filenames and types)
 
 Then ask: "Would you like me to generate an invoice for this order? The borrower info will be used as the payer (Bill To) on the invoice."
 
