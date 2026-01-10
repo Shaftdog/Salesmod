@@ -80,7 +80,77 @@ Query `clients` table by company name or domain:
 - If not found, create new client
 - Ensure billing_email_confirmed = true if we have a real email
 
-## Step 5: Create the Order
+## Step 5: Match or Create Property
+
+**1. Search for existing property by address:**
+```sql
+SELECT id, address_line1, city, state, postal_code
+FROM properties
+WHERE tenant_id = '<tenant_id>'
+  AND LOWER(address_line1) = LOWER('<street_address>')
+  AND LOWER(city) = LOWER('<city>')
+  AND state = '<state>'
+LIMIT 1;
+```
+
+**2. If property exists:** Use the existing `property_id`
+
+**3. If property doesn't exist:** Create it
+```javascript
+const { data: property } = await supabase.from('properties').insert({
+  tenant_id: tenantId,
+  org_id: orgId,
+  address_line1: streetAddress,    // e.g., "3065 Adcock Dr"
+  city: city,                       // e.g., "Orlando"
+  state: state,                     // e.g., "FL"
+  postal_code: zip,                 // e.g., "32822"
+  county: county,                   // If available from email
+  property_type: propertyType,      // 'single_family', 'condo', 'townhouse', 'multi_family', 'land', 'commercial'
+  // Optional fields if available:
+  gla: livingArea,                  // Square footage
+  lot_size: lotSize,                // Lot size in sq ft or acres
+  year_built: yearBuilt
+}).select().single();
+
+const propertyId = property.id;
+```
+
+**Property type mapping from email:**
+- "SFR" / "Single Family" / "1004" → `single_family`
+- "Condo" / "1073" → `condo`
+- "Townhouse" / "Townhome" → `townhouse`
+- "Multi" / "2-4 Unit" / "1025" → `multi_family`
+- "Land" / "Vacant" → `land`
+- "Commercial" → `commercial`
+
+## Step 6: Assign to Appraiser
+
+**Determine the appraiser based on:**
+1. **Geographic coverage** - Match property location to appraiser's service area
+2. **Product type expertise** - Some appraisers specialize in certain property types
+3. **Workload balance** - Consider current assignments
+
+**For ROI Appraise, default appraiser is Rod:**
+```javascript
+// Get Rod's profile ID (primary appraiser)
+const { data: appraiser } = await supabase
+  .from('profiles')
+  .select('id')
+  .eq('email', 'rod@myroihome.com')
+  .eq('tenant_id', tenantId)
+  .single();
+
+const assignedTo = appraiser?.id;
+const assignedDate = new Date().toISOString();
+```
+
+**If multiple appraisers exist**, consider these factors:
+- Property county/zip code
+- Property type (residential vs commercial)
+- Order urgency (rush orders)
+- Current appraiser workload
+
+## Step 7: Create the Order
 
 Insert into `orders` table with proper values. IMPORTANT - respect CHECK constraints:
 - `status`: Use 'pending' (NOT 'new')
@@ -88,12 +158,17 @@ Insert into `orders` table with proper values. IMPORTANT - respect CHECK constra
 - `scope_of_work`: Use 'desktop', 'exterior_only', 'interior', 'land', 'rent_survey', 'commercial', 'review'
 - `billing_method`: Use 'online', 'bill', 'cod'
 
+**Link to property and assign appraiser:**
+- `property_id` - The property ID from Step 5
+- `assigned_to` - The appraiser's profile ID from Step 6
+- `assigned_date` - Current timestamp
+
 Include ALL borrower fields:
 - `borrower_name` - Full name of borrower
 - `borrower_email` - Borrower's email
 - `borrower_phone` - Borrower's phone
 
-## Step 6: Link Related Contacts with Apollo Enrichment
+## Step 8: Link Related Contacts with Apollo Enrichment
 
 For each contact, check if we have complete information. If not, use Apollo to enrich.
 
@@ -169,7 +244,7 @@ For each contact, check if we have complete information. If not, use Apollo to e
 - `realtor` - If a realtor is mentioned
 - `property_contact` - Contact for property access
 
-## Step 7: Convert Email to PDF Engagement Letter
+## Step 9: Convert Email to PDF Engagement Letter
 
 Convert the original order email into a PDF document and store it as the engagement letter.
 
@@ -263,7 +338,7 @@ await supabase.from('order_documents').insert({
 });
 ```
 
-## Step 8: Ingest Email Attachments
+## Step 10: Ingest Email Attachments
 
 If the email has attachments (PDFs, documents), ingest them into the order's documents.
 
@@ -352,7 +427,7 @@ WHERE id = '<email_id>';
 - List each document uploaded with filename and size
 - Note if any attachments failed to download
 
-## Step 9: Update Email as Processed
+## Step 11: Update Email as Processed
 
 ```sql
 UPDATE gmail_messages
@@ -360,11 +435,12 @@ SET processed_at = NOW()
 WHERE id = '<email_id>';
 ```
 
-## Step 10: Report & Ask About Invoice
+## Step 12: Report & Ask About Invoice
 
 Report what was created:
 - Order number and ID
-- Property address
+- **Property:** address (created new or linked to existing)
+- **Assigned to:** Appraiser name
 - Client name
 - Borrower name and contact info
 - Related contacts linked (with roles)
@@ -410,3 +486,6 @@ Enrich contacts in this order:
 - Use Apollo enrichment for contacts missing phone numbers or full names
 - Related contacts can be viewed/managed in the "Related Contacts" section on the order detail page
 - Report which contacts were successfully enriched and which still need manual entry
+- **Always link property** - Either find existing or create new; never leave property_id null
+- **Always assign appraiser** - Default to Rod (rod@myroihome.com) unless specified otherwise
+- **Property matching** - Use address + city + state to find existing properties; avoid duplicates
