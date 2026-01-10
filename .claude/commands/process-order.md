@@ -169,7 +169,101 @@ For each contact, check if we have complete information. If not, use Apollo to e
 - `realtor` - If a realtor is mentioned
 - `property_contact` - Contact for property access
 
-## Step 7: Ingest Email Attachments
+## Step 7: Convert Email to PDF Engagement Letter
+
+Convert the original order email into a PDF document and store it as the engagement letter.
+
+**1. Build HTML from email content:**
+```javascript
+const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
+    .header { border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 20px; }
+    .meta { color: #666; margin-bottom: 10px; }
+    .subject { font-size: 24px; font-weight: bold; margin: 20px 0; }
+    .body { white-space: pre-wrap; line-height: 1.6; }
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ccc; color: #666; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="meta"><strong>From:</strong> ${email.from_name} &lt;${email.from_email}&gt;</div>
+    <div class="meta"><strong>Date:</strong> ${new Date(email.received_at).toLocaleString()}</div>
+    <div class="meta"><strong>To:</strong> ${email.to_email?.join(', ') || 'N/A'}</div>
+    ${email.cc_email?.length ? `<div class="meta"><strong>CC:</strong> ${email.cc_email.join(', ')}</div>` : ''}
+    <div class="subject">${email.subject}</div>
+  </div>
+  <div class="body">${email.body_text || email.body_html || ''}</div>
+  <div class="footer">
+    <p>Order processed: ${new Date().toLocaleString()}</p>
+    <p>Order ID: ${orderId}</p>
+  </div>
+</body>
+</html>`;
+```
+
+**2. Convert HTML to PDF using Puppeteer:**
+```javascript
+const puppeteer = require('puppeteer');
+
+const browser = await puppeteer.launch({ headless: true });
+const page = await browser.newPage();
+await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+
+const pdfBuffer = await page.pdf({
+  format: 'Letter',
+  margin: { top: '0.5in', bottom: '0.5in', left: '0.5in', right: '0.5in' },
+  printBackground: true
+});
+
+await browser.close();
+```
+
+**3. Upload PDF to storage and create document record:**
+```javascript
+// Generate filename from order number or loan number
+const fileName = `Engagement_Letter_${orderNumber}.pdf`;
+const filePath = `${tenantId}/orders/${orderId}/${Date.now()}_${fileName}`;
+
+// Upload to Supabase storage
+await supabase.storage
+  .from('order-documents')
+  .upload(filePath, pdfBuffer, { contentType: 'application/pdf' });
+
+// Get the public URL
+const { data: urlData } = supabase.storage
+  .from('order-documents')
+  .getPublicUrl(filePath);
+
+// Get a profile ID for the tenant (for uploaded_by fields)
+const { data: profile } = await supabase
+  .from('profiles')
+  .select('id, org_id')
+  .eq('tenant_id', tenantId)
+  .limit(1)
+  .single();
+
+// Create order_documents record with ALL required fields
+await supabase.from('order_documents').insert({
+  order_id: orderId,
+  tenant_id: tenantId,
+  org_id: profile.org_id,
+  document_type: 'engagement_letter',
+  file_name: fileName,
+  file_path: filePath,
+  file_url: urlData.publicUrl,
+  file_size: pdfBuffer.length,
+  mime_type: 'application/pdf',
+  uploaded_by: profile.id,
+  uploaded_by_id: profile.id
+});
+```
+
+## Step 8: Ingest Email Attachments
 
 If the email has attachments (PDFs, documents), ingest them into the order's documents.
 
@@ -202,6 +296,14 @@ WHERE id = '<email_id>';
    const { GmailService } = require('@/lib/gmail/gmail-service');
    const gmailService = await GmailService.create(orgId);
 
+   // Get profile for uploaded_by fields
+   const { data: profile } = await supabase
+     .from('profiles')
+     .select('id, org_id')
+     .eq('tenant_id', tenantId)
+     .limit(1)
+     .single();
+
    for (const attachment of validAttachments) {
      // Download from Gmail
      const data = await gmailService.getAttachment(
@@ -216,26 +318,32 @@ WHERE id = '<email_id>';
          .from('order-documents')
          .upload(filePath, data, { contentType: attachment.mimeType });
 
-       // Create order_documents record
+       // Get the public URL
+       const { data: urlData } = supabase.storage
+         .from('order-documents')
+         .getPublicUrl(filePath);
+
+       // Create order_documents record with ALL required fields
        await supabase.from('order_documents').insert({
          order_id: orderId,
          tenant_id: tenantId,
-         org_id: orgId,
+         org_id: profile.org_id,
          document_type: categorizeDocument(attachment.filename),
          file_name: attachment.filename,
          file_path: filePath,
+         file_url: urlData.publicUrl,
          file_size: attachment.size,
          mime_type: attachment.mimeType,
-         uploaded_by: orgId
+         uploaded_by: profile.id,
+         uploaded_by_id: profile.id
        });
      }
    }
    ```
 
 3. **Document type categorization:**
-   - "engagement" / "order" / "request" → `engagement_letter`
    - "plans" / "blueprint" / "construction" → `construction_plans`
-   - "budget" / "cost" / "estimate" → `budget`
+   - "budget" / "cost" / "estimate" → `construction_budget`
    - "contract" / "purchase" / "agreement" → `contract`
    - "survey" / "plat" → `survey`
    - Default → `other`
@@ -244,7 +352,7 @@ WHERE id = '<email_id>';
 - List each document uploaded with filename and size
 - Note if any attachments failed to download
 
-## Step 8: Update Email as Processed
+## Step 9: Update Email as Processed
 
 ```sql
 UPDATE gmail_messages
@@ -252,7 +360,7 @@ SET processed_at = NOW()
 WHERE id = '<email_id>';
 ```
 
-## Step 9: Report & Ask About Invoice
+## Step 10: Report & Ask About Invoice
 
 Report what was created:
 - Order number and ID
@@ -262,7 +370,8 @@ Report what was created:
 - Related contacts linked (with roles)
 - Which contacts were enriched via Apollo
 - Which contacts are still missing info
-- **Documents uploaded** (list filenames and types)
+- **Engagement Letter PDF** (converted from original email)
+- **Documents uploaded** (list filenames and types from attachments)
 
 Then ask: "Would you like me to generate an invoice for this order? The borrower info will be used as the payer (Bill To) on the invoice."
 
